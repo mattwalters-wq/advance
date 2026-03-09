@@ -2,12 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@/lib/supabase'
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = createClient()
 
 export default function ArtistPage() {
   const params = useParams()
@@ -22,30 +19,14 @@ export default function ArtistPage() {
   const [darkMode, setDarkMode] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadArtist()
-  }, [params.id])
-
-  useEffect(() => {
-    if (selectedTour) loadTourData(selectedTour.id)
-  }, [selectedTour])
+  useEffect(() => { loadArtist() }, [params.id])
+  useEffect(() => { if (selectedTour) loadTourData(selectedTour.id) }, [selectedTour])
 
   async function loadArtist() {
-    const { data: artistData } = await supabase
-      .from('artists')
-      .select('*')
-      .eq('id', params.id)
-      .single()
-
+    const { data: artistData } = await supabase.from('artists').select('*').eq('id', params.id).single()
     if (!artistData) { router.push('/dashboard'); return }
     setArtist(artistData)
-
-    const { data: toursData } = await supabase
-      .from('tours')
-      .select('*')
-      .eq('artist_id', params.id)
-      .order('start_date', { ascending: true })
-
+    const { data: toursData } = await supabase.from('tours').select('*').eq('artist_id', params.id).order('start_date', { ascending: true })
     setTours(toursData || [])
     if (toursData && toursData.length > 0) setSelectedTour(toursData[0])
     setLoading(false)
@@ -75,7 +56,6 @@ export default function ArtistPage() {
 
   return (
     <div style={{ background: bg, minHeight: '100vh', fontFamily: 'system-ui, sans-serif', color: text }}>
-      {/* Header */}
       <div style={{ borderBottom: `1px solid ${border}`, padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <button onClick={() => router.push('/dashboard')} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '14px' }}>← Back</button>
@@ -90,7 +70,6 @@ export default function ArtistPage() {
       </div>
 
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '24px' }}>
-        {/* Tour selector */}
         {tours.length > 1 && (
           <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }}>
             {tours.map(tour => (
@@ -111,7 +90,6 @@ export default function ArtistPage() {
 
         {selectedTour && (
           <div style={{ display: 'grid', gap: '20px' }}>
-            {/* Shows */}
             {shows.length > 0 && (
               <div style={{ background: card, borderRadius: '12px', padding: '20px', border: `1px solid ${border}` }}>
                 <div style={{ fontSize: '11px', letterSpacing: '0.1em', color: muted, marginBottom: '16px', textTransform: 'uppercase' }}>Shows — {shows.length} found</div>
@@ -120,12 +98,12 @@ export default function ArtistPage() {
                     <div style={{ fontWeight: '600', marginBottom: '4px' }}>{show.venue}</div>
                     <div style={{ fontSize: '13px', color: muted }}>{show.date} · {show.set_time}{show.stage ? ` · ${show.stage}` : ''}</div>
                     {show.city && <div style={{ fontSize: '13px', color: muted }}>{show.city}{show.country ? `, ${show.country}` : ''}</div>}
+                    {show.notes && <div style={{ fontSize: '12px', color: muted, marginTop: 4, fontStyle: 'italic' }}>{show.notes}</div>}
                   </div>
                 ))}
               </div>
             )}
 
-            {/* Travel */}
             {travel.length > 0 && (
               <div style={{ background: card, borderRadius: '12px', padding: '20px', border: `1px solid ${border}` }}>
                 <div style={{ fontSize: '11px', letterSpacing: '0.1em', color: muted, marginBottom: '16px', textTransform: 'uppercase' }}>Travel — {travel.length} items</div>
@@ -139,7 +117,6 @@ export default function ArtistPage() {
               </div>
             )}
 
-            {/* Accommodation */}
             {accommodation.length > 0 && (
               <div style={{ background: card, borderRadius: '12px', padding: '20px', border: `1px solid ${border}` }}>
                 <div style={{ fontSize: '11px', letterSpacing: '0.1em', color: muted, marginBottom: '16px', textTransform: 'uppercase' }}>Accommodation — {accommodation.length} found</div>
@@ -154,7 +131,6 @@ export default function ArtistPage() {
               </div>
             )}
 
-            {/* Contacts */}
             {contacts.length > 0 && (
               <div style={{ background: card, borderRadius: '12px', padding: '20px', border: `1px solid ${border}` }}>
                 <div style={{ fontSize: '11px', letterSpacing: '0.1em', color: muted, marginBottom: '16px', textTransform: 'uppercase' }}>Contacts — {contacts.length} found</div>

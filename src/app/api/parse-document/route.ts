@@ -1,9 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,10 +10,9 @@ export async function POST(request: NextRequest) {
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 2000,
-      messages: [
-        {
-          role: 'user',
-          content: `You are a tour management assistant. Extract touring information from this document.
+      messages: [{
+        role: 'user',
+        content: `You are a tour management assistant. Extract touring information from this document.
 
 Return ONLY a JSON object with these fields (omit any not found):
 {
@@ -34,8 +31,7 @@ Important:
 
 Document:
 ${text.slice(0, 3000)}`,
-        },
-      ],
+      }],
     })
 
     const content = message.content[0]

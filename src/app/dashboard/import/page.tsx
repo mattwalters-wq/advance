@@ -27,7 +27,6 @@ export default function ImportPage() {
     setLoading(true)
     setError('')
     setParsed(null)
-
     try {
       const res = await fetch('/api/parse-document', {
         method: 'POST',
@@ -45,58 +44,25 @@ export default function ImportPage() {
   }
 
   async function handleImport() {
-    if (!selectedArtistId || !tourName) {
-      setError('Please select an artist and enter a tour name')
-      return
-    }
+    if (!selectedArtistId || !tourName) { setError('Please select an artist and enter a tour name'); return }
     setImporting(true)
     setError('')
-
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not logged in')
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('org_id')
-        .eq('id', user.id)
-        .single()
+      const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
       if (!profile) throw new Error('No profile found')
-
       const org_id = profile.org_id
 
       const { data: tour, error: tourError } = await supabase
-        .from('tours')
-        .insert({ name: tourName, artist_id: selectedArtistId, org_id })
-        .select()
-        .single()
+        .from('tours').insert({ name: tourName, artist_id: selectedArtistId, org_id }).select().single()
       if (tourError) throw tourError
 
-      if (parsed.shows?.length) {
-        await supabase.from('shows').insert(
-          parsed.shows.map((s: any) => ({ ...s, tour_id: tour.id, org_id }))
-        )
-      }
-      if (parsed.travel?.length) {
-        await supabase.from('travel').insert(
-          parsed.travel.map((t: any) => ({ ...t, tour_id: tour.id, org_id }))
-        )
-      }
-      if (parsed.accommodation?.length) {
-        await supabase.from('accommodation').insert(
-          parsed.accommodation.map((a: any) => ({ ...a, tour_id: tour.id, org_id }))
-        )
-      }
-      if (parsed.contacts?.length) {
-        await supabase.from('contacts').insert(
-          parsed.contacts.map((c: any) => ({ ...c, tour_id: tour.id, org_id }))
-        )
-      }
-      if (parsed.personnel?.length) {
-        await supabase.from('personnel').insert(
-          parsed.personnel.map((p: any) => ({ ...p, tour_id: tour.id, org_id }))
-        )
-      }
+      if (parsed.shows?.length) await supabase.from('shows').insert(parsed.shows.map((s: any) => ({ ...s, tour_id: tour.id, org_id })))
+      if (parsed.travel?.length) await supabase.from('travel').insert(parsed.travel.map((t: any) => ({ ...t, tour_id: tour.id, org_id })))
+      if (parsed.accommodation?.length) await supabase.from('accommodation').insert(parsed.accommodation.map((a: any) => ({ ...a, tour_id: tour.id, org_id })))
+      if (parsed.contacts?.length) await supabase.from('contacts').insert(parsed.contacts.map((c: any) => ({ ...c, tour_id: tour.id, org_id })))
+      if (parsed.personnel?.length) await supabase.from('personnel').insert(parsed.personnel.map((p: any) => ({ ...p, tour_id: tour.id, org_id })))
 
       router.push('/dashboard')
     } catch (err: any) {
@@ -108,7 +74,6 @@ export default function ImportPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#F5F0E8', fontFamily: 'Georgia, serif' }}>
-
       <div style={{ background: '#1A1714', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: 16 }}>
         <button onClick={() => router.push('/dashboard')} style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#8A8580', background: 'transparent', border: '1px solid #2A2520', borderRadius: 4, padding: '6px 12px', cursor: 'pointer' }}>← ROSTER</button>
         <span style={{ fontSize: 20, fontStyle: 'italic', color: '#F5F0E8' }}>Import Document</span>
@@ -116,12 +81,7 @@ export default function ImportPage() {
       </div>
 
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 24px' }}>
-
-        {error && (
-          <div style={{ background: '#FEE', border: '1px solid #FCC', borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#C00', fontFamily: 'monospace' }}>
-            {error}
-          </div>
-        )}
+        {error && <div style={{ background: '#FEE', border: '1px solid #FCC', borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#C00', fontFamily: 'monospace' }}>{error}</div>}
 
         {!parsed && (
           <>
@@ -130,19 +90,12 @@ export default function ImportPage() {
               <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#8A8580', marginBottom: 12, lineHeight: 1.6 }}>
                 Paste any festival advance, flight confirmation, car hire email, hotel booking, or tour itinerary. Claude will extract all the relevant information automatically.
               </div>
-              <textarea
-                value={text}
-                onChange={e => setText(e.target.value)}
+              <textarea value={text} onChange={e => setText(e.target.value)}
                 placeholder="Paste your advance, flight confirmation, car hire email, or any tour document here..."
-                style={{ width: '100%', height: 280, padding: '14px', border: '1px solid #DDD8CE', borderRadius: 8, fontSize: 12, fontFamily: 'Georgia, serif', outline: 'none', background: '#fff', resize: 'vertical', color: '#1A1714', lineHeight: 1.6 }}
-              />
+                style={{ width: '100%', height: 280, padding: '14px', border: '1px solid #DDD8CE', borderRadius: 8, fontSize: 12, fontFamily: 'Georgia, serif', outline: 'none', background: '#fff', resize: 'vertical', color: '#1A1714', lineHeight: 1.6, boxSizing: 'border-box' }} />
             </div>
-
-            <button
-              onClick={handleParse}
-              disabled={loading || !text.trim()}
-              style={{ padding: '13px 32px', background: '#1A1714', color: '#F5F0E8', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: loading || !text.trim() ? 'not-allowed' : 'pointer', opacity: loading || !text.trim() ? 0.6 : 1 }}
-            >
+            <button onClick={handleParse} disabled={loading || !text.trim()}
+              style={{ padding: '13px 32px', background: '#1A1714', color: '#F5F0E8', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: loading || !text.trim() ? 'not-allowed' : 'pointer', opacity: loading || !text.trim() ? 0.6 : 1 }}>
               {loading ? 'READING DOCUMENT...' : '✦ EXTRACT WITH AI'}
             </button>
           </>
@@ -160,23 +113,16 @@ export default function ImportPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#8A8580', marginBottom: 6 }}>ARTIST</div>
-                  <select
-                    value={selectedArtistId}
-                    onChange={e => setSelectedArtistId(e.target.value)}
-                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #DDD8CE', borderRadius: 6, fontSize: 13, fontFamily: 'Georgia, serif', color: '#1A1714', background: '#fff', outline: 'none' }}
-                  >
+                  <select value={selectedArtistId} onChange={e => setSelectedArtistId(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #DDD8CE', borderRadius: 6, fontSize: 13, fontFamily: 'Georgia, serif', color: '#1A1714', background: '#fff', outline: 'none' }}>
                     <option value="">Select artist...</option>
                     {artists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#8A8580', marginBottom: 6 }}>TOUR NAME</div>
-                  <input
-                    value={tourName}
-                    onChange={e => setTourName(e.target.value)}
-                    placeholder="Port Fairy 2026"
-                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #DDD8CE', borderRadius: 6, fontSize: 13, fontFamily: 'Georgia, serif', color: '#1A1714', outline: 'none' }}
-                  />
+                  <input value={tourName} onChange={e => setTourName(e.target.value)} placeholder="Port Fairy 2026"
+                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #DDD8CE', borderRadius: 6, fontSize: 13, fontFamily: 'Georgia, serif', color: '#1A1714', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
               </div>
             </div>
@@ -187,7 +133,7 @@ export default function ImportPage() {
                 {parsed.shows.map((s: any, i: number) => (
                   <div key={i} style={{ padding: '10px 12px', background: '#FDF5EF', borderRadius: 6, marginBottom: 6 }}>
                     <div style={{ fontSize: 13, color: '#1A1714', fontWeight: 600 }}>{s.venue || 'Venue TBC'}</div>
-                    <div style={{ fontFamily: 'monospace', fontSize: 9, color: '#8A8580', marginTop: 3, letterSpacing: 1 }}>{s.date} · {s.set_time || 'TBC'} · {s.stage || ''}</div>
+                    <div style={{ fontFamily: 'monospace', fontSize: 9, color: '#8A8580', marginTop: 3, letterSpacing: 1 }}>{s.date} · {s.set_time || 'TBC'}{s.stage ? ` · ${s.stage}` : ''}</div>
                   </div>
                 ))}
               </div>
@@ -230,17 +176,12 @@ export default function ImportPage() {
             )}
 
             <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-              <button
-                onClick={handleImport}
-                disabled={importing || !selectedArtistId || !tourName}
-                style={{ flex: 1, padding: 13, background: '#1A1714', color: '#F5F0E8', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: importing ? 'not-allowed' : 'pointer', opacity: importing || !selectedArtistId || !tourName ? 0.6 : 1 }}
-              >
+              <button onClick={handleImport} disabled={importing || !selectedArtistId || !tourName}
+                style={{ flex: 1, padding: 13, background: '#1A1714', color: '#F5F0E8', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: importing ? 'not-allowed' : 'pointer', opacity: importing || !selectedArtistId || !tourName ? 0.6 : 1 }}>
                 {importing ? 'IMPORTING...' : 'CONFIRM & IMPORT'}
               </button>
-              <button
-                onClick={() => setParsed(null)}
-                style={{ padding: '13px 20px', background: 'transparent', color: '#8A8580', border: '1px solid #DDD8CE', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: 'pointer' }}
-              >
+              <button onClick={() => setParsed(null)}
+                style={{ padding: '13px 20px', background: 'transparent', color: '#8A8580', border: '1px solid #DDD8CE', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: 'pointer' }}>
                 START OVER
               </button>
             </div>
