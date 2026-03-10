@@ -1,0 +1,55 @@
+@font-face {
+  font-family: 'CooperBT';
+  src: url('https://db.onlinewebfonts.com/t/4e52e894cba2174ce0d6e5a3e90d8498.woff2') format('woff2');
+  font-weight: 900;
+  font-display: swap;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: #F5EFE6;
+  font-family: 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+  color: #1A1018;
+}
+
+input, textarea, select, button {
+  font-family: inherit;
+  font-size: 16px; /* prevents iOS zoom on focus */
+}
+
+@media (min-width: 481px) {
+  input, textarea, select, button {
+    font-size: inherit;
+  }
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(196, 155, 155, 0.4); border-radius: 2px; }
+
+input::placeholder { color: rgba(90, 90, 110, 0.47); }
+
+/* Safe area for notched phones */
+@supports (padding: env(safe-area-inset-bottom)) {
+  body { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* Smooth scrolling */
+html { scroll-behavior: smooth; }
+
+/* Prevent text selection on buttons */
+button { user-select: none; -webkit-user-select: none; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
