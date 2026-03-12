@@ -284,7 +284,6 @@ export default function ArtistPage() {
                       }}>
                         <div style={{
                           fontSize: 12, fontWeight: isToday ? 700 : 400,
-                          color: isToday ? accent : hasAnything ? text : muted,
                           marginBottom: 4,
                           width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
                           borderRadius: '50%', background: isToday ? accent : 'transparent',
