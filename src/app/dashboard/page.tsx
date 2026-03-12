@@ -64,6 +64,10 @@ export default function DashboardPage() {
             style={{ padding: '12px 24px', background: accent, color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: 'pointer' }}>
             ✦ IMPORT DOC
           </button>
+          <button onClick={() => router.push('/dashboard/calendar')}
+            style={{ padding: '12px 24px', background: 'transparent', color: text, border: `1px solid ${border}`, borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: 'pointer' }}>
+            ▦ CALENDAR
+          </button>
           <button onClick={() => router.push('/dashboard/artists/new')}
             style={{ padding: '12px 24px', background: 'transparent', color: text, border: `1px solid ${border}`, borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: 'pointer' }}>
             + ADD ARTIST
