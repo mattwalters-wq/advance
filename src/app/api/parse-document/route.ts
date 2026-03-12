@@ -3,35 +3,61 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-export async function POST(request: NextRequest) {
-  try {
-    const { text } = await request.json()
-
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
-      messages: [{
-        role: 'user',
-        content: `You are a tour management assistant. Extract touring information from this document.
+const SYSTEM_PROMPT = `You are a tour management assistant. Extract touring information from this document.
 
 Return ONLY a JSON object with these fields (omit any not found):
 {
-  "shows": [{ "date": "", "venue": "", "city": "", "country": "", "stage": "", "set_time": "", "doors_time": "", "soundcheck_time": "", "notes": "" }],
-  "travel": [{ "travel_date": "", "travel_type": "", "departure_time": "", "arrival_time": "", "from_location": "", "to_location": "", "carrier": "", "reference": "", "notes": "" }],
-  "accommodation": [{ "check_in": "", "check_out": "", "name": "", "address": "", "confirmation": "", "notes": "" }],
+  "shows": [{ "date": "YYYY-MM-DD", "venue": "", "city": "", "country": "", "stage": "", "set_time": "HH:MM", "doors_time": "HH:MM", "soundcheck_time": "HH:MM", "notes": "" }],
+  "travel": [{ "travel_date": "YYYY-MM-DD", "travel_type": "", "departure_time": "HH:MM", "arrival_time": "HH:MM", "from_location": "", "to_location": "", "carrier": "", "reference": "", "notes": "" }],
+  "accommodation": [{ "check_in": "YYYY-MM-DD", "check_out": "YYYY-MM-DD", "name": "", "address": "", "confirmation": "", "notes": "" }],
   "contacts": [{ "name": "", "role": "", "phone": "", "email": "" }],
   "personnel": [{ "name": "", "role": "", "phone": "", "email": "", "travel_notes": "" }]
 }
 
-Important:
+Rules:
 - Return raw JSON only, no markdown, no backticks
-- All values must be plain strings with no special characters
-- Do not include newlines inside string values
-- If nothing found for a category, omit that array entirely
+- Dates must be YYYY-MM-DD format
+- Times must be HH:MM 24hr format
+- All values must be plain strings
+- Omit arrays entirely if nothing found for that category`
 
-Document:
-${text.slice(0, 3000)}`,
-      }],
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { text, pdf_base64, filename } = body
+
+    let messageContent: any[]
+
+    if (pdf_base64) {
+      // Native PDF reading via Claude's document API
+      messageContent = [
+        {
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: pdf_base64,
+          },
+        },
+        {
+          type: 'text',
+          text: `Extract all touring information from this document${filename ? ` (${filename})` : ''}. ${SYSTEM_PROMPT}`,
+        },
+      ]
+    } else {
+      // Plain text (pasted or extracted from Word)
+      messageContent = [
+        {
+          type: 'text',
+          text: `${SYSTEM_PROMPT}\n\nDocument${filename ? ` (${filename})` : ''}:\n${(text || '').slice(0, 8000)}`,
+        },
+      ]
+    }
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: messageContent }],
     })
 
     const content = message.content[0]
