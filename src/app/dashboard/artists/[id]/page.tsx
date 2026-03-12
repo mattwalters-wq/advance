@@ -86,6 +86,125 @@ export default function ArtistPage() {
     closeModal()
   }
 
+  function handleExportIcal() {
+    if (!selectedTour || !artist) return
+
+    function pad(n: number) { return String(n).padStart(2, '0') }
+    function toIcalDate(dateStr: string) {
+      // dateStr is YYYY-MM-DD
+      return dateStr.replace(/-/g, '')
+    }
+    function toIcalDateTime(dateStr: string, timeStr: string) {
+      // returns local datetime string YYYYMMDDTHHmmss
+      if (!timeStr) return toIcalDate(dateStr)
+      const t = timeStr.replace(':', '')
+      return `${dateStr.replace(/-/g, '')}T${t}00`
+    }
+    function uid() {
+      return Math.random().toString(36).slice(2) + '@advance'
+    }
+    function escIcal(str: string) {
+      return (str || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
+    }
+
+    const lines: string[] = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Advance//Tour Manager//EN',
+      `X-WR-CALNAME:${escIcal(artist.name)} - ${escIcal(selectedTour.name)}`,
+      'X-WR-TIMEZONE:Australia/Melbourne',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+    ]
+
+    // Shows
+    for (const show of shows) {
+      const dtstart = show.set_time
+        ? toIcalDateTime(show.date, show.set_time)
+        : toIcalDate(show.date)
+      const isAllDay = !show.set_time
+      const location = [show.venue, show.city, show.country].filter(Boolean).join(', ')
+      const description = [
+        show.doors_time ? `Doors: ${show.doors_time}` : '',
+        show.soundcheck_time ? `Soundcheck: ${show.soundcheck_time}` : '',
+        show.stage ? `Stage: ${show.stage}` : '',
+        show.notes || '',
+      ].filter(Boolean).join('\\n')
+
+      lines.push('BEGIN:VEVENT')
+      lines.push(`UID:show-${uid()}`)
+      lines.push(`SUMMARY:🎵 ${escIcal(show.venue)}${show.city ? ` — ${escIcal(show.city)}` : ''}`)
+      if (isAllDay) {
+        lines.push(`DTSTART;VALUE=DATE:${dtstart}`)
+        lines.push(`DTEND;VALUE=DATE:${dtstart}`)
+      } else {
+        lines.push(`DTSTART:${dtstart}`)
+        // default 2hr show
+        const [h, m] = show.set_time.split(':').map(Number)
+        const endH = pad((h + 2) % 24)
+        lines.push(`DTEND:${toIcalDate(show.date)}T${endH}${pad(m)}00`)
+      }
+      if (location) lines.push(`LOCATION:${escIcal(location)}`)
+      if (description) lines.push(`DESCRIPTION:${description}`)
+      lines.push('END:VEVENT')
+    }
+
+    // Travel
+    for (const t of travel) {
+      const dtstart = t.departure_time
+        ? toIcalDateTime(t.travel_date, t.departure_time)
+        : toIcalDate(t.travel_date)
+      const isAllDay = !t.departure_time
+      const summary = `${t.travel_type || '✈️'} ${escIcal(t.from_location)} → ${escIcal(t.to_location)}`
+      const description = [
+        t.carrier ? `${t.carrier}` : '',
+        t.reference ? `Ref: ${t.reference}` : '',
+        t.notes || '',
+      ].filter(Boolean).join('\\n')
+
+      lines.push('BEGIN:VEVENT')
+      lines.push(`UID:travel-${uid()}`)
+      lines.push(`SUMMARY:${summary}`)
+      if (isAllDay) {
+        lines.push(`DTSTART;VALUE=DATE:${dtstart}`)
+        lines.push(`DTEND;VALUE=DATE:${dtstart}`)
+      } else {
+        lines.push(`DTSTART:${dtstart}`)
+        if (t.arrival_time) {
+          lines.push(`DTEND:${toIcalDateTime(t.travel_date, t.arrival_time)}`)
+        } else {
+          lines.push(`DTEND:${dtstart}`)
+        }
+      }
+      if (description) lines.push(`DESCRIPTION:${description}`)
+      lines.push('END:VEVENT')
+    }
+
+    // Accommodation
+    for (const a of accommodation) {
+      lines.push('BEGIN:VEVENT')
+      lines.push(`UID:hotel-${uid()}`)
+      lines.push(`SUMMARY:🏨 ${escIcal(a.name)}`)
+      lines.push(`DTSTART;VALUE=DATE:${toIcalDate(a.check_in)}`)
+      lines.push(`DTEND;VALUE=DATE:${a.check_out ? toIcalDate(a.check_out) : toIcalDate(a.check_in)}`)
+      if (a.address) lines.push(`LOCATION:${escIcal(a.address)}`)
+      const desc = [a.confirmation ? `Confirmation: ${a.confirmation}` : '', a.notes || ''].filter(Boolean).join('\\n')
+      if (desc) lines.push(`DESCRIPTION:${desc}`)
+      lines.push('END:VEVENT')
+    }
+
+    lines.push('END:VCALENDAR')
+
+    const icsContent = lines.join('\r\n')
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${artist.name} - ${selectedTour.name}.ics`.replace(/[^a-z0-9 \-\.]/gi, '_')
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function handleShare() {
     if (!selectedTour) return
     setSharing(true)
@@ -362,6 +481,10 @@ export default function ArtistPage() {
                 <button onClick={handleShare} disabled={sharing}
                   style={{ padding: '9px 16px', background: copied ? '#2d7a4f' : accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2 }}>
                   {copied ? '✓ COPIED' : '🔗 SHARE'}
+                </button>
+                <button onClick={handleExportIcal}
+                  style={{ padding: '9px 16px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, whiteSpace: 'nowrap' }}>
+                  📅 ICAL
                 </button>
                 {copied && <span style={{ fontSize: 12, color: '#2d7a4f' }}>Link copied — send to band & crew</span>}
               </div>
