@@ -640,7 +640,7 @@ export default function ArtistPage() {
                           {show.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{show.notes}</div>}
                         </div>
                         <button onClick={() => setConfirmDelete({ table: 'shows', id: show.id, label: `${show.venue} — ${show.date}` })}
-                          style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 16, padding: '2px 6px', opacity: 0.4, flexShrink: 0 }}
+                          style={{ background: 'none', border: '1px solid ' + border, borderRadius: 6, color: '#C00', cursor: 'pointer', fontSize: 13, padding: '2px 8px', flexShrink: 0, lineHeight: 1.6 }}
                           title="Delete">×</button>
                       </div>
                     ))}
@@ -658,7 +658,7 @@ export default function ArtistPage() {
                           {t.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{t.notes}</div>}
                         </div>
                         <button onClick={() => setConfirmDelete({ table: 'travel', id: t.id, label: `${t.from_location} → ${t.to_location} — ${t.travel_date}` })}
-                          style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 16, padding: '2px 6px', opacity: 0.4, flexShrink: 0 }}
+                          style={{ background: 'none', border: '1px solid ' + border, borderRadius: 6, color: '#C00', cursor: 'pointer', fontSize: 13, padding: '2px 8px', flexShrink: 0, lineHeight: 1.6 }}
                           title="Delete">×</button>
                       </div>
                     ))}
@@ -677,7 +677,7 @@ export default function ArtistPage() {
                           {a.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{a.notes}</div>}
                         </div>
                         <button onClick={() => setConfirmDelete({ table: 'accommodation', id: a.id, label: `${a.name} — ${a.check_in}` })}
-                          style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 16, padding: '2px 6px', opacity: 0.4, flexShrink: 0 }}
+                          style={{ background: 'none', border: '1px solid ' + border, borderRadius: 6, color: '#C00', cursor: 'pointer', fontSize: 13, padding: '2px 8px', flexShrink: 0, lineHeight: 1.6 }}
                           title="Delete">×</button>
                       </div>
                     ))}
@@ -695,7 +695,7 @@ export default function ArtistPage() {
                           {c.email && <div style={{ fontSize: 13, color: muted }}>✉️ {c.email}</div>}
                         </div>
                         <button onClick={() => setConfirmDelete({ table: 'contacts', id: c.id, label: `${c.name}${c.role ? ' — ' + c.role : ''}` })}
-                          style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 16, padding: '2px 6px', opacity: 0.4, flexShrink: 0 }}
+                          style={{ background: 'none', border: '1px solid ' + border, borderRadius: 6, color: '#C00', cursor: 'pointer', fontSize: 13, padding: '2px 8px', flexShrink: 0, lineHeight: 1.6 }}
                           title="Delete">×</button>
                       </div>
                     ))}
