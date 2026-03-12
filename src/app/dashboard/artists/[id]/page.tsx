@@ -29,6 +29,9 @@ export default function ArtistPage() {
 
   // Form state
   const [form, setForm] = useState<any>({})
+  const [confirmDelete, setConfirmDelete] = useState<{ table: string, id: string, label: string } | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [warnings, setWarnings] = useState<string[]>([])
 
   useEffect(() => { loadArtist() }, [params.id])
   useEffect(() => { if (selectedTour) loadTourData(selectedTour.id) }, [selectedTour])
@@ -50,10 +53,85 @@ export default function ArtistPage() {
       supabase.from('accommodation').select('*').eq('tour_id', tourId).order('check_in'),
       supabase.from('contacts').select('*').eq('tour_id', tourId),
     ])
-    setShows(s.data || [])
-    setTravel(t.data || [])
-    setAccommodation(a.data || [])
+    const showsData = s.data || []
+    const travelData = t.data || []
+    const accomData = a.data || []
+    setShows(showsData)
+    setTravel(travelData)
+    setAccommodation(accomData)
     setContacts(c.data || [])
+    setWarnings(computeWarnings(showsData, travelData, accomData))
+  }
+
+  async function handleDelete() {
+    if (!confirmDelete) return
+    setDeleting(true)
+    await supabase.from(confirmDelete.table).delete().eq('id', confirmDelete.id)
+    setConfirmDelete(null)
+    setDeleting(false)
+    if (selectedTour) await loadTourData(selectedTour.id)
+  }
+
+  function computeWarnings(showsData: any[], travelData: any[], accomData: any[]) {
+    const w: string[] = []
+    const sorted = [...showsData].sort((a, b) => a.date.localeCompare(b.date))
+
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const a = sorted[i]
+      const b = sorted[i + 1]
+      if (!a.city || !b.city) continue
+      if (a.city.toLowerCase() === b.city.toLowerCase()) continue
+
+      // Different cities on consecutive or nearby days — check for travel
+      const dateA = new Date(a.date + 'T00:00:00')
+      const dateB = new Date(b.date + 'T00:00:00')
+      const dayGap = (dateB.getTime() - dateA.getTime()) / (1000 * 60 * 60 * 24)
+      if (dayGap > 3) continue
+
+      const hasTravelBetween = travelData.some(t => {
+        if (!t.travel_date) return false
+        const td = new Date(t.travel_date + 'T00:00:00')
+        return td >= dateA && td <= dateB
+      })
+      if (!hasTravelBetween) {
+        w.push(`No travel booked between ${a.city} (${a.date}) and ${b.city} (${b.date})`)
+      }
+    }
+
+    // Shows with no accommodation on the same night
+    for (const show of sorted) {
+      const hasAccom = accomData.some(a => {
+        if (!a.check_in || !a.check_out) return false
+        return a.check_in <= show.date && a.check_out > show.date
+      })
+      if (!hasAccom && show.city) {
+        w.push(`No hotel for show night: ${show.venue}, ${show.city} (${show.date})`)
+      }
+    }
+
+    // Shows with no set time
+    for (const show of sorted) {
+      if (!show.set_time) {
+        w.push(`Stage time missing: ${show.venue}${show.city ? ', ' + show.city : ''} (${show.date})`)
+      }
+    }
+
+    // Back-to-back shows in different countries with less than 2 days gap
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const a = sorted[i]
+      const b = sorted[i + 1]
+      if (!a.country || !b.country) continue
+      if (a.country === b.country) continue
+      const dateA = new Date(a.date + 'T00:00:00')
+      const dateB = new Date(b.date + 'T00:00:00')
+      const dayGap = (dateB.getTime() - dateA.getTime()) / (1000 * 60 * 60 * 24)
+      if (dayGap < 2) {
+        w.push(`Tight international jump: ${a.country} → ${b.country} with only ${dayGap} day gap (${a.date} → ${b.date})`)
+      }
+    }
+
+    // No contacts at all
+    return w
   }
 
   function openModal(type: ModalType) {
@@ -438,6 +516,28 @@ export default function ArtistPage() {
         </div>
       )}
 
+      {/* Delete confirm modal */}
+      {confirmDelete && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => setConfirmDelete(null)}>
+          <div style={{ background: card, borderRadius: 16, padding: 28, width: '100%', maxWidth: 360 }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Delete this item?</div>
+            <div style={{ fontSize: 13, color: muted, marginBottom: 24 }}>{confirmDelete.label}</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setConfirmDelete(null)}
+                style={{ flex: 1, padding: '10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
+                Cancel
+              </button>
+              <button onClick={handleDelete} disabled={deleting}
+                style={{ flex: 1, padding: '10px', background: '#C00', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ borderBottom: `1px solid ${border}`, padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -512,6 +612,19 @@ export default function ArtistPage() {
               </div>
             </div>
 
+            {/* Warnings */}
+            {warnings.length > 0 && (
+              <div style={{ background: darkMode ? '#2a1f00' : '#FFF8E6', border: `1px solid ${darkMode ? '#5a3a00' : '#F0C040'}`, borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
+                <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: '#B8860B', marginBottom: 10 }}>⚠ LOGISTICS FLAGS — {warnings.length}</div>
+                {warnings.map((w, i) => (
+                  <div key={i} style={{ fontSize: 13, color: darkMode ? '#e8c840' : '#7a5800', marginBottom: i < warnings.length - 1 ? 6 : 0, display: 'flex', gap: 8 }}>
+                    <span style={{ opacity: 0.5 }}>—</span>
+                    <span>{w}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* LIST VIEW */}
             {view === 'list' && (
               <div style={{ display: 'grid', gap: 20 }}>
@@ -519,11 +632,16 @@ export default function ArtistPage() {
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
                     <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Shows — {shows.length}</div>
                     {shows.map((show, i) => (
-                      <div key={i} style={{ padding: '12px 0', borderBottom: i < shows.length - 1 ? `1px solid ${border}` : 'none' }}>
-                        <div style={{ fontWeight: 600, marginBottom: 4 }}>{show.venue}</div>
-                        <div style={{ fontSize: 13, color: muted }}>{show.date}{show.set_time ? ` · Stage ${formatTime(show.set_time)}` : ''}{show.stage ? ` · ${show.stage}` : ''}</div>
-                        {show.city && <div style={{ fontSize: 13, color: muted }}>{show.city}{show.country ? `, ${show.country}` : ''}</div>}
-                        {show.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{show.notes}</div>}
+                      <div key={i} style={{ padding: '12px 0', borderBottom: i < shows.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>{show.venue}</div>
+                          <div style={{ fontSize: 13, color: muted }}>{show.date}{show.set_time ? ` · Stage ${formatTime(show.set_time)}` : ''}{show.stage ? ` · ${show.stage}` : ''}</div>
+                          {show.city && <div style={{ fontSize: 13, color: muted }}>{show.city}{show.country ? `, ${show.country}` : ''}</div>}
+                          {show.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{show.notes}</div>}
+                        </div>
+                        <button onClick={() => setConfirmDelete({ table: 'shows', id: show.id, label: `${show.venue} — ${show.date}` })}
+                          style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 16, padding: '2px 6px', opacity: 0.4, flexShrink: 0 }}
+                          title="Delete">×</button>
                       </div>
                     ))}
                   </div>
@@ -532,11 +650,16 @@ export default function ArtistPage() {
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
                     <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Travel — {travel.length}</div>
                     {travel.map((t, i) => (
-                      <div key={i} style={{ padding: '12px 0', borderBottom: i < travel.length - 1 ? `1px solid ${border}` : 'none' }}>
-                        <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.from_location} → {t.to_location}</div>
-                        <div style={{ fontSize: 13, color: muted }}>{t.travel_date}{t.carrier ? ` · ${t.carrier}` : ''}{t.reference ? ` ${t.reference}` : ''}</div>
-                        {t.departure_time && <div style={{ fontSize: 13, color: muted }}>Departs {formatTime(t.departure_time)}{t.arrival_time ? ` · Arrives ${formatTime(t.arrival_time)}` : ''}</div>}
-                        {t.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{t.notes}</div>}
+                      <div key={i} style={{ padding: '12px 0', borderBottom: i < travel.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.from_location} → {t.to_location}</div>
+                          <div style={{ fontSize: 13, color: muted }}>{t.travel_date}{t.carrier ? ` · ${t.carrier}` : ''}{t.reference ? ` ${t.reference}` : ''}</div>
+                          {t.departure_time && <div style={{ fontSize: 13, color: muted }}>Departs {formatTime(t.departure_time)}{t.arrival_time ? ` · Arrives ${formatTime(t.arrival_time)}` : ''}</div>}
+                          {t.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{t.notes}</div>}
+                        </div>
+                        <button onClick={() => setConfirmDelete({ table: 'travel', id: t.id, label: `${t.from_location} → ${t.to_location} — ${t.travel_date}` })}
+                          style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 16, padding: '2px 6px', opacity: 0.4, flexShrink: 0 }}
+                          title="Delete">×</button>
                       </div>
                     ))}
                   </div>
@@ -545,12 +668,17 @@ export default function ArtistPage() {
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
                     <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Hotels — {accommodation.length}</div>
                     {accommodation.map((a, i) => (
-                      <div key={i} style={{ padding: '12px 0', borderBottom: i < accommodation.length - 1 ? `1px solid ${border}` : 'none' }}>
-                        <div style={{ fontWeight: 600, marginBottom: 4 }}>{a.name}</div>
-                        {a.address && <div style={{ fontSize: 13, color: muted }}>{a.address}</div>}
-                        <div style={{ fontSize: 13, color: muted }}>Check in: {a.check_in}{a.check_out ? ` · Check out: ${a.check_out}` : ''}</div>
-                        {a.confirmation && <div style={{ fontSize: 13, color: muted }}>Ref: {a.confirmation}</div>}
-                        {a.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{a.notes}</div>}
+                      <div key={i} style={{ padding: '12px 0', borderBottom: i < accommodation.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>{a.name}</div>
+                          {a.address && <div style={{ fontSize: 13, color: muted }}>{a.address}</div>}
+                          <div style={{ fontSize: 13, color: muted }}>Check in: {a.check_in}{a.check_out ? ` · Check out: ${a.check_out}` : ''}</div>
+                          {a.confirmation && <div style={{ fontSize: 13, color: muted }}>Ref: {a.confirmation}</div>}
+                          {a.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{a.notes}</div>}
+                        </div>
+                        <button onClick={() => setConfirmDelete({ table: 'accommodation', id: a.id, label: `${a.name} — ${a.check_in}` })}
+                          style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 16, padding: '2px 6px', opacity: 0.4, flexShrink: 0 }}
+                          title="Delete">×</button>
                       </div>
                     ))}
                   </div>
@@ -559,11 +687,16 @@ export default function ArtistPage() {
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
                     <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Contacts — {contacts.length}</div>
                     {contacts.map((c, i) => (
-                      <div key={i} style={{ padding: '12px 0', borderBottom: i < contacts.length - 1 ? `1px solid ${border}` : 'none' }}>
-                        <div style={{ fontWeight: 600, marginBottom: 4 }}>{c.name}</div>
-                        {c.role && <div style={{ fontSize: 13, color: muted }}>{c.role}</div>}
-                        {c.phone && <div style={{ fontSize: 13, color: muted }}>📞 {c.phone}</div>}
-                        {c.email && <div style={{ fontSize: 13, color: muted }}>✉️ {c.email}</div>}
+                      <div key={i} style={{ padding: '12px 0', borderBottom: i < contacts.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>{c.name}</div>
+                          {c.role && <div style={{ fontSize: 13, color: muted }}>{c.role}</div>}
+                          {c.phone && <div style={{ fontSize: 13, color: muted }}>📞 {c.phone}</div>}
+                          {c.email && <div style={{ fontSize: 13, color: muted }}>✉️ {c.email}</div>}
+                        </div>
+                        <button onClick={() => setConfirmDelete({ table: 'contacts', id: c.id, label: `${c.name}${c.role ? ' — ' + c.role : ''}` })}
+                          style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 16, padding: '2px 6px', opacity: 0.4, flexShrink: 0 }}
+                          title="Delete">×</button>
                       </div>
                     ))}
                   </div>
