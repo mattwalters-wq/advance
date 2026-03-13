@@ -66,8 +66,8 @@ export default function PublicTourPage() {
       return `${d.replace(/-/g, '')}T${t.replace(':', '')}00`
     }
     function esc(s: string) {
-      return (s || '').replace(/\/g, '\\').replace(/;/g, '\;').replace(/,/g, '\,').replace(/
-/g, '\n')
+      if (!s) return ''
+      return s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
     }
     function uid() { return Math.random().toString(36).slice(2) + '@advance' }
     function pad(n: number) { return String(n).padStart(2, '0') }
