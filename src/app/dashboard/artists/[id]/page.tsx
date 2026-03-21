@@ -1385,8 +1385,7 @@ export default function ArtistPage() {
                         <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#1A1714', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: accent, fontSize: 11, marginTop: 2 }}>✦</div>
                       )}
                       <div style={{ maxWidth: '80%', padding: '10px 14px', borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px', background: msg.role === 'user' ? accent : card, color: msg.role === 'user' ? '#fff' : text, border: msg.role === 'assistant' ? `1px solid ${border}` : 'none', fontSize: 14, lineHeight: 1.65 }}>
-                        <div className="ai-msg" dangerouslySetInnerHTML={{ __html: (msg.content || '').replace(/
-/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
+                        <div className="ai-msg" dangerouslySetInnerHTML={{ __html: (msg.content || '').split('\n').join('<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
                         {/* Save to tour button if AI extracted data */}
                         {msg.extracted && (
                           <button onClick={() => saveAiExtracted(msg.extracted)}

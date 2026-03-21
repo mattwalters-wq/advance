@@ -119,10 +119,7 @@ Be direct and concise. These are busy music industry professionals. No unnecessa
         })
         const extractText = extractResponse.content[0].type === 'text' ? extractResponse.content[0].text.trim() : ''
         if (extractText && extractText !== 'null') {
-          const clean = extractText.replace(/^```json
-?/, '').replace(/^```
-?/, '').replace(/
-?```$/, '').trim()
+          const clean = extractText.replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/\n?```$/, '').trim()
           extracted = JSON.parse(clean)
           // Only return extracted if there's actually something
           const hasData = Object.values(extracted).some((arr: any) => arr?.length > 0)
