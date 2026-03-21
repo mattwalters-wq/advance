@@ -55,13 +55,11 @@ async function extractExcelText(file: File): Promise<string> {
     const sheet = workbook.Sheets[sheetName]
     const csv = XLSX.utils.sheet_to_csv(sheet)
     if (csv.trim()) {
-      lines.push(`Sheet: ${sheetName}`)
+      lines.push('Sheet: ' + sheetName)
       lines.push(csv)
     }
   }
-  return lines.join('
-
-')
+  return lines.join('\n\n')
 }
 
 export default function ImportPage() {
