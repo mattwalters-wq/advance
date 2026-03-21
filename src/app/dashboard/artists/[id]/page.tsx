@@ -813,9 +813,15 @@ export default function ArtistPage() {
             <div style={{ fontSize: 13, color: muted, fontStyle: 'italic' }}>{artist?.project}</div>
           </div>
         </div>
-        <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, padding: '6px 12px', color: text, cursor: 'pointer', fontSize: 13 }}>
-          {darkMode ? '☀️ Light' : '🌙 Dark'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => router.push(`/dashboard/artists/${params.id}/settings`)}
+            style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, padding: '6px 12px', color: muted, cursor: 'pointer', fontSize: 12, fontFamily: 'monospace', letterSpacing: 1 }}>
+            ⚙ SETTINGS
+          </button>
+          <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, padding: '6px 12px', color: text, cursor: 'pointer', fontSize: 13 }}>
+            {darkMode ? '☀️' : '🌙'}
+          </button>
+        </div>
       </div>
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
