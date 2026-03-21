@@ -14,6 +14,7 @@ export default function DaySheetPage() {
   const [travel, setTravel] = useState<any[]>([])
   const [accommodation, setAccommodation] = useState<any[]>([])
   const [contacts, setContacts] = useState<any[]>([])
+  const [rider, setRider] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
@@ -26,11 +27,12 @@ export default function DaySheetPage() {
     if (!showData) { setNotFound(true); setLoading(false); return }
     setShow(showData)
 
-    const [tourRes, travelRes, accomRes, contactsRes] = await Promise.all([
+    const [tourRes, travelRes, accomRes, contactsRes, riderRes] = await Promise.all([
       supabase.from('tours').select('*').eq('id', showData.tour_id).single(),
       supabase.from('travel').select('*').eq('tour_id', showData.tour_id).order('travel_date'),
       supabase.from('accommodation').select('*').eq('tour_id', showData.tour_id).order('check_in'),
       supabase.from('contacts').select('*').eq('tour_id', showData.tour_id),
+      supabase.from('riders').select('*').eq('tour_id', showData.tour_id).single(),
     ])
 
     const tourData = tourRes.data
@@ -60,6 +62,7 @@ export default function DaySheetPage() {
     setAccommodation(relevantAccom)
 
     setContacts(contactsRes.data || [])
+    setRider(riderRes.data || null)
     setLoading(false)
   }
 
@@ -159,8 +162,20 @@ export default function DaySheetPage() {
                 Stage: <strong>{show.stage}</strong>
               </div>
             )}
+            {show?.catering && (
+              <div style={{ marginTop: 14, padding: '12px 14px', background: '#F0FFF4', borderLeft: `3px solid #3D6B50`, borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.6 }}>
+                <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, color: '#3D6B50', display: 'block', marginBottom: 4 }}>🍽 CATERING</span>
+                {show.catering}
+              </div>
+            )}
+            {show?.backline && (
+              <div style={{ marginTop: 10, padding: '12px 14px', background: '#F5F0FF', borderLeft: `3px solid #5B4B8A`, borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.6 }}>
+                <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, color: '#5B4B8A', display: 'block', marginBottom: 4 }}>🎸 BACKLINE</span>
+                {show.backline}
+              </div>
+            )}
             {show?.notes && (
-              <div style={{ marginTop: 14, padding: '10px 14px', background: '#FFF8F0', borderLeft: `3px solid ${accent}`, borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.6 }}>
+              <div style={{ marginTop: 10, padding: '10px 14px', background: '#FFF8F0', borderLeft: `3px solid ${accent}`, borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.6 }}>
                 {show.notes}
               </div>
             )}
@@ -243,6 +258,19 @@ export default function DaySheetPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tech rider link */}
+        {rider?.tech_rider_url && (
+          <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 20 }}>
+            <SectionHeader label="Tech Rider" />
+            <div style={{ padding: '16px 20px' }}>
+              <a href={rider.tech_rider_url} target="_blank" rel="noreferrer"
+                style={{ fontSize: 14, color: accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
+                📄 Open tech rider document ↗
+              </a>
             </div>
           </div>
         )}

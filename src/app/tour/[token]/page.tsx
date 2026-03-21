@@ -178,6 +178,18 @@ export default function PublicTourPage() {
                   {show.set_time && <Tag label="Stage" value={formatTime(show.set_time)} accent={accent} />}
                   {show.stage && <Tag label="Stage name" value={show.stage} accent={accent} />}
                 </div>
+                {show.catering && (
+                  <div style={{ marginTop: 8, padding: '8px 12px', background: '#F0FFF4', borderLeft: `2px solid #3D6B50`, borderRadius: 4, fontSize: 13 }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, color: '#3D6B50', display: 'block', marginBottom: 2 }}>🍽 CATERING</span>
+                    {show.catering}
+                  </div>
+                )}
+                {show.backline && (
+                  <div style={{ marginTop: 6, padding: '8px 12px', background: '#F5F0FF', borderLeft: `2px solid #5B4B8A`, borderRadius: 4, fontSize: 13 }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, color: '#5B4B8A', display: 'block', marginBottom: 2 }}>🎸 BACKLINE</span>
+                    {show.backline}
+                  </div>
+                )}
                 {show.notes && <div style={{ marginTop: 8, fontSize: 13, color: muted, fontStyle: 'italic', borderLeft: `2px solid ${accent}`, paddingLeft: 10 }}>{show.notes}</div>}
               </Item>
             ))}

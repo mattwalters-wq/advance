@@ -33,6 +33,7 @@ export default function ArtistPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [warnings, setWarnings] = useState<string[]>([])
+  const [dismissedWarnings, setDismissedWarnings] = useState<Set<string>>(new Set())
   const [notes, setNotes] = useState<any[]>([])
   const [rider, setRider] = useState<any>(null)
   const [settlements, setSettlements] = useState<any[]>([])
@@ -236,8 +237,9 @@ export default function ArtistPage() {
       if (!data.success) throw new Error(data.error)
 
       update({ status: 'done', result: data.result })
-      // Reload tour data to reflect changes
+      // Reload tour data and switch to list view to see results
       await loadTourData(selectedTour.id)
+      setView('list')
     } catch (err: any) {
       update({ status: 'error', error: err.message })
     }
@@ -619,6 +621,16 @@ export default function ArtistPage() {
                   <label style={labelStyle}>Notes</label>
                   <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: 70 }} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any notes..." />
                 </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                  <div>
+                    <label style={labelStyle}>Catering / dinner</label>
+                    <input style={inputStyle} value={form.catering || ''} onChange={e => setForm({ ...form, catering: e.target.value })} placeholder="e.g. Dinner provided 6pm" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Backline</label>
+                    <input style={inputStyle} value={form.backline || ''} onChange={e => setForm({ ...form, backline: e.target.value })} placeholder="e.g. Drum kit provided" />
+                  </div>
+                </div>
               </>
             )}
 
@@ -804,6 +816,11 @@ export default function ArtistPage() {
                   <label style={labelStyle}>Input list / additional notes</label>
                   <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: 80 }} value={form.input_list || ''} onChange={e => setForm({ ...form, input_list: e.target.value })} placeholder="Channel list, special requirements..." />
                 </div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={labelStyle}>Tech rider document URL</label>
+                  <input style={inputStyle} value={form.tech_rider_url || ''} onChange={e => setForm({ ...form, tech_rider_url: e.target.value })} placeholder="Paste a link to your tech rider PDF or Google Doc" />
+                  <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Upload to Google Drive, Dropbox, or anywhere and paste the link here.</div>
+                </div>
               </>
             )}
 
@@ -985,13 +1002,20 @@ export default function ArtistPage() {
             </div>
 
             {/* Warnings */}
-            {warnings.length > 0 && (
+            {warnings.filter(w => !dismissedWarnings.has(w)).length > 0 && (
               <div style={{ background: darkMode ? '#2a1f00' : '#FFF8E6', border: `1px solid ${darkMode ? '#5a3a00' : '#F0C040'}`, borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
-                <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: '#B8860B', marginBottom: 10 }}>⚠ LOGISTICS FLAGS — {warnings.length}</div>
-                {warnings.map((w, i) => (
-                  <div key={i} style={{ fontSize: 13, color: darkMode ? '#e8c840' : '#7a5800', marginBottom: i < warnings.length - 1 ? 6 : 0, display: 'flex', gap: 8 }}>
-                    <span style={{ opacity: 0.5 }}>—</span>
-                    <span>{w}</span>
+                <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: '#B8860B', marginBottom: 10 }}>
+                  ⚠ LOGISTICS FLAGS — {warnings.filter(w => !dismissedWarnings.has(w)).length}
+                </div>
+                {warnings.filter(w => !dismissedWarnings.has(w)).map((w, i, arr) => (
+                  <div key={i} style={{ fontSize: 13, color: darkMode ? '#e8c840' : '#7a5800', marginBottom: i < arr.length - 1 ? 8 : 0, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <span style={{ opacity: 0.4, marginTop: 1 }}>—</span>
+                    <span style={{ flex: 1 }}>{w}</span>
+                    <button onClick={() => setDismissedWarnings(prev => new Set([...prev, w]))}
+                      title="Mark as resolved"
+                      style={{ background: 'none', border: '1px solid #F0C040', borderRadius: 5, color: '#B8860B', cursor: 'pointer', fontSize: 10, padding: '2px 8px', fontFamily: 'monospace', letterSpacing: 1, flexShrink: 0, opacity: 0.8 }}>
+                      ✓ RESOLVE
+                    </button>
                   </div>
                 ))}
               </div>
@@ -1009,6 +1033,8 @@ export default function ArtistPage() {
                           <div style={{ fontWeight: 600, marginBottom: 4 }}>{show.venue}</div>
                           <div style={{ fontSize: 13, color: muted }}>{show.date}{show.set_time ? ` · Stage ${formatTime(show.set_time)}` : ''}{show.stage ? ` · ${show.stage}` : ''}</div>
                           {show.city && <div style={{ fontSize: 13, color: muted }}>{show.city}{show.country ? `, ${show.country}` : ''}</div>}
+                          {show.catering && <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>🍽 {show.catering}</div>}
+                          {show.backline && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>🎸 {show.backline}</div>}
                           {show.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{show.notes}</div>}
                         </div>
                         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -1178,9 +1204,18 @@ export default function ArtistPage() {
                       </div>
                     )}
                     {rider.input_list && (
-                      <div>
+                      <div style={{ marginBottom: 12 }}>
                         <div style={{ fontSize: 11, fontFamily: 'monospace', color: muted, letterSpacing: 1, marginBottom: 6 }}>INPUT LIST</div>
                         <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', color: text }}>{rider.input_list}</div>
+                      </div>
+                    )}
+                    {rider.tech_rider_url && (
+                      <div>
+                        <div style={{ fontSize: 11, fontFamily: 'monospace', color: muted, letterSpacing: 1, marginBottom: 6 }}>TECH RIDER DOCUMENT</div>
+                        <a href={rider.tech_rider_url} target="_blank" rel="noreferrer"
+                          style={{ fontSize: 13, color: accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          📄 Open tech rider ↗
+                        </a>
                       </div>
                     )}
                   </div>
