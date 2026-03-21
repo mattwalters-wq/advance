@@ -40,10 +40,6 @@ export default function DashboardPage() {
     if (!inviteEmail.trim()) return
     setInviting(true)
     setInviteMsg('')
-    const { error } = await supabase.auth.admin?.inviteUserByEmail
-      ? supabase.auth.signInWithOtp({ email: inviteEmail, options: { shouldCreateUser: true } })
-      : Promise.resolve({ error: null })
-
     // Use Supabase magic link invite
     const res = await fetch('/api/invite', {
       method: 'POST',
