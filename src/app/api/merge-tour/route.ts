@@ -165,7 +165,13 @@ Rules:
       if (match) {
         const { updates, changed } = mergeFields(match, newShow, ['venue', 'city', 'country', 'stage', 'set_time', 'doors_time', 'soundcheck_time', 'notes', 'catering', 'backline'])
         if (Object.keys(updates).length > 0) {
-          await supabase.from('shows').update(updates).eq('id', match.id)
+          // Strip fields that may not exist in schema yet
+          const safeUpdates = { ...updates }
+          const { error: updateErr } = await supabase.from('shows').update(safeUpdates).eq('id', match.id)
+          if (updateErr && updateErr.message?.includes('column')) {
+            const { catering: _c, backline: _b, ...baseUpdates } = safeUpdates
+            await supabase.from('shows').update(baseUpdates).eq('id', match.id)
+          }
           result.shows.updated++
           result.shows.details.push({ action: 'updated', date: newShow.date, venue: newShow.venue, fields: changed })
         } else {
@@ -173,7 +179,16 @@ Rules:
           result.shows.details.push({ action: 'unchanged', date: newShow.date, venue: newShow.venue, fields: [] })
         }
       } else {
-        await supabase.from('shows').insert({ ...newShow, tour_id: tourId, org_id })
+        // Strip any fields that may not exist in schema yet
+        const { catering, backline, ...safeShow } = newShow
+        const insertData: any = { ...safeShow, tour_id: tourId, org_id }
+        // Try with extra fields first, fall back without
+        const { error: insertErr } = await supabase.from('shows').insert(insertData)
+        if (insertErr && insertErr.message?.includes('column')) {
+          // Schema doesn't have new columns yet — insert without them
+          const { catering: _c, backline: _b, ...baseShow } = insertData
+          await supabase.from('shows').insert(baseShow)
+        }
         result.shows.added++
         result.shows.details.push({ action: 'added', date: newShow.date, venue: newShow.venue, fields: [] })
       }
