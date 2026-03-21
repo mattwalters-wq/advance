@@ -26,31 +26,52 @@ export default function SigninPage() {
     }
   }
 
+  const inputStyle = {
+    width: '100%', padding: '12px 14px', background: '#2A2520',
+    border: '1px solid #333', borderRadius: 8, color: '#F5F0E8',
+    fontSize: 14, fontFamily: 'Georgia, serif', outline: 'none',
+    boxSizing: 'border-box' as const,
+  }
+
   return (
-    <div style={{ minHeight: '100vh', background: '#F5F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Georgia, serif' }}>
-      <div style={{ width: 400, background: '#fff', borderRadius: 12, padding: 40, border: '1px solid #DDD8CE' }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 24, fontStyle: 'italic', color: '#1A1714', marginBottom: 4 }}>Advance</div>
-          <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: '#8A8580' }}>SIGN IN</div>
-        </div>
-        {error && <div style={{ background: '#FEE', border: '1px solid #FCC', borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#C00', fontFamily: 'monospace' }}>{error}</div>}
-        {[
-          { label: 'EMAIL', value: email, set: setEmail, type: 'email', placeholder: 'matt@unified.com' },
-          { label: 'PASSWORD', value: password, set: setPassword, type: 'password', placeholder: '••••••••' },
-        ].map(f => (
-          <div key={f.label} style={{ marginBottom: 16 }}>
-            <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#8A8580', marginBottom: 6 }}>{f.label}</div>
-            <input type={f.type} value={f.value} onChange={e => f.set(e.target.value)} placeholder={f.placeholder}
-              onKeyDown={e => e.key === 'Enter' && handleSignin()}
-              style={{ width: '100%', padding: '10px 12px', border: '1px solid #DDD8CE', borderRadius: 6, fontSize: 13, fontFamily: 'Georgia, serif', color: '#1A1714', outline: 'none', boxSizing: 'border-box' }} />
+    <div style={{ minHeight: '100vh', background: '#1A1714', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Georgia, serif', padding: 24 }}>
+
+      {/* Logo */}
+      <div style={{ marginBottom: 48, textAlign: 'center', cursor: 'pointer' }} onClick={() => router.push('/')}>
+        <div style={{ fontSize: 28, fontStyle: 'italic', color: '#F5F0E8', marginBottom: 4 }}>Advance</div>
+        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: '#C4622D' }}>AI ✦</div>
+      </div>
+
+      <div style={{ width: '100%', maxWidth: 380 }}>
+        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: '#8A8580', textAlign: 'center', marginBottom: 28 }}>SIGN IN</div>
+
+        {error && (
+          <div style={{ background: 'rgba(200,0,0,0.15)', border: '1px solid rgba(200,0,0,0.3)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#ff8080', fontFamily: 'monospace' }}>
+            {error}
           </div>
-        ))}
+        )}
+
+        <div style={{ marginBottom: 14 }}>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+            placeholder="Email address" onKeyDown={e => e.key === 'Enter' && handleSignin()}
+            style={inputStyle} />
+        </div>
+        <div style={{ marginBottom: 24 }}>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+            placeholder="Password" onKeyDown={e => e.key === 'Enter' && handleSignin()}
+            style={inputStyle} />
+        </div>
+
         <button onClick={handleSignin} disabled={loading}
-          style={{ width: '100%', padding: 13, background: '#1A1714', color: '#F5F0E8', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: 'pointer', marginTop: 8 }}>
-          {loading ? 'SIGNING IN...' : 'SIGN IN'}
+          style={{ width: '100%', padding: 14, background: '#C4622D', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: 'pointer', marginBottom: 16 }}>
+          {loading ? 'SIGNING IN...' : 'SIGN IN →'}
         </button>
-        <div style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: '#8A8580' }}>
-          No account? <a href="/auth/signup" style={{ color: '#1A1714' }}>Create one</a>
+
+        <div style={{ textAlign: 'center', fontSize: 13, color: '#8A8580' }}>
+          No account?{' '}
+          <span onClick={() => router.push('/auth/signup')} style={{ color: '#F5F0E8', cursor: 'pointer', textDecoration: 'underline' }}>
+            Get started
+          </span>
         </div>
       </div>
     </div>

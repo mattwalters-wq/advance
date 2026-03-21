@@ -77,10 +77,26 @@ export default function ImportPage() {
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState('')
   const [imported, setImported] = useState(false)
+  const [importMode, setImportMode] = useState<'new' | 'existing'>('new')
+  const [tours, setTours] = useState<any[]>([])
+  const [selectedTourId, setSelectedTourId] = useState('')
 
   useEffect(() => {
     supabase.from('artists').select('*').order('name').then(({ data }) => setArtists(data || []))
   }, [])
+
+  useEffect(() => {
+    if (selectedArtistId) {
+      supabase.from('tours').select('*').eq('artist_id', selectedArtistId).order('start_date', { ascending: false })
+        .then(({ data }) => {
+          setTours(data || [])
+          setSelectedTourId(data?.[0]?.id || '')
+        })
+    } else {
+      setTours([])
+      setSelectedTourId('')
+    }
+  }, [selectedArtistId])
 
   function updateJob(id: string, updates: Partial<FileJob>) {
     setJobs(prev => prev.map(j => j.id === id ? { ...j, ...updates } : j))
@@ -176,7 +192,9 @@ export default function ImportPage() {
   const merged = mergeResults()
 
   async function handleImport() {
-    if (!selectedArtistId || !tourName) { setImportError('Select an artist and enter a tour name'); return }
+    if (!selectedArtistId) { setImportError('Select an artist'); return }
+    if (importMode === 'new' && !tourName) { setImportError('Enter a tour name'); return }
+    if (importMode === 'existing' && !selectedTourId) { setImportError('Select a tour'); return }
     setImporting(true)
     setImportError('')
     try {
@@ -186,15 +204,21 @@ export default function ImportPage() {
       if (!profile) throw new Error('No profile found')
       const org_id = profile.org_id
 
-      const { data: tour, error: tourError } = await supabase
-        .from('tours').insert({ name: tourName, artist_id: selectedArtistId, org_id }).select().single()
-      if (tourError) throw tourError
+      let tourId: string
+      if (importMode === 'existing') {
+        tourId = selectedTourId
+      } else {
+        const { data: tour, error: tourError } = await supabase
+          .from('tours').insert({ name: tourName, artist_id: selectedArtistId, org_id }).select().single()
+        if (tourError) throw tourError
+        tourId = tour.id
+      }
 
-      if (merged.shows?.length) await supabase.from('shows').insert(merged.shows.map((s: any) => ({ ...s, tour_id: tour.id, org_id })))
-      if (merged.travel?.length) await supabase.from('travel').insert(merged.travel.map((t: any) => ({ ...t, tour_id: tour.id, org_id })))
-      if (merged.accommodation?.length) await supabase.from('accommodation').insert(merged.accommodation.map((a: any) => ({ ...a, tour_id: tour.id, org_id })))
-      if (merged.contacts?.length) await supabase.from('contacts').insert(merged.contacts.map((c: any) => ({ ...c, tour_id: tour.id, org_id })))
-      if (merged.personnel?.length) await supabase.from('personnel').insert(merged.personnel.map((p: any) => ({ ...p, tour_id: tour.id, org_id })))
+      if (merged.shows?.length) await supabase.from('shows').insert(merged.shows.map((s: any) => ({ ...s, tour_id: tourId, org_id })))
+      if (merged.travel?.length) await supabase.from('travel').insert(merged.travel.map((t: any) => ({ ...t, tour_id: tourId, org_id })))
+      if (merged.accommodation?.length) await supabase.from('accommodation').insert(merged.accommodation.map((a: any) => ({ ...a, tour_id: tourId, org_id })))
+      if (merged.contacts?.length) await supabase.from('contacts').insert(merged.contacts.map((c: any) => ({ ...c, tour_id: tourId, org_id })))
+      if (merged.personnel?.length) await supabase.from('personnel').insert(merged.personnel.map((p: any) => ({ ...p, tour_id: tourId, org_id })))
 
       setImported(true)
       setTimeout(() => router.push(`/dashboard/artists/${selectedArtistId}`), 1200)
@@ -341,19 +365,47 @@ export default function ImportPage() {
 
             {/* Assign to */}
             <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: muted, marginBottom: 12 }}>ASSIGN TO</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-              <div>
-                <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 6 }}>ARTIST</div>
-                <select value={selectedArtistId} onChange={e => setSelectedArtistId(e.target.value)} style={inputStyle}>
-                  <option value="">Select artist...</option>
-                  {artists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 6 }}>TOUR NAME</div>
-                <input value={tourName} onChange={e => setTourName(e.target.value)} placeholder="e.g. EU Tour 2026" style={inputStyle} />
-              </div>
+
+            {/* Artist */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 6 }}>ARTIST</div>
+              <select value={selectedArtistId} onChange={e => setSelectedArtistId(e.target.value)} style={inputStyle}>
+                <option value="">Select artist...</option>
+                {artists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
             </div>
+
+            {/* New vs existing tour toggle */}
+            {selectedArtistId && (
+              <>
+                <div style={{ display: 'flex', gap: 0, marginBottom: 12, border: `1px solid ${border}`, borderRadius: 8, overflow: 'hidden' }}>
+                  {(['new', 'existing'] as const).map(mode => (
+                    <button key={mode} onClick={() => setImportMode(mode)}
+                      style={{ flex: 1, padding: '9px', background: importMode === mode ? accent : 'transparent', color: importMode === mode ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2 }}>
+                      {mode === 'new' ? '+ NEW TOUR' : 'ADD TO EXISTING'}
+                    </button>
+                  ))}
+                </div>
+
+                {importMode === 'new' ? (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 6 }}>TOUR NAME</div>
+                    <input value={tourName} onChange={e => setTourName(e.target.value)} placeholder="e.g. EU Tour 2026" style={inputStyle} />
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 6 }}>SELECT TOUR</div>
+                    {tours.length === 0 ? (
+                      <div style={{ fontSize: 12, color: muted, padding: '10px 0' }}>No tours yet for this artist — create a new one instead.</div>
+                    ) : (
+                      <select value={selectedTourId} onChange={e => setSelectedTourId(e.target.value)} style={inputStyle}>
+                        {tours.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
 
             {importError && <div style={{ background: '#FEE', borderRadius: 6, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#C00', fontFamily: 'monospace' }}>{importError}</div>}
 
