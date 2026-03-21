@@ -22,7 +22,7 @@ export default function ArtistPage() {
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
   const [sharing, setSharing] = useState(false)
-  const [view, setView] = useState<'list' | 'calendar' | 'notes'>('list')
+  const [view, setView] = useState<'list' | 'calendar' | 'notes' | 'import'>('list')
   const [calMonth, setCalMonth] = useState(new Date())
   const [modal, setModal] = useState<ModalType>(null)
   const [saving, setSaving] = useState(false)
@@ -37,6 +37,8 @@ export default function ArtistPage() {
   const [rider, setRider] = useState<any>(null)
   const [settlements, setSettlements] = useState<any[]>([])
   const [settlementShow, setSettlementShow] = useState<any>(null)
+  const [importJobs, setImportJobs] = useState<any[]>([])
+  const [importDragging, setImportDragging] = useState(false)
   const [newNote, setNewNote] = useState('')
   const [postingNote, setPostingNote] = useState(false)
   const [userName, setUserName] = useState('Manager')
@@ -172,6 +174,62 @@ export default function ArtistPage() {
 
     // No contacts at all
     return w
+  }
+
+  async function processImportFile(file: File) {
+    if (!selectedTour) return
+    const jobId = Math.random().toString(36).slice(2)
+    const job = { id: jobId, name: file.name, status: 'reading', result: null as any, error: null as any }
+    setImportJobs(prev => [...prev, job])
+
+    const update = (updates: any) => setImportJobs(prev => prev.map(j => j.id === jobId ? { ...j, ...updates } : j))
+
+    try {
+      update({ status: 'parsing' })
+      const ext = file.name.split('.').pop()?.toLowerCase()
+      let body: any = { tourId: selectedTour.id, filename: file.name }
+
+      if (ext === 'pdf') {
+        const base64 = await new Promise<string>((res, rej) => {
+          const reader = new FileReader()
+          reader.onload = () => res((reader.result as string).split(',')[1])
+          reader.onerror = rej
+          reader.readAsDataURL(file)
+        })
+        body.pdf_base64 = base64
+      } else if (ext === 'xlsx' || ext === 'xls') {
+        const XLSX = await import('xlsx')
+        const ab = await file.arrayBuffer()
+        const wb = XLSX.read(ab, { type: 'array' })
+        const lines: string[] = []
+        for (const sn of wb.SheetNames) {
+          lines.push('Sheet: ' + sn)
+          lines.push(XLSX.utils.sheet_to_csv(wb.Sheets[sn]))
+        }
+        body.text = lines.join('\n\n')
+      } else if (ext === 'docx' || ext === 'doc') {
+        const mammoth = await import('mammoth')
+        const ab = await file.arrayBuffer()
+        const r = await mammoth.extractRawText({ arrayBuffer: ab })
+        body.text = r.value
+      } else {
+        body.text = await file.text()
+      }
+
+      const res = await fetch('/api/merge-tour', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!data.success) throw new Error(data.error)
+
+      update({ status: 'done', result: data.result })
+      // Reload tour data to reflect changes
+      await loadTourData(selectedTour.id)
+    } catch (err: any) {
+      update({ status: 'error', error: err.message })
+    }
   }
 
   function openModal(type: ModalType, existingItem?: any) {
@@ -854,7 +912,7 @@ export default function ArtistPage() {
 
                 {/* View toggle */}
                 <div style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: 8, overflow: 'hidden' }}>
-                  {([['list', '☰'], ['calendar', '▦'], ['notes', '💬']] as const).map(([v, icon]) => (
+                  {([['list', '☰'], ['calendar', '▦'], ['notes', '💬'], ['import', '⊕']] as const).map(([v, icon]) => (
                     <button key={v} onClick={() => setView(v as any)}
                       style={{ padding: '8px 12px', background: view === v ? accent : 'transparent', color: view === v ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, position: 'relative' }}>
                       {icon}{v === 'notes' && notes.length > 0 && <span style={{ position: 'absolute', top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', background: '#f59e0b' }} />}
@@ -1132,6 +1190,120 @@ export default function ArtistPage() {
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* IMPORT VIEW */}
+            {view === 'import' && (
+              <div style={{ display: 'grid', gap: 16 }}>
+
+                {/* Drop zone */}
+                <div
+                  onDrop={e => { e.preventDefault(); setImportDragging(false); Array.from(e.dataTransfer.files).forEach(f => processImportFile(f)) }}
+                  onDragOver={e => { e.preventDefault(); setImportDragging(true) }}
+                  onDragLeave={() => setImportDragging(false)}
+                  onClick={() => { const i = document.createElement('input'); i.type='file'; i.multiple=true; i.accept='.pdf,.doc,.docx,.txt,.csv,.xlsx,.xls'; i.onchange=(e:any)=>Array.from(e.target.files||[]).forEach((f:any)=>processImportFile(f)); i.click() }}
+                  style={{ border: `2px dashed ${importDragging ? accent : border}`, borderRadius: 14, padding: '40px 24px', textAlign: 'center', cursor: 'pointer', background: importDragging ? (darkMode ? '#2a1f18' : '#FDF5EF') : card, transition: 'all 0.15s' }}>
+                  <div style={{ fontSize: 32, marginBottom: 10 }}>⊕</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
+                    {importDragging ? 'Drop to add to this tour' : 'Drop documents here'}
+                  </div>
+                  <div style={{ fontSize: 13, color: muted, marginBottom: 8 }}>
+                    {selectedTour?.name}
+                  </div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 10, color: muted, letterSpacing: 2 }}>
+                    PDF · DOCX · XLSX · CSV · TXT
+                  </div>
+                  <div style={{ marginTop: 12, fontSize: 12, color: muted, lineHeight: 1.6 }}>
+                    AI matches against existing shows and fills in the blanks.<br/>
+                    Drop multiple docs at different times — it keeps updating.
+                  </div>
+                </div>
+
+                {/* Job history */}
+                {importJobs.length > 0 && (
+                  <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
+                    <div style={{ padding: '12px 20px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: muted }}>IMPORT HISTORY</div>
+                      <button onClick={() => setImportJobs([])} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 11, fontFamily: 'monospace' }}>CLEAR</button>
+                    </div>
+                    {importJobs.slice().reverse().map((job, i) => (
+                      <div key={job.id} style={{ padding: '14px 20px', borderBottom: i < importJobs.length - 1 ? `1px solid ${border}` : 'none' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: job.result || job.error ? 8 : 0 }}>
+                          <span style={{ fontSize: 16 }}>
+                            {job.status === 'reading' || job.status === 'parsing' ? <span style={{ color: accent }}>✦</span>
+                             : job.status === 'done' ? <span style={{ color: '#2d7a4f' }}>✓</span>
+                             : <span style={{ color: '#C00' }}>✕</span>}
+                          </span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{job.name}</div>
+                            <div style={{ fontSize: 11, fontFamily: 'monospace', color: muted, letterSpacing: 1 }}>
+                              {job.status === 'parsing' ? 'Reading with AI...' : job.status === 'reading' ? 'Loading...' : job.status}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Result summary */}
+                        {job.result && (
+                          <div style={{ marginLeft: 28, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {[
+                              ['shows', '🎵'],
+                              ['travel', '✈️'],
+                              ['accommodation', '🏨'],
+                              ['contacts', '👤'],
+                            ].map(([key, icon]) => {
+                              const r = job.result[key]
+                              if (!r) return null
+                              const parts = []
+                              if (r.added > 0) parts.push(`+${r.added} added`)
+                              if (r.updated > 0) parts.push(`${r.updated} updated`)
+                              if (r.unchanged > 0) parts.push(`${r.unchanged} unchanged`)
+                              if (parts.length === 0) return null
+                              return (
+                                <div key={key as string} style={{ fontSize: 11, background: '#F5F0E8', borderRadius: 6, padding: '3px 8px', color: text }}>
+                                  {icon} {parts.join(' · ')}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        {/* Show-level detail */}
+                        {job.result?.shows?.details?.filter((d: any) => d.action !== 'unchanged').length > 0 && (
+                          <div style={{ marginLeft: 28, marginTop: 8 }}>
+                            {job.result.shows.details.filter((d: any) => d.action !== 'unchanged').map((d: any, di: number) => (
+                              <div key={di} style={{ fontSize: 11, color: d.action === 'added' ? '#2d7a4f' : '#B8860B', marginBottom: 2 }}>
+                                {d.action === 'added' ? '+ ' : '↑ '}{d.venue} ({d.date}){d.fields?.length > 0 ? ` — filled: ${d.fields.join(', ')}` : ''}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {job.error && (
+                          <div style={{ marginLeft: 28, fontSize: 11, color: '#C00', fontFamily: 'monospace' }}>{job.error}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Current gap warnings */}
+                {warnings.length > 0 && (
+                  <div style={{ background: darkMode ? '#2a1f00' : '#FFF8E6', border: `1px solid ${darkMode ? '#5a3a00' : '#F0C040'}`, borderRadius: 10, padding: '14px 18px' }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: '#B8860B', marginBottom: 10 }}>⚠ STILL MISSING — {warnings.length}</div>
+                    {warnings.map((w, i) => (
+                      <div key={i} style={{ fontSize: 13, color: darkMode ? '#e8c840' : '#7a5800', marginBottom: i < warnings.length - 1 ? 6 : 0, display: 'flex', gap: 8 }}>
+                        <span style={{ opacity: 0.5 }}>—</span><span>{w}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {warnings.length === 0 && importJobs.some(j => j.status === 'done') && (
+                  <div style={{ background: darkMode ? '#0a2a1a' : '#F0FFF4', border: `1px solid #2d7a4f`, borderRadius: 10, padding: '14px 18px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 14, color: '#2d7a4f', fontWeight: 600 }}>✓ No gaps detected — tour looks complete</div>
+                  </div>
+                )}
               </div>
             )}
 
