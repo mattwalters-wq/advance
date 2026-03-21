@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase'
 
 const supabase = createClient()
 
-type ModalType = 'show' | 'travel' | 'accommodation' | 'contact' | 'tour' | null
+type ModalType = 'show' | 'travel' | 'accommodation' | 'contact' | 'tour' | 'rider' | null
 
 export default function ArtistPage() {
   const params = useParams()
@@ -34,6 +34,7 @@ export default function ArtistPage() {
   const [deleting, setDeleting] = useState(false)
   const [warnings, setWarnings] = useState<string[]>([])
   const [notes, setNotes] = useState<any[]>([])
+  const [rider, setRider] = useState<any>(null)
   const [newNote, setNewNote] = useState('')
   const [postingNote, setPostingNote] = useState(false)
   const [userName, setUserName] = useState('Manager')
@@ -75,6 +76,8 @@ export default function ArtistPage() {
     // Load notes
     const { data: notesData } = await supabase.from('tour_notes').select('*').eq('tour_id', tourId).order('created_at', { ascending: true })
     setNotes(notesData || [])
+    const { data: riderData } = await supabase.from('riders').select('*').eq('tour_id', tourId).single()
+    setRider(riderData || null)
   }
 
   async function postNote() {
@@ -205,6 +208,21 @@ export default function ArtistPage() {
 
     if (!selectedTour) { setSaving(false); return }
     const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id }
+
+    if (modal === 'rider') {
+      if (rider?.id) {
+        const { id, tour_id, org_id, created_at, ...updates } = form
+        await supabase.from('riders').update(updates).eq('id', rider.id)
+        setRider({ ...rider, ...updates })
+      } else {
+        const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id }
+        const { data } = await supabase.from('riders').insert({ ...base, ...form }).select().single()
+        setRider(data)
+      }
+      setSaving(false)
+      closeModal()
+      return
+    }
 
     const tableMap: Record<string, string> = {
       show: 'shows', travel: 'travel', accommodation: 'accommodation', contact: 'contacts'
@@ -433,6 +451,14 @@ export default function ArtistPage() {
                     <input style={inputStyle} type="date" value={form.end_date || ''} onChange={e => setForm({ ...form, end_date: e.target.value })} />
                   </div>
                 </div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={labelStyle}>Status</label>
+                  <select style={inputStyle} value={form.status || 'routing'} onChange={e => setForm({ ...form, status: e.target.value })}>
+                    <option value="routing">~ Routing</option>
+                    <option value="confirmed">✓ Confirmed</option>
+                    <option value="completed">— Completed</option>
+                  </select>
+                </div>
               </>
             )}
 
@@ -587,6 +613,31 @@ export default function ArtistPage() {
               </>
             )}
 
+            {modal === 'rider' && (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={labelStyle}>Stage plot / tech notes</label>
+                  <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: 100 }} value={form.tech_notes || ''} onChange={e => setForm({ ...form, tech_notes: e.target.value })} placeholder="Stage dimensions, monitoring setup, backline requirements..." />
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={labelStyle}>Hospitality rider</label>
+                  <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: 100 }} value={form.hospitality || ''} onChange={e => setForm({ ...form, hospitality: e.target.value })} placeholder="Catering, dressing room requirements, dietary needs..." />
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={labelStyle}>Set length</label>
+                  <input style={inputStyle} value={form.set_length || ''} onChange={e => setForm({ ...form, set_length: e.target.value })} placeholder="e.g. 45 minutes" />
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={labelStyle}>Band size</label>
+                  <input style={inputStyle} value={form.band_size || ''} onChange={e => setForm({ ...form, band_size: e.target.value })} placeholder="e.g. 5 piece" />
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={labelStyle}>Input list / additional notes</label>
+                  <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: 80 }} value={form.input_list || ''} onChange={e => setForm({ ...form, input_list: e.target.value })} placeholder="Channel list, special requirements..." />
+                </div>
+              </>
+            )}
+
             <button onClick={handleSave} disabled={saving}
               style={{ width: '100%', padding: '12px', background: accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase' }}>
               {saving ? 'Saving...' : editingId ? 'Save Changes' : 'Save'}
@@ -636,12 +687,17 @@ export default function ArtistPage() {
         {/* Tour tabs */}
         {tours.length > 1 && (
           <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-            {tours.map(tour => (
-              <button key={tour.id} onClick={() => setSelectedTour(tour)}
-                style={{ padding: '8px 16px', borderRadius: 20, border: `1px solid ${border}`, background: selectedTour?.id === tour.id ? accent : card, color: selectedTour?.id === tour.id ? '#fff' : text, cursor: 'pointer', fontSize: 13 }}>
-                {tour.name}
-              </button>
-            ))}
+            {tours.map(tour => {
+              const statusColor: Record<string, string> = { confirmed: '#2d7a4f', routing: '#B8860B', completed: '#8A8580' }
+              const statusLabel: Record<string, string> = { confirmed: '✓', routing: '~', completed: '—' }
+              return (
+                <button key={tour.id} onClick={() => setSelectedTour(tour)}
+                  style={{ padding: '8px 16px', borderRadius: 20, border: `1px solid ${border}`, background: selectedTour?.id === tour.id ? accent : card, color: selectedTour?.id === tour.id ? '#fff' : text, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {tour.status && <span style={{ fontSize: 10, color: selectedTour?.id === tour.id ? 'rgba(255,255,255,0.8)' : statusColor[tour.status] || muted }}>{statusLabel[tour.status] || ''}</span>}
+                  {tour.name}
+                </button>
+              )
+            })}
           </div>
         )}
 
@@ -662,6 +718,29 @@ export default function ArtistPage() {
 
         {selectedTour && (
           <>
+            {/* Tour status badge */}
+            {selectedTour?.status && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                {[
+                  { val: 'routing', label: 'Routing', color: '#B8860B', bg: '#FFF8E6' },
+                  { val: 'confirmed', label: 'Confirmed', color: '#2d7a4f', bg: '#F0FFF4' },
+                  { val: 'completed', label: 'Completed', color: '#8A8580', bg: '#F5F0E8' },
+                ].map(s => (
+                  <button key={s.val} onClick={async () => {
+                    await supabase.from('tours').update({ status: s.val }).eq('id', selectedTour.id)
+                    setSelectedTour({ ...selectedTour, status: s.val })
+                    const updated = tours.map((t: any) => t.id === selectedTour.id ? { ...t, status: s.val } : t)
+                    setTours(updated)
+                  }} style={{
+                    padding: '4px 10px', borderRadius: 20, border: `1px solid ${selectedTour.status === s.val ? s.color : border}`,
+                    background: selectedTour.status === s.val ? s.bg : 'transparent',
+                    color: selectedTour.status === s.val ? s.color : muted,
+                    cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1
+                  }}>{s.label}</button>
+                ))}
+              </div>
+            )}
+
             {/* Toolbar */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -685,6 +764,10 @@ export default function ArtistPage() {
                       {label}
                     </button>
                   ))}
+                  <button onClick={() => openModal('rider', rider || {})}
+                    style={{ padding: '7px 10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, whiteSpace: 'nowrap' }}>
+                    {rider ? '✎ Rider' : '+ Rider'}
+                  </button>
                 </div>
 
                 {/* View toggle */}
@@ -811,6 +894,36 @@ export default function ArtistPage() {
                     ))}
                   </div>
                 )}
+                {rider && (rider.tech_notes || rider.hospitality || rider.set_length || rider.band_size || rider.input_list) && (
+                  <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, textTransform: 'uppercase', fontFamily: 'monospace' }}>Rider / Tech Spec</div>
+                      <button onClick={() => openModal('rider', rider)}
+                        style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 11, padding: '3px 8px' }}>✎</button>
+                    </div>
+                    {rider.band_size && <div style={{ marginBottom: 10 }}><span style={{ fontSize: 11, fontFamily: 'monospace', color: muted, letterSpacing: 1 }}>BAND — </span><span style={{ fontSize: 13 }}>{rider.band_size}</span></div>}
+                    {rider.set_length && <div style={{ marginBottom: 10 }}><span style={{ fontSize: 11, fontFamily: 'monospace', color: muted, letterSpacing: 1 }}>SET — </span><span style={{ fontSize: 13 }}>{rider.set_length}</span></div>}
+                    {rider.tech_notes && (
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 11, fontFamily: 'monospace', color: muted, letterSpacing: 1, marginBottom: 6 }}>TECHNICAL</div>
+                        <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', color: text }}>{rider.tech_notes}</div>
+                      </div>
+                    )}
+                    {rider.hospitality && (
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 11, fontFamily: 'monospace', color: muted, letterSpacing: 1, marginBottom: 6 }}>HOSPITALITY</div>
+                        <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', color: text }}>{rider.hospitality}</div>
+                      </div>
+                    )}
+                    {rider.input_list && (
+                      <div>
+                        <div style={{ fontSize: 11, fontFamily: 'monospace', color: muted, letterSpacing: 1, marginBottom: 6 }}>INPUT LIST</div>
+                        <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', color: text }}>{rider.input_list}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {shows.length === 0 && travel.length === 0 && accommodation.length === 0 && contacts.length === 0 && (
                   <div style={{ textAlign: 'center', padding: 60, color: muted }}>
                     <div style={{ fontSize: 32, marginBottom: 12 }}>📄</div>

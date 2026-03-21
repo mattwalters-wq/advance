@@ -131,6 +131,10 @@ export default function DashboardPage() {
             style={{ flex: '1 1 auto', minWidth: 120, padding: '12px 16px', background: accent, color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, cursor: 'pointer' }}>
             ✦ IMPORT DOC
           </button>
+          <button onClick={() => router.push('/dashboard/search')}
+            style={{ flex: '1 1 auto', minWidth: 100, padding: '12px 16px', background: 'transparent', color: text, border: `1px solid ${border}`, borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, cursor: 'pointer' }}>
+            🔍 SEARCH
+          </button>
           <button onClick={() => router.push('/dashboard/calendar')}
             style={{ flex: '1 1 auto', minWidth: 100, padding: '12px 16px', background: 'transparent', color: text, border: `1px solid ${border}`, borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, cursor: 'pointer' }}>
             ▦ CALENDAR
