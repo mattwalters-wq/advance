@@ -41,6 +41,9 @@ export default function ArtistPage() {
   const [importJobs, setImportJobs] = useState<any[]>([])
   const [importDragging, setImportDragging] = useState(false)
   const [aiMessages, setAiMessages] = useState<any[]>([])
+  const [travelScanMode, setTravelScanMode] = useState<'scan' | 'manual'>('scan')
+  const [travelScanning, setTravelScanning] = useState(false)
+  const [travelScanResult, setTravelScanResult] = useState<any>(null)
   const [aiInput, setAiInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiAttachments, setAiAttachments] = useState<any[]>([])
@@ -252,6 +255,54 @@ export default function ArtistPage() {
     }
   }
 
+  async function scanTravelDoc(file: File) {
+    setTravelScanning(true)
+    setTravelScanResult(null)
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase()
+      let body: any = { filename: file.name }
+
+      if (['jpg','jpeg','png','gif','webp','heic'].includes(ext || '') || file.type.startsWith('image/')) {
+        const base64 = await new Promise<string>((res, rej) => {
+          const reader = new FileReader()
+          reader.onload = () => res((reader.result as string).split(',')[1])
+          reader.onerror = rej
+          reader.readAsDataURL(file)
+        })
+        body.image_base64 = base64
+        body.image_type = file.type || 'image/jpeg'
+      } else if (ext === 'pdf') {
+        const base64 = await new Promise<string>((res, rej) => {
+          const reader = new FileReader()
+          reader.onload = () => res((reader.result as string).split(',')[1])
+          reader.onerror = rej
+          reader.readAsDataURL(file)
+        })
+        body.pdf_base64 = base64
+      } else {
+        body.text = await file.text()
+      }
+
+      const res = await fetch('/api/scan-travel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (data.success && data.travel?.length > 0) {
+        // Pre-fill form with first result, store rest
+        setTravelScanResult(data.travel)
+        setForm({ ...data.travel[0] })
+        setTravelScanMode('manual')
+      } else {
+        setTravelScanResult([])
+      }
+    } catch (err: any) {
+      setTravelScanResult([])
+    }
+    setTravelScanning(false)
+  }
+
   async function sendAiMessage(text?: string) {
     const msg = text || aiInput.trim()
     if ((!msg && aiAttachments.length === 0) || aiLoading || !selectedTour) return
@@ -304,12 +355,19 @@ export default function ArtistPage() {
     setForm(existingItem ? { ...existingItem } : {})
     setEditingId(existingItem?.id || null)
     setModal(type)
+    // Travel modal defaults to scan if adding new, manual if editing
+    if (type === 'travel') {
+      setTravelScanMode(existingItem ? 'manual' : 'scan')
+      setTravelScanResult(null)
+    }
   }
 
   function closeModal() {
     setModal(null)
     setForm({})
     setEditingId(null)
+    setTravelScanMode('scan')
+    setTravelScanResult(null)
   }
 
   async function handleSave() {
@@ -691,55 +749,120 @@ export default function ArtistPage() {
 
             {modal === 'travel' && (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                  <div>
-                    <label style={labelStyle}>From *</label>
-                    <input style={inputStyle} value={form.from_location || ''} onChange={e => setForm({ ...form, from_location: e.target.value })} placeholder="Melbourne" />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>To *</label>
-                    <input style={inputStyle} value={form.to_location || ''} onChange={e => setForm({ ...form, to_location: e.target.value })} placeholder="Sydney" />
-                  </div>
+                {/* Tab toggle */}
+                <div style={{ display: 'flex', gap: 0, border: `1px solid ${border}`, borderRadius: 8, overflow: 'hidden', marginBottom: 20 }}>
+                  {([['scan', '📷 Scan / Drop'] , ['manual', '✎ Manual']] as const).map(([m, label]) => (
+                    <button key={m} onClick={() => { setTravelScanMode(m); if (m === 'scan') { setForm({}); setTravelScanResult(null) } }}
+                      style={{ flex: 1, padding: '9px', background: travelScanMode === m ? accent : 'transparent', color: travelScanMode === m ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2 }}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Date *</label>
-                  <input style={inputStyle} type="date" value={form.travel_date || ''} onChange={e => setForm({ ...form, travel_date: e.target.value })} />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                  <div>
-                    <label style={labelStyle}>Type</label>
-                    <select style={inputStyle} value={form.travel_type || ''} onChange={e => setForm({ ...form, travel_type: e.target.value })}>
-                      <option value="">Select...</option>
-                      <option>Flight</option>
-                      <option>Drive</option>
-                      <option>Train</option>
-                      <option>Bus</option>
-                      <option>Ferry</option>
-                    </select>
+
+                {/* SCAN MODE */}
+                {travelScanMode === 'scan' && (
+                  <div
+                    onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) scanTravelDoc(f) }}
+                    onDragOver={e => e.preventDefault()}
+                    onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*,.pdf,.csv,.xlsx,.txt'; i.onchange=(e:any)=>{ if(e.target.files?.[0]) scanTravelDoc(e.target.files[0]) }; i.click() }}
+                    style={{ border: `2px dashed ${border}`, borderRadius: 12, padding: '36px 20px', textAlign: 'center', cursor: 'pointer', background: bg, marginBottom: 4 }}>
+                    {travelScanning ? (
+                      <>
+                        <div style={{ fontSize: 24, marginBottom: 10 }}>✦</div>
+                        <div style={{ fontSize: 14, color: text, marginBottom: 4 }}>Reading travel details...</div>
+                        <div style={{ fontSize: 12, color: muted }}>AI is extracting flight info</div>
+                      </>
+                    ) : travelScanResult !== null && travelScanResult.length === 0 ? (
+                      <>
+                        <div style={{ fontSize: 24, marginBottom: 10 }}>?</div>
+                        <div style={{ fontSize: 14, color: text, marginBottom: 4 }}>Couldn't find travel details</div>
+                        <div style={{ fontSize: 12, color: muted }}>Try a different file or switch to Manual</div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 28, marginBottom: 10 }}>📷</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: text, marginBottom: 4 }}>Drop screenshot or file here</div>
+                        <div style={{ fontSize: 12, color: muted, marginBottom: 8 }}>or click to browse</div>
+                        <div style={{ fontFamily: 'monospace', fontSize: 9, color: muted, letterSpacing: 2 }}>SCREENSHOT · PDF · SPREADSHEET · EMAIL</div>
+                      </>
+                    )}
                   </div>
-                  <div>
-                    <label style={labelStyle}>Carrier</label>
-                    <input style={inputStyle} value={form.carrier || ''} onChange={e => setForm({ ...form, carrier: e.target.value })} placeholder="e.g. QF401" />
+                )}
+
+                {/* Multiple results from scan */}
+                {travelScanMode === 'manual' && travelScanResult && travelScanResult.length > 1 && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: 1, color: muted, marginBottom: 8 }}>FOUND {travelScanResult.length} LEGS — SHOWING FIRST</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {travelScanResult.map((t: any, i: number) => (
+                        <button key={i} onClick={() => setForm({ ...t })}
+                          style={{ padding: '4px 10px', background: bg, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontSize: 11, color: text }}>
+                          {t.from_location} → {t.to_location} ({t.travel_date})
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                  <div>
-                    <label style={labelStyle}>Departs</label>
-                    <input style={inputStyle} type="time" value={form.departure_time || ''} onChange={e => setForm({ ...form, departure_time: e.target.value })} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Arrives</label>
-                    <input style={inputStyle} type="time" value={form.arrival_time || ''} onChange={e => setForm({ ...form, arrival_time: e.target.value })} />
-                  </div>
-                </div>
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Reference / Booking #</label>
-                  <input style={inputStyle} value={form.reference || ''} onChange={e => setForm({ ...form, reference: e.target.value })} placeholder="ABC123" />
-                </div>
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Notes</label>
-                  <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: 60 }} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any notes..." />
-                </div>
+                )}
+
+                {/* MANUAL FORM — shown in manual mode or after scan pre-fills */}
+                {travelScanMode === 'manual' && (
+                  <>
+                    {travelScanResult && travelScanResult.length > 0 && (
+                      <div style={{ padding: '8px 12px', background: darkMode ? '#0a2a1a' : '#F0FFF4', border: '1px solid #2d7a4f', borderRadius: 8, marginBottom: 14, fontSize: 12, color: '#2d7a4f', fontFamily: 'monospace' }}>
+                        ✓ AI pre-filled from your file — check and save
+                      </div>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                      <div>
+                        <label style={labelStyle}>From *</label>
+                        <input style={inputStyle} value={form.from_location || ''} onChange={e => setForm({ ...form, from_location: e.target.value })} placeholder="Melbourne" />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>To *</label>
+                        <input style={inputStyle} value={form.to_location || ''} onChange={e => setForm({ ...form, to_location: e.target.value })} placeholder="Sydney" />
+                      </div>
+                    </div>
+                    <div style={fieldStyle}>
+                      <label style={labelStyle}>Date *</label>
+                      <input style={inputStyle} type="date" value={form.travel_date || ''} onChange={e => setForm({ ...form, travel_date: e.target.value })} />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                      <div>
+                        <label style={labelStyle}>Type</label>
+                        <select style={inputStyle} value={form.travel_type || ''} onChange={e => setForm({ ...form, travel_type: e.target.value })}>
+                          <option value="">Select...</option>
+                          <option>Flight</option>
+                          <option>Drive</option>
+                          <option>Train</option>
+                          <option>Bus</option>
+                          <option>Ferry</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Carrier / Flight No.</label>
+                        <input style={inputStyle} value={form.carrier || ''} onChange={e => setForm({ ...form, carrier: e.target.value })} placeholder="e.g. VA703" />
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                      <div>
+                        <label style={labelStyle}>Departs</label>
+                        <input style={inputStyle} type="time" value={form.departure_time || ''} onChange={e => setForm({ ...form, departure_time: e.target.value })} />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Arrives</label>
+                        <input style={inputStyle} type="time" value={form.arrival_time || ''} onChange={e => setForm({ ...form, arrival_time: e.target.value })} />
+                      </div>
+                    </div>
+                    <div style={fieldStyle}>
+                      <label style={labelStyle}>Booking Reference</label>
+                      <input style={inputStyle} value={form.reference || ''} onChange={e => setForm({ ...form, reference: e.target.value })} placeholder="ABC123" />
+                    </div>
+                    <div style={fieldStyle}>
+                      <label style={labelStyle}>Notes</label>
+                      <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: 60 }} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any notes..." />
+                    </div>
+                  </>
+                )}
               </>
             )}
 
