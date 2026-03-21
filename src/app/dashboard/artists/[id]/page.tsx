@@ -22,7 +22,7 @@ export default function ArtistPage() {
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
   const [sharing, setSharing] = useState(false)
-  const [view, setView] = useState<'list' | 'calendar' | 'notes' | 'import'>('list')
+  const [view, setView] = useState<'list' | 'calendar' | 'notes' | 'import' | 'ai'>('list')
   const [calMonth, setCalMonth] = useState(new Date())
   const [modal, setModal] = useState<ModalType>(null)
   const [saving, setSaving] = useState(false)
@@ -40,6 +40,10 @@ export default function ArtistPage() {
   const [settlementShow, setSettlementShow] = useState<any>(null)
   const [importJobs, setImportJobs] = useState<any[]>([])
   const [importDragging, setImportDragging] = useState(false)
+  const [aiMessages, setAiMessages] = useState<any[]>([])
+  const [aiInput, setAiInput] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiAttachments, setAiAttachments] = useState<any[]>([])
   const [newNote, setNewNote] = useState('')
   const [postingNote, setPostingNote] = useState(false)
   const [userName, setUserName] = useState('Manager')
@@ -246,6 +250,54 @@ export default function ArtistPage() {
     } catch (err: any) {
       update({ status: 'error', error: err.message })
     }
+  }
+
+  async function sendAiMessage(text?: string) {
+    const msg = text || aiInput.trim()
+    if ((!msg && aiAttachments.length === 0) || aiLoading || !selectedTour) return
+    const displayMsg = msg + (aiAttachments.length > 0 ? `\n📎 ${aiAttachments.map((a: any) => a.name).join(', ')}` : '')
+    const userMsg = { role: 'user', content: displayMsg }
+    const newMessages = [...aiMessages, userMsg]
+    setAiMessages(newMessages)
+    setAiInput('')
+    const currentAttachments = [...aiAttachments]
+    setAiAttachments([])
+    setAiLoading(true)
+    try {
+      const res = await fetch('/api/tour-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tourId: selectedTour.id,
+          messages: newMessages.map((m: any) => ({ role: m.role, content: m.content })),
+          attachments: currentAttachments,
+          extractIfPossible: currentAttachments.length > 0,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setAiMessages(prev => [...prev, {
+          role: 'assistant',
+          content: data.message,
+          extracted: data.extracted || null,
+        }])
+      }
+    } catch (err: any) {
+      setAiMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, something went wrong.' }])
+    }
+    setAiLoading(false)
+  }
+
+  async function saveAiExtracted(extracted: any) {
+    if (!selectedTour) return
+    const org_id = selectedTour.org_id
+    const tourId = selectedTour.id
+    if (extracted.shows?.length) await supabase.from('shows').insert(extracted.shows.map((s: any) => ({ ...s, tour_id: tourId, org_id })))
+    if (extracted.travel?.length) await supabase.from('travel').insert(extracted.travel.map((t: any) => ({ ...t, tour_id: tourId, org_id })))
+    if (extracted.accommodation?.length) await supabase.from('accommodation').insert(extracted.accommodation.map((a: any) => ({ ...a, tour_id: tourId, org_id })))
+    if (extracted.contacts?.length) await supabase.from('contacts').insert(extracted.contacts.map((c: any) => ({ ...c, tour_id: tourId, org_id })))
+    await loadTourData(tourId)
+    setAiMessages(prev => [...prev, { role: 'assistant', content: '✓ Added to tour. Switch to the Tour tab to see it.' }])
   }
 
   function openModal(type: ModalType, existingItem?: any) {
@@ -949,62 +1001,58 @@ export default function ArtistPage() {
 
             {/* Toolbar */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <button onClick={() => router.push(`/tour-ai/${selectedTour.id}`)}
-                  style={{ padding: '9px 16px', background: '#1A1714', color: '#F5F0E8', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, whiteSpace: 'nowrap' }}>
-                  ✦ ASK AI
-                </button>
+
+              {/* Main tabs */}
+              <div style={{ display: 'flex', gap: 2, background: darkMode ? '#222' : '#EDE8DF', borderRadius: 10, padding: 3 }}>
+                {([
+                  ['list', '☰ Tour'],
+                  ['import', '⊕ Import'],
+                  ['ai', '✦ Ask AI'],
+                  ['calendar', '▦ Calendar'],
+                  ['notes', '💬 Notes'],
+                ] as const).map(([v, label]) => (
+                  <button key={v} onClick={() => setView(v as any)}
+                    style={{
+                      padding: '7px 14px', borderRadius: 7,
+                      background: view === v ? (darkMode ? '#333' : '#fff') : 'transparent',
+                      color: view === v ? text : muted,
+                      border: 'none', cursor: 'pointer',
+                      fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em',
+                      fontWeight: view === v ? 700 : 400,
+                      boxShadow: view === v ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      transition: 'all 0.15s',
+                      position: 'relative' as const,
+                      whiteSpace: 'nowrap' as const,
+                    }}>
+                    {label}
+                    {v === 'notes' && notes.length > 0 && <span style={{ position: 'absolute', top: 5, right: 5, width: 5, height: 5, borderRadius: '50%', background: '#f59e0b' }} />}
+                    {v === 'import' && importJobs.filter(j => j.status === 'queued').length > 0 && (
+                      <span style={{ marginLeft: 5, background: accent, color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 9 }}>
+                        {importJobs.filter(j => j.status === 'queued').length}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Right actions */}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <button onClick={handleShare} disabled={sharing}
-                  style={{ padding: '9px 16px', background: copied ? '#2d7a4f' : accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2 }}>
+                  style={{ padding: '7px 14px', background: copied ? '#2d7a4f' : accent, color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em' }}>
                   {copied ? '✓ COPIED' : '🔗 SHARE'}
                 </button>
                 <button onClick={handleExportIcal}
-                  style={{ padding: '9px 16px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, whiteSpace: 'nowrap' }}>
-                  📅 ICAL
+                  style={{ padding: '7px 10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 7, cursor: 'pointer', fontSize: 13 }} title="Export iCal">
+                  📅
                 </button>
-                <button onClick={() => router.push(`/dashboard/artists/${params.id}/budget`)}
-                  style={{ padding: '9px 16px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, whiteSpace: 'nowrap' }}>
-                  💰 BUDGET
+                <button onClick={() => router.push(`/dashboard/artists/${params.id}/settings`)}
+                  style={{ padding: '7px 10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 7, cursor: 'pointer', fontSize: 13 }} title="Settings">
+                  ⚙
                 </button>
-                {copied && <span style={{ fontSize: 12, color: '#2d7a4f' }}>Link copied — send to band & crew</span>}
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {/* Add buttons */}
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {([['show', '+ Show'], ['travel', '+ Travel'], ['accommodation', '+ Hotel'], ['contact', '+ Contact']] as const).map(([type, label]) => (
-                    <button key={type} onClick={() => openModal(type)}
-                      style={{ padding: '7px 10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, whiteSpace: 'nowrap' }}>
-                      {label}
-                    </button>
-                  ))}
-                  <button onClick={() => openModal('rider', rider || {})}
-                    style={{ padding: '7px 10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, whiteSpace: 'nowrap' }}>
-                    {rider ? '✎ Rider' : '+ Rider'}
-                  </button>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {/* Import button - prominent */}
-                  <button onClick={() => setView('import')}
-                    style={{ padding: '8px 14px', background: view === 'import' ? '#1A1714' : 'transparent', color: view === 'import' ? '#fff' : muted, border: `1px solid ${view === 'import' ? '#1A1714' : border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, whiteSpace: 'nowrap' }}>
-                    ⊕ IMPORT
-                  </button>
-
-                  {/* View toggle */}
-                  <div style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: 8, overflow: 'hidden' }}>
-                    {([['list', '☰ LIST'], ['calendar', '▦ CAL'], ['notes', '💬 NOTES']] as const).map(([v, label]) => (
-                      <button key={v} onClick={() => setView(v as any)}
-                        style={{ padding: '8px 10px', background: view === v ? accent : 'transparent', color: view === v ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, position: 'relative', whiteSpace: 'nowrap' }}>
-                        {label}{v === 'notes' && notes.length > 0 && <span style={{ position: 'absolute', top: 4, right: 4, width: 5, height: 5, borderRadius: '50%', background: '#f59e0b' }} />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
             </div>
 
-            {/* Warnings */}
+                        {/* Warnings */}
             {warnings.filter(w => !dismissedWarnings.has(w)).length > 0 && (
               <div style={{ background: darkMode ? '#2a1f00' : '#FFF8E6', border: `1px solid ${darkMode ? '#5a3a00' : '#F0C040'}`, borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
                 <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: '#B8860B', marginBottom: 10 }}>
@@ -1027,6 +1075,23 @@ export default function ArtistPage() {
             {/* LIST VIEW */}
             {view === 'list' && (
               <div style={{ display: 'grid', gap: 20 }}>
+                {/* Manual add row */}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {([['show', '+ Show'], ['travel', '+ Travel'], ['accommodation', '+ Hotel'], ['contact', '+ Contact']] as const).map(([type, label]) => (
+                    <button key={type} onClick={() => openModal(type)}
+                      style={{ padding: '6px 12px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
+                      {label}
+                    </button>
+                  ))}
+                  <button onClick={() => openModal('rider', rider || {})}
+                    style={{ padding: '6px 12px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
+                    {rider ? '✎ Rider' : '+ Rider'}
+                  </button>
+                  <button onClick={() => router.push(`/dashboard/artists/${params.id}/budget`)}
+                    style={{ padding: '6px 12px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
+                    💰 Budget
+                  </button>
+                </div>
                 {shows.length > 0 && (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
                     <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Shows — {shows.length}</div>
@@ -1290,6 +1355,99 @@ export default function ArtistPage() {
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* AI VIEW */}
+            {view === 'ai' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0, height: 'calc(100vh - 280px)', minHeight: 400 }}>
+                <style>{`.ai-msg a { color: ${accent}; }`}</style>
+
+                {/* Messages */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {aiMessages.length === 0 && (
+                    <div style={{ padding: '20px 0' }}>
+                      <div style={{ fontSize: 13, color: muted, marginBottom: 16 }}>Ask anything about this tour, or drop in a document or screenshot.</div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {["What's missing from this tour?", "Draft an advance email to the first venue", "Summarise the full itinerary", "Any scheduling conflicts?"].map((s, i) => (
+                          <button key={i} onClick={() => sendAiMessage(s)}
+                            style={{ padding: '7px 14px', background: 'transparent', border: `1px solid ${border}`, borderRadius: 20, cursor: 'pointer', fontSize: 12, color: muted, fontFamily: '"Georgia", serif' }}>
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {aiMessages.map((msg: any, i: number) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', gap: 8 }}>
+                      {msg.role === 'assistant' && (
+                        <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#1A1714', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: accent, fontSize: 11, marginTop: 2 }}>✦</div>
+                      )}
+                      <div style={{ maxWidth: '80%', padding: '10px 14px', borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px', background: msg.role === 'user' ? accent : card, color: msg.role === 'user' ? '#fff' : text, border: msg.role === 'assistant' ? `1px solid ${border}` : 'none', fontSize: 14, lineHeight: 1.65 }}>
+                        <div className="ai-msg" dangerouslySetInnerHTML={{ __html: (msg.content || '').replace(/
+/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
+                        {/* Save to tour button if AI extracted data */}
+                        {msg.extracted && (
+                          <button onClick={() => saveAiExtracted(msg.extracted)}
+                            style={{ marginTop: 10, padding: '6px 14px', background: '#1A1714', color: '#F5F0E8', border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, display: 'block' }}>
+                            ✦ ADD TO TOUR
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {aiLoading && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#1A1714', display: 'flex', alignItems: 'center', justifyContent: 'center', color: accent, fontSize: 11 }}>✦</div>
+                      <div style={{ padding: '10px 14px', borderRadius: '14px 14px 14px 4px', background: card, border: `1px solid ${border}`, display: 'flex', gap: 5, alignItems: 'center' }}>
+                        {[0,1,2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: muted, animation: `bounce 1.2s ease-in-out ${i*0.2}s infinite` }} />)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Attachments preview */}
+                {aiAttachments.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 0' }}>
+                    {aiAttachments.map((a: any, i: number) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: card, border: `1px solid ${border}`, borderRadius: 20, fontSize: 12 }}>
+                        <span>{a.type?.startsWith('image/') ? '🖼' : '📄'}</span>
+                        <span style={{ color: text }}>{a.name}</span>
+                        <button onClick={() => setAiAttachments(prev => prev.filter((_: any, j: number) => j !== i))}
+                          style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Input */}
+                <div style={{ borderTop: `1px solid ${border}`, paddingTop: 12, display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                  <input type="file" id="ai-file-input" multiple accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx"
+                    style={{ display: 'none' }}
+                    onChange={async e => {
+                      const files = Array.from(e.target.files || []) as File[]
+                      const atts = await Promise.all(files.map(async f => {
+                        const base64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res((r.result as string).split(',')[1]); r.onerror = rej; r.readAsDataURL(f) })
+                        return { name: f.name, base64, type: f.type || 'application/octet-stream' }
+                      }))
+                      setAiAttachments(prev => [...prev, ...atts])
+                    }} />
+                  <button onClick={() => document.getElementById('ai-file-input')?.click()}
+                    style={{ width: 40, height: 40, background: 'transparent', border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', color: muted, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                    title="Attach file or image">📎</button>
+                  <textarea value={aiInput} onChange={e => setAiInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAiMessage() } }}
+                    placeholder="Ask anything, or drop in a screenshot of a flight change, hotel confirmation..."
+                    rows={2}
+                    style={{ flex: 1, padding: '10px 12px', border: `1px solid ${border}`, borderRadius: 10, background: card, color: text, fontSize: 13, fontFamily: '"Georgia", serif', resize: 'none', outline: 'none', lineHeight: 1.5 }} />
+                  <button onClick={() => sendAiMessage()} disabled={aiLoading || (!aiInput.trim() && aiAttachments.length === 0)}
+                    style={{ width: 40, height: 40, background: (aiInput.trim() || aiAttachments.length > 0) ? accent : border, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 16, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    ↑
+                  </button>
+                </div>
+                <style>{`@keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }`}</style>
               </div>
             )}
 

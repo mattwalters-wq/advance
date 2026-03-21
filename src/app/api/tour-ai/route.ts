@@ -6,7 +6,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function POST(request: NextRequest) {
   try {
-    const { messages, tourId, attachments } = await request.json()
+    const { messages, tourId, attachments, extractIfPossible } = await request.json()
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -99,9 +99,44 @@ Be direct and concise. These are busy music industry professionals. No unnecessa
       messages: apiMessages,
     })
 
+    const responseText = response.content[0].type === 'text' ? response.content[0].text : ''
+
+    // If files were attached, also try to extract structured data
+    let extracted = null
+    if (extractIfPossible && attachments?.length > 0) {
+      try {
+        const extractPrompt = `Based on what you just saw in the attached file(s), extract any tour data in this exact JSON format. Return ONLY valid JSON or null if nothing extractable:
+{"shows":[{"date":"YYYY-MM-DD","venue":"","city":"","country":"","set_time":"HH:MM","doors_time":"HH:MM","notes":""}],"travel":[{"travel_date":"YYYY-MM-DD","from_location":"","to_location":"","carrier":"","reference":"","departure_time":"HH:MM","arrival_time":"HH:MM"}],"accommodation":[{"check_in":"YYYY-MM-DD","check_out":"YYYY-MM-DD","name":"","address":"","confirmation":""}],"contacts":[{"name":"","role":"","phone":"","email":""}]}`
+
+        const extractResponse = await anthropic.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [
+            ...apiMessages,
+            { role: 'assistant', content: responseText },
+            { role: 'user', content: extractPrompt }
+          ],
+        })
+        const extractText = extractResponse.content[0].type === 'text' ? extractResponse.content[0].text.trim() : ''
+        if (extractText && extractText !== 'null') {
+          const clean = extractText.replace(/^```json
+?/, '').replace(/^```
+?/, '').replace(/
+?```$/, '').trim()
+          extracted = JSON.parse(clean)
+          // Only return extracted if there's actually something
+          const hasData = Object.values(extracted).some((arr: any) => arr?.length > 0)
+          if (!hasData) extracted = null
+        }
+      } catch (e) {
+        // extraction failed silently — not critical
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      message: response.content[0].type === 'text' ? response.content[0].text : ''
+      message: responseText,
+      extracted,
     })
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 })
