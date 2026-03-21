@@ -1456,7 +1456,7 @@ function TourStarter({ artistId, darkMode, onCreated }: { artistId: string, dark
       if (authError || !user) throw new Error('Not logged in')
       const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
       const { data: tour, error: insertError } = await supabase.from('tours')
-        .insert({ name: tourName.trim(), artist_id: artistId, org_id: profile?.org_id, status: 'routing' })
+        .insert({ name: tourName.trim(), artist_id: artistId, org_id: profile?.org_id })
         .select().single()
       if (insertError) throw insertError
       if (tour) onCreated(tour)
