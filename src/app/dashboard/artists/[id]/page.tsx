@@ -963,14 +963,22 @@ export default function ArtistPage() {
                   </button>
                 </div>
 
-                {/* View toggle */}
-                <div style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: 8, overflow: 'hidden' }}>
-                  {([['list', '☰ LIST'], ['calendar', '▦ CAL'], ['notes', '💬 NOTES'], ['import', '⊕ IMPORT']] as const).map(([v, label]) => (
-                    <button key={v} onClick={() => setView(v as any)}
-                      style={{ padding: '8px 10px', background: view === v ? (v === 'import' ? '#1A1714' : accent) : 'transparent', color: view === v ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, position: 'relative', whiteSpace: 'nowrap' }}>
-                      {label}{v === 'notes' && notes.length > 0 && <span style={{ position: 'absolute', top: 4, right: 4, width: 5, height: 5, borderRadius: '50%', background: '#f59e0b' }} />}
-                    </button>
-                  ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {/* Import button - prominent */}
+                  <button onClick={() => setView('import')}
+                    style={{ padding: '8px 14px', background: view === 'import' ? '#1A1714' : 'transparent', color: view === 'import' ? '#fff' : muted, border: `1px solid ${view === 'import' ? '#1A1714' : border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, whiteSpace: 'nowrap' }}>
+                    ⊕ IMPORT
+                  </button>
+
+                  {/* View toggle */}
+                  <div style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: 8, overflow: 'hidden' }}>
+                    {([['list', '☰ LIST'], ['calendar', '▦ CAL'], ['notes', '💬 NOTES']] as const).map(([v, label]) => (
+                      <button key={v} onClick={() => setView(v as any)}
+                        style={{ padding: '8px 10px', background: view === v ? accent : 'transparent', color: view === v ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, position: 'relative', whiteSpace: 'nowrap' }}>
+                        {label}{v === 'notes' && notes.length > 0 && <span style={{ position: 'absolute', top: 4, right: 4, width: 5, height: 5, borderRadius: '50%', background: '#f59e0b' }} />}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>

@@ -186,12 +186,8 @@ export default function DashboardPage() {
             </h1>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => router.push('/dashboard/import')} className="action-btn"
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', background: '#C4622D', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', cursor: 'pointer', transition: 'opacity 0.15s' }}>
-              <span style={{ fontSize: 14 }}>✦</span> IMPORT DOC
-            </button>
             <button onClick={() => router.push('/dashboard/artists/new')} className="action-btn"
-              style={{ padding: '10px 20px', background: 'transparent', color: '#1A1714', border: '1.5px solid #C8BFB0', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', cursor: 'pointer', transition: 'opacity 0.15s' }}>
+              style={{ padding: '10px 20px', background: '#C4622D', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', cursor: 'pointer', transition: 'opacity 0.15s' }}>
               + ARTIST
             </button>
           </div>
