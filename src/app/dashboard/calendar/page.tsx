@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
+const supabase = createClient()
+
 export default function CalendarPage() {
   const router = useRouter()
-  const supabase = createClient()
   const [artists, setArtists] = useState<any[]>([])
   const [shows, setShows] = useState<any[]>([])
   const [travel, setTravel] = useState<any[]>([])

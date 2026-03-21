@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
+const supabase = createClient()
+
 export default function DashboardPage() {
   const [artists, setArtists] = useState<any[]>([])
   const [user, setUser] = useState<any>(null)
@@ -16,7 +18,6 @@ export default function DashboardPage() {
   const [inviteMsg, setInviteMsg] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => { loadData() }, [])
 
@@ -24,10 +25,13 @@ export default function DashboardPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/auth/signin'); return }
     setUser(user)
-    const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-    setProfile(profileData)
-    const { data } = await supabase.from('artists').select('*').order('name')
-    setArtists(data || [])
+    // Parallelise profile + artists
+    const [profileRes, artistsRes] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', user.id).single(),
+      supabase.from('artists').select('*').order('name'),
+    ])
+    setProfile(profileRes.data)
+    setArtists(artistsRes.data || [])
     setLoading(false)
   }
 
@@ -57,8 +61,25 @@ export default function DashboardPage() {
   }
 
   if (loading) return (
-    <div style={{ background: '#0F0E0C', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ fontFamily: '"Georgia", serif', fontSize: 13, color: '#4a4540', letterSpacing: '0.2em' }}>LOADING</div>
+    <div style={{ background: '#F4EFE6', minHeight: '100vh', fontFamily: '"Georgia", serif' }}>
+      <style>{`@keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} } .sk{background:linear-gradient(90deg,#E8E0D4 25%,#F0E8DC 50%,#E8E0D4 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:6px;}`}</style>
+      <div style={{ background: '#0F0E0C', height: 56 }} />
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px' }}>
+        <div className="sk" style={{ width: 120, height: 12, marginBottom: 12 }} />
+        <div className="sk" style={{ width: 200, height: 36, marginBottom: 40 }} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+          {[1,2,3,4].map(i => (
+            <div key={i} style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', border: '1px solid #E8E0D4' }}>
+              <div style={{ height: 5, background: '#E8E0D4' }} />
+              <div style={{ padding: '20px 22px 22px' }}>
+                <div className="sk" style={{ width: 44, height: 44, borderRadius: 10, marginBottom: 16 }} />
+                <div className="sk" style={{ width: '70%', height: 18, marginBottom: 8 }} />
+                <div className="sk" style={{ width: '50%', height: 12 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 

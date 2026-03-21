@@ -47,17 +47,22 @@ export default function ArtistPage() {
   useEffect(() => { if (selectedTour) loadTourData(selectedTour.id) }, [selectedTour])
 
   async function loadArtist() {
-    const { data: artistData } = await supabase.from('artists').select('*').eq('id', params.id).single()
-    if (!artistData) { router.push('/dashboard'); return }
-    setArtist(artistData)
-    const { data: toursData } = await supabase.from('tours').select('*').eq('artist_id', params.id).order('start_date', { ascending: true })
-    setTours(toursData || [])
-    if (toursData && toursData.length > 0) setSelectedTour(toursData[0])
-    // Get user name
-    const { data: { user } } = await supabase.auth.getUser()
+    // Parallelise all initial queries
+    const [artistRes, toursRes, authRes] = await Promise.all([
+      supabase.from('artists').select('*').eq('id', params.id).single(),
+      supabase.from('tours').select('*').eq('artist_id', params.id).order('start_date', { ascending: true }),
+      supabase.auth.getUser(),
+    ])
+    if (!artistRes.data) { router.push('/dashboard'); return }
+    setArtist(artistRes.data)
+    const toursData = toursRes.data || []
+    setTours(toursData)
+    if (toursData.length > 0) setSelectedTour(toursData[0])
+    // Get user name (non-blocking)
+    const user = authRes.data?.user
     if (user) {
-      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
-      if (profile?.full_name) setUserName(profile.full_name)
+      supabase.from('profiles').select('full_name').eq('id', user.id).single()
+        .then(({ data }) => { if (data?.full_name) setUserName(data.full_name) })
     }
     setLoading(false)
   }
@@ -81,13 +86,15 @@ export default function ArtistPage() {
     if (showsData.length === 0 && travelData.length === 0 && accomData.length === 0) {
       setView('import')
     }
-    // Load notes
-    const { data: notesData } = await supabase.from('tour_notes').select('*').eq('tour_id', tourId).order('created_at', { ascending: true })
-    setNotes(notesData || [])
-    const { data: riderData } = await supabase.from('riders').select('*').eq('tour_id', tourId).single()
-    setRider(riderData || null)
-    const { data: settlementsData } = await supabase.from('settlements').select('*').eq('tour_id', tourId)
-    setSettlements(settlementsData || [])
+    // Parallelise secondary queries
+    const [notesRes, riderRes, settlementsRes] = await Promise.all([
+      supabase.from('tour_notes').select('*').eq('tour_id', tourId).order('created_at', { ascending: true }),
+      supabase.from('riders').select('*').eq('tour_id', tourId).single(),
+      supabase.from('settlements').select('*').eq('tour_id', tourId),
+    ])
+    setNotes(notesRes.data || [])
+    setRider(riderRes.data || null)
+    setSettlements(settlementsRes.data || [])
   }
 
   async function postNote() {
@@ -498,7 +505,33 @@ export default function ArtistPage() {
   const monthName = calMonth.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-  if (loading) return <div style={{ background: bg, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: text }}>Loading...</div>
+  if (loading) return (
+    <div style={{ background: '#F4EFE6', minHeight: '100vh' }}>
+      <style>{`@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}.sk{background:linear-gradient(90deg,#E8E0D4 25%,#F0E8DC 50%,#E8E0D4 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:6px;}`}</style>
+      <div style={{ background: '#0F0E0C', height: 56, display: 'flex', alignItems: 'center', padding: '0 24px', gap: 20 }}>
+        <div className="sk" style={{ width: 60, height: 12, background: '#2A2520' }} />
+        <div style={{ width: 1, height: 20, background: '#2A2520' }} />
+        <div className="sk" style={{ width: 32, height: 32, borderRadius: 8, background: '#2A2520' }} />
+        <div className="sk" style={{ width: 120, height: 16, background: '#2A2520' }} />
+      </div>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+          {[1,2,3].map(i => <div key={i} className="sk" style={{ width: 100, height: 36, borderRadius: 20 }} />)}
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+          {[1,2,3,4,5].map(i => <div key={i} className="sk" style={{ width: 80, height: 36, borderRadius: 8 }} />)}
+        </div>
+        <div style={{ background: '#fff', borderRadius: 12, padding: 20, border: '1px solid #E8E0D4' }}>
+          {[1,2,3].map(i => (
+            <div key={i} style={{ padding: '12px 0', borderBottom: i < 3 ? '1px solid #E8E0D4' : 'none' }}>
+              <div className="sk" style={{ width: '40%', height: 16, marginBottom: 8 }} />
+              <div className="sk" style={{ width: '25%', height: 12 }} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div style={{ background: bg, minHeight: '100vh', fontFamily: 'Georgia, serif', color: text }}>
