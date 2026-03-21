@@ -6,7 +6,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function POST(request: NextRequest) {
   try {
-    const { messages, tourId } = await request.json()
+    const { messages, tourId, attachments } = await request.json()
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -75,11 +75,28 @@ When the user pastes raw information, extract key details clearly and tell them 
 
 Be direct and concise. These are busy music industry professionals. No unnecessary filler.`
 
+    // Build messages, adding attachments to the last user message if present
+    const apiMessages = messages.map((m: any, i: number) => {
+      if (i === messages.length - 1 && m.role === 'user' && attachments?.length > 0) {
+        const contentParts: any[] = []
+        for (const att of attachments) {
+          if (att.type.startsWith('image/')) {
+            contentParts.push({ type: 'image', source: { type: 'base64', media_type: att.type, data: att.base64 } })
+          } else {
+            contentParts.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: att.base64 } })
+          }
+        }
+        contentParts.push({ type: 'text', text: m.content })
+        return { role: m.role, content: contentParts }
+      }
+      return { role: m.role, content: m.content }
+    })
+
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1500,
       system: systemPrompt,
-      messages: messages.map((m: any) => ({ role: m.role, content: m.content })),
+      messages: apiMessages,
     })
 
     return NextResponse.json({

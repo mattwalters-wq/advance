@@ -29,10 +29,13 @@ export default function TourAIPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [attachments, setAttachments] = useState<{ name: string, base64: string, type: string }[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [darkMode, setDarkMode] = useState(false)
   const [tourLoading, setTourLoading] = useState(true)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // fileInputRef already declared above
 
   useEffect(() => { loadTour() }, [params.tour_id])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
@@ -54,12 +57,14 @@ export default function TourAIPage() {
 
   async function send(text?: string) {
     const content = text || input.trim()
-    if (!content || loading) return
+    if ((!content && attachments.length === 0) || loading) return
 
-    const userMessage: Message = { role: 'user', content, timestamp: new Date() }
+    const displayContent = content + (attachments.length > 0 ? `\n📎 ${attachments.map(a => a.name).join(', ')}` : '')
+    const userMessage: Message = { role: 'user', content: displayContent, timestamp: new Date() }
     const newMessages = [...messages, userMessage]
     setMessages(newMessages)
     setInput('')
+    setAttachments([])
     setLoading(true)
 
     try {
@@ -69,6 +74,7 @@ export default function TourAIPage() {
         body: JSON.stringify({
           tourId: params.tour_id,
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          attachments,
         }),
       })
       const data = await res.json()
@@ -109,6 +115,20 @@ export default function TourAIPage() {
         return `<span>${line}</span>`
       })
       .join('<br/>')
+  }
+
+  async function handleFileAttach(files: FileList | null) {
+    if (!files) return
+    const newAttachments = await Promise.all(Array.from(files).map(async file => {
+      const base64 = await new Promise<string>((res, rej) => {
+        const reader = new FileReader()
+        reader.onload = () => res((reader.result as string).split(',')[1])
+        reader.onerror = rej
+        reader.readAsDataURL(file)
+      })
+      return { name: file.name, base64, type: file.type || 'application/octet-stream' }
+    }))
+    setAttachments(prev => [...prev, ...newAttachments])
   }
 
   const bg = darkMode ? '#1a1a1a' : '#F5F0E8'
@@ -199,6 +219,26 @@ export default function TourAIPage() {
       {/* Input */}
       <div style={{ padding: '12px 16px 20px', borderTop: `1px solid ${border}`, background: bg, flexShrink: 0 }}>
         <div style={{ maxWidth: 800, margin: '0 auto', display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+          <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.txt" style={{ display: 'none' }}
+            onChange={e => handleFileAttach(e.target.files)} />
+          {attachments.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+              {attachments.map((a, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: card, border: `1px solid ${border}`, borderRadius: 20, fontSize: 12 }}>
+                  <span>{a.type.startsWith('image/') ? '🖼' : '📄'}</span>
+                  <span style={{ color: text }}>{a.name}</span>
+                  <button onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
+                    style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <button onClick={() => fileInputRef.current?.click()}
+            style={{ width: 46, height: 46, background: 'transparent', border: `1px solid ${border}`, borderRadius: 10, cursor: 'pointer', color: muted, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            title="Attach file">
+            📎
+          </button>
           <textarea
             ref={textareaRef}
             value={input}
@@ -214,10 +254,11 @@ export default function TourAIPage() {
             rows={1}
             style={{ flex: 1, padding: '12px 16px', border: `1px solid ${border}`, borderRadius: 12, background: card, color: text, fontSize: 14, fontFamily: 'Georgia, serif', resize: 'none', outline: 'none', lineHeight: 1.5, minHeight: 46, maxHeight: 160, overflowY: 'auto' }}
           />
-          <button onClick={() => send()} disabled={loading || !input.trim()}
-            style={{ width: 46, height: 46, background: input.trim() ? accent : border, color: '#fff', border: 'none', borderRadius: 12, cursor: input.trim() ? 'pointer' : 'default', fontSize: 18, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <button onClick={() => send()} disabled={loading || (!input.trim() && attachments.length === 0)}
+            style={{ width: 46, height: 46, background: (input.trim() || attachments.length > 0) ? accent : border, color: '#fff', border: 'none', borderRadius: 12, cursor: (input.trim() || attachments.length > 0) ? 'pointer' : 'default', fontSize: 18, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             ↑
           </button>
+          </div>
         </div>
         <div style={{ maxWidth: 800, margin: '6px auto 0', fontSize: 11, color: muted, fontFamily: 'monospace', letterSpacing: 1 }}>
           ENTER TO SEND · SHIFT+ENTER FOR NEW LINE · PASTE ANY DOCUMENT

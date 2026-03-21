@@ -190,14 +190,18 @@ export default function ArtistPage() {
 
   async function processImportFile(file: File) {
     if (!selectedTour) return
-    const jobId = Math.random().toString(36).slice(2)
-    const job = { id: jobId, name: file.name, status: 'reading', result: null as any, error: null as any }
-    setImportJobs(prev => [...prev, job])
+    // Find the queued job for this file or create one
+    let jobId: string
+    setImportJobs(prev => {
+      const existing = prev.find(j => j.name === file.name && j.status === 'queued')
+      if (existing) { jobId = existing.id; return prev.map(j => j.id === existing.id ? { ...j, status: 'parsing' } : j) }
+      jobId = Math.random().toString(36).slice(2)
+      return [...prev, { id: jobId, name: file.name, file, status: 'parsing', result: null, error: null }]
+    })
 
     const update = (updates: any) => setImportJobs(prev => prev.map(j => j.id === jobId ? { ...j, ...updates } : j))
 
     try {
-      update({ status: 'parsing' })
       const ext = file.name.split('.').pop()?.toLowerCase()
       let body: any = { tourId: selectedTour.id, filename: file.name }
 
@@ -237,9 +241,8 @@ export default function ArtistPage() {
       if (!data.success) throw new Error(data.error)
 
       update({ status: 'done', result: data.result })
-      // Reload tour data and switch to list view to see results
+      // Reload tour data to reflect merged changes
       await loadTourData(selectedTour.id)
-      setView('list')
     } catch (err: any) {
       update({ status: 'error', error: err.message })
     }
@@ -1294,109 +1297,128 @@ export default function ArtistPage() {
             {view === 'import' && (
               <div style={{ display: 'grid', gap: 16 }}>
 
-                {/* Drop zone */}
+                {/* Drop zone - always available */}
                 <div
-                  onDrop={e => { e.preventDefault(); setImportDragging(false); Array.from(e.dataTransfer.files).forEach(f => processImportFile(f)) }}
+                  onDrop={e => {
+                    e.preventDefault(); setImportDragging(false)
+                    const newFiles = Array.from(e.dataTransfer.files) as File[]
+                    setImportJobs(prev => [...prev, ...newFiles.map(f => ({
+                      id: Math.random().toString(36).slice(2), name: f.name, file: f,
+                      status: 'queued' as const, result: null, error: null
+                    }))])
+                  }}
                   onDragOver={e => { e.preventDefault(); setImportDragging(true) }}
                   onDragLeave={() => setImportDragging(false)}
-                  onClick={() => { const i = document.createElement('input'); i.type='file'; i.multiple=true; i.accept='.pdf,.doc,.docx,.txt,.csv,.xlsx,.xls'; i.onchange=(e:any)=>Array.from(e.target.files||[]).forEach((f:any)=>processImportFile(f)); i.click() }}
-                  style={{ border: `2px dashed ${importDragging ? accent : border}`, borderRadius: 14, padding: '40px 24px', textAlign: 'center', cursor: 'pointer', background: importDragging ? (darkMode ? '#2a1f18' : '#FDF5EF') : card, transition: 'all 0.15s' }}>
-                  <div style={{ fontSize: 32, marginBottom: 10 }}>⊕</div>
-                  <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
-                    {importDragging ? 'Drop to add to this tour' : 'Drop documents here'}
+                  onClick={() => {
+                    const inp = document.createElement('input')
+                    inp.type = 'file'; inp.multiple = true
+                    inp.accept = '.pdf,.doc,.docx,.txt,.csv,.xlsx,.xls'
+                    inp.onchange = (e: any) => {
+                      const newFiles = Array.from(e.target.files || []) as File[]
+                      setImportJobs(prev => [...prev, ...newFiles.map(f => ({
+                        id: Math.random().toString(36).slice(2), name: f.name, file: f,
+                        status: 'queued' as const, result: null, error: null
+                      }))])
+                    }
+                    inp.click()
+                  }}
+                  style={{ border: `2px dashed ${importDragging ? accent : border}`, borderRadius: 14, padding: '28px 24px', textAlign: 'center', cursor: 'pointer', background: importDragging ? (darkMode ? '#2a1f18' : '#FDF5EF') : card, transition: 'all 0.15s' }}>
+                  <div style={{ fontSize: 26, marginBottom: 8 }}>⊕</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: text }}>
+                    {importDragging ? 'Drop to add to queue' : 'Drop documents here'}
                   </div>
-                  <div style={{ fontSize: 13, color: muted, marginBottom: 8 }}>
-                    {selectedTour?.name}
-                  </div>
-                  <div style={{ fontFamily: 'monospace', fontSize: 10, color: muted, letterSpacing: 2 }}>
-                    PDF · DOCX · XLSX · CSV · TXT
-                  </div>
-                  <div style={{ marginTop: 12, fontSize: 12, color: muted, lineHeight: 1.6 }}>
-                    AI matches against existing shows and fills in the blanks.<br/>
-                    Drop multiple docs at different times — it keeps updating.
-                  </div>
+                  <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>Click to browse · Add more any time</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 9, color: muted, letterSpacing: 2 }}>PDF · DOCX · XLSX · CSV · TXT</div>
                 </div>
 
-                {/* Job history */}
+                {/* Queue */}
                 {importJobs.length > 0 && (
                   <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
                     <div style={{ padding: '12px 20px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: muted }}>IMPORT HISTORY</div>
-                      <button onClick={() => setImportJobs([])} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 11, fontFamily: 'monospace' }}>CLEAR</button>
+                      <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: muted }}>
+                        {importJobs.filter(j => j.status === 'queued').length > 0
+                          ? `${importJobs.filter(j => j.status === 'queued').length} QUEUED · READY TO PROCESS`
+                          : `${importJobs.filter(j => j.status === 'done').length} PROCESSED`}
+                      </div>
+                      <button onClick={() => setImportJobs([])}
+                        style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 11, fontFamily: 'monospace' }}>
+                        CLEAR
+                      </button>
                     </div>
-                    {importJobs.slice().reverse().map((job, i) => (
-                      <div key={job.id} style={{ padding: '14px 20px', borderBottom: i < importJobs.length - 1 ? `1px solid ${border}` : 'none' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: job.result || job.error ? 8 : 0 }}>
-                          <span style={{ fontSize: 16 }}>
-                            {job.status === 'reading' || job.status === 'parsing' ? <span style={{ color: accent }}>✦</span>
-                             : job.status === 'done' ? <span style={{ color: '#2d7a4f' }}>✓</span>
-                             : <span style={{ color: '#C00' }}>✕</span>}
-                          </span>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>{job.name}</div>
-                            <div style={{ fontSize: 11, fontFamily: 'monospace', color: muted, letterSpacing: 1 }}>
-                              {job.status === 'parsing' ? 'Reading with AI...' : job.status === 'reading' ? 'Loading...' : job.status}
+
+                    {/* File list */}
+                    {importJobs.map((job, i) => (
+                      <div key={job.id} style={{ padding: '12px 20px', borderBottom: i < importJobs.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                        <span style={{ fontSize: 15, marginTop: 1, flexShrink: 0 }}>
+                          {job.status === 'queued' && <span style={{ color: muted }}>○</span>}
+                          {job.status === 'parsing' && <span style={{ color: accent }}>✦</span>}
+                          {job.status === 'done' && <span style={{ color: '#2d7a4f' }}>✓</span>}
+                          {job.status === 'error' && <span style={{ color: '#C00' }}>✕</span>}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.name}</div>
+                          {job.status === 'queued' && <div style={{ fontSize: 11, color: muted, fontFamily: 'monospace', letterSpacing: 1, marginTop: 2 }}>Waiting...</div>}
+                          {job.status === 'parsing' && <div style={{ fontSize: 11, color: accent, fontFamily: 'monospace', letterSpacing: 1, marginTop: 2 }}>Reading with AI...</div>}
+                          {job.status === 'done' && job.result && (
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                              {[['shows','🎵'],['travel','✈️'],['accommodation','🏨'],['contacts','👤']].map(([key, icon]) => {
+                                const r = job.result[key]
+                                if (!r) return null
+                                const parts = []
+                                if (r.added > 0) parts.push(`+${r.added}`)
+                                if (r.updated > 0) parts.push(`↑${r.updated}`)
+                                if (parts.length === 0) return null
+                                return <div key={key} style={{ fontSize: 11, background: darkMode ? '#2a2a2a' : '#F5F0E8', borderRadius: 5, padding: '2px 8px', color: text }}>{icon} {parts.join(' ')}</div>
+                              })}
                             </div>
-                          </div>
+                          )}
+                          {job.status === 'error' && <div style={{ fontSize: 11, color: '#C00', fontFamily: 'monospace', marginTop: 2 }}>{job.error}</div>}
                         </div>
-
-                        {/* Result summary */}
-                        {job.result && (
-                          <div style={{ marginLeft: 28, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            {[
-                              ['shows', '🎵'],
-                              ['travel', '✈️'],
-                              ['accommodation', '🏨'],
-                              ['contacts', '👤'],
-                            ].map(([key, icon]) => {
-                              const r = job.result[key]
-                              if (!r) return null
-                              const parts = []
-                              if (r.added > 0) parts.push(`+${r.added} added`)
-                              if (r.updated > 0) parts.push(`${r.updated} updated`)
-                              if (r.unchanged > 0) parts.push(`${r.unchanged} unchanged`)
-                              if (parts.length === 0) return null
-                              return (
-                                <div key={key as string} style={{ fontSize: 11, background: '#F5F0E8', borderRadius: 6, padding: '3px 8px', color: text }}>
-                                  {icon} {parts.join(' · ')}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-
-                        {/* Show-level detail */}
-                        {job.result?.shows?.details?.filter((d: any) => d.action !== 'unchanged').length > 0 && (
-                          <div style={{ marginLeft: 28, marginTop: 8 }}>
-                            {job.result.shows.details.filter((d: any) => d.action !== 'unchanged').map((d: any, di: number) => (
-                              <div key={di} style={{ fontSize: 11, color: d.action === 'added' ? '#2d7a4f' : '#B8860B', marginBottom: 2 }}>
-                                {d.action === 'added' ? '+ ' : '↑ '}{d.venue} ({d.date}){d.fields?.length > 0 ? ` — filled: ${d.fields.join(', ')}` : ''}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {job.error && (
-                          <div style={{ marginLeft: 28, fontSize: 11, color: '#C00', fontFamily: 'monospace' }}>{job.error}</div>
+                        {job.status === 'queued' && (
+                          <button onClick={() => setImportJobs(prev => prev.filter(j => j.id !== job.id))}
+                            style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 16, padding: 0, flexShrink: 0 }}>×</button>
                         )}
                       </div>
                     ))}
+
+                    {/* Process button - only shows when queued files exist */}
+                    {importJobs.some(j => j.status === 'queued') && (
+                      <div style={{ padding: '14px 20px', borderTop: `1px solid ${border}`, background: darkMode ? '#222' : '#FAFAF8' }}>
+                        <button onClick={async () => {
+                          const queued = importJobs.filter(j => j.status === 'queued')
+                          for (const job of queued) {
+                            await processImportFile(job.file)
+                          }
+                        }}
+                          style={{ width: '100%', padding: '12px', background: '#1A1714', color: '#F5F0E8', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 3 }}>
+                          ✦ PROCESS {importJobs.filter(j => j.status === 'queued').length} DOCUMENT{importJobs.filter(j => j.status === 'queued').length !== 1 ? 'S' : ''} WITH AI
+                        </button>
+                        <div style={{ textAlign: 'center', marginTop: 8, fontSize: 11, color: muted }}>
+                          AI will merge with existing tour data — no duplicates
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* Current gap warnings */}
-                {warnings.length > 0 && (
+                {/* Gap warnings */}
+                {warnings.filter(w => !dismissedWarnings.has(w)).length > 0 && (
                   <div style={{ background: darkMode ? '#2a1f00' : '#FFF8E6', border: `1px solid ${darkMode ? '#5a3a00' : '#F0C040'}`, borderRadius: 10, padding: '14px 18px' }}>
-                    <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: '#B8860B', marginBottom: 10 }}>⚠ STILL MISSING — {warnings.length}</div>
-                    {warnings.map((w, i) => (
-                      <div key={i} style={{ fontSize: 13, color: darkMode ? '#e8c840' : '#7a5800', marginBottom: i < warnings.length - 1 ? 6 : 0, display: 'flex', gap: 8 }}>
-                        <span style={{ opacity: 0.5 }}>—</span><span>{w}</span>
+                    <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: '#B8860B', marginBottom: 10 }}>⚠ STILL MISSING — {warnings.filter(w => !dismissedWarnings.has(w)).length}</div>
+                    {warnings.filter(w => !dismissedWarnings.has(w)).map((w, i, arr) => (
+                      <div key={i} style={{ fontSize: 13, color: darkMode ? '#e8c840' : '#7a5800', marginBottom: i < arr.length - 1 ? 8 : 0, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                        <span style={{ opacity: 0.4, marginTop: 1 }}>—</span>
+                        <span style={{ flex: 1 }}>{w}</span>
+                        <button onClick={() => setDismissedWarnings(prev => new Set([...prev, w]))}
+                          style={{ background: 'none', border: '1px solid #F0C040', borderRadius: 5, color: '#B8860B', cursor: 'pointer', fontSize: 10, padding: '2px 8px', fontFamily: 'monospace', letterSpacing: 1, flexShrink: 0 }}>
+                          ✓ RESOLVE
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {warnings.length === 0 && importJobs.some(j => j.status === 'done') && (
+                {warnings.filter(w => !dismissedWarnings.has(w)).length === 0 && importJobs.some(j => j.status === 'done') && (
                   <div style={{ background: darkMode ? '#0a2a1a' : '#F0FFF4', border: `1px solid #2d7a4f`, borderRadius: 10, padding: '14px 18px', textAlign: 'center' }}>
                     <div style={{ fontSize: 14, color: '#2d7a4f', fontWeight: 600 }}>✓ No gaps detected — tour looks complete</div>
                   </div>
@@ -1404,7 +1426,7 @@ export default function ArtistPage() {
               </div>
             )}
 
-            {/* CALENDAR VIEW */}
+                        {/* CALENDAR VIEW */}
             {view === 'calendar' && (
               <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: `1px solid ${border}` }}>
