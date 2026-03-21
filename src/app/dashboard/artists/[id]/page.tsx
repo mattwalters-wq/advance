@@ -805,20 +805,30 @@ export default function ArtistPage() {
       )}
 
       {/* Header */}
-      <div style={{ borderBottom: `1px solid ${border}`, padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button onClick={() => router.push('/dashboard')} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 14 }}>← Back</button>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 600 }}>{artist?.name}</div>
-            <div style={{ fontSize: 13, color: muted, fontStyle: 'italic' }}>{artist?.project}</div>
+      <div style={{ background: darkMode ? '#111' : '#0F0E0C', borderBottom: `1px solid ${darkMode ? '#222' : '#1E1C18'}`, padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+          <button onClick={() => router.push('/dashboard')}
+            style={{ background: 'none', border: 'none', color: '#5A5450', cursor: 'pointer', fontSize: 13, fontFamily: '"Georgia", serif', display: 'flex', alignItems: 'center', gap: 6, padding: 0 }}>
+            ← Roster
+          </button>
+          <div style={{ width: 1, height: 20, background: '#2A2520' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: artist?.color || '#C4622D', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 700, fontFamily: '"Georgia", serif', fontStyle: 'italic' }}>
+              {artist?.name?.charAt(0)}
+            </div>
+            <div>
+              <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 17, fontWeight: 700, color: '#F4EFE6', lineHeight: 1 }}>{artist?.name}</div>
+              {artist?.project && <div style={{ fontSize: 11, color: '#5A5450', fontStyle: 'italic', marginTop: 2 }}>{artist.project}</div>}
+            </div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <button onClick={() => router.push(`/dashboard/artists/${params.id}/settings`)}
-            style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, padding: '6px 12px', color: muted, cursor: 'pointer', fontSize: 12, fontFamily: 'monospace', letterSpacing: 1 }}>
-            ⚙ SETTINGS
+            style={{ padding: '6px 12px', background: 'transparent', border: '1px solid #2A2520', borderRadius: 6, color: '#5A5450', cursor: 'pointer', fontSize: 11, fontFamily: 'monospace', letterSpacing: '0.1em' }}>
+            ⚙
           </button>
-          <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, padding: '6px 12px', color: text, cursor: 'pointer', fontSize: 13 }}>
+          <button onClick={() => setDarkMode(!darkMode)}
+            style={{ padding: '6px 12px', background: 'transparent', border: '1px solid #2A2520', borderRadius: 6, color: '#5A5450', cursor: 'pointer', fontSize: 12 }}>
             {darkMode ? '☀️' : '🌙'}
           </button>
         </div>

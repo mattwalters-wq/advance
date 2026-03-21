@@ -16,89 +16,146 @@ export default function LandingPage() {
     })
   }, [])
 
-  if (checking) return <div style={{ background: '#1A1714', minHeight: '100vh' }} />
+  if (checking) return <div style={{ background: '#0F0E0C', minHeight: '100vh' }} />
 
   return (
-    <div style={{ background: '#1A1714', minHeight: '100vh', fontFamily: 'Georgia, serif', color: '#F5F0E8' }}>
-
+    <div style={{ background: '#0F0E0C', minHeight: '100vh', fontFamily: '"Georgia", serif', color: '#F4EFE6', overflowX: 'hidden' }}>
       <style>{`
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(20px) }
-          to { opacity: 1; transform: translateY(0) }
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(24px) } to { opacity: 1; transform: translateY(0) } }
+        @keyframes grain {
+          0%, 100% { transform: translate(0,0) }
+          10% { transform: translate(-2%,-3%) }
+          20% { transform: translate(3%,2%) }
+          30% { transform: translate(-1%,4%) }
+          40% { transform: translate(4%,-1%) }
+          50% { transform: translate(-3%,1%) }
+          60% { transform: translate(2%,3%) }
+          70% { transform: translate(-4%,-2%) }
+          80% { transform: translate(1%,-4%) }
+          90% { transform: translate(-2%,2%) }
         }
-        .fade-1 { animation: fadeUp 0.6s ease forwards; }
-        .fade-2 { animation: fadeUp 0.6s ease 0.15s forwards; opacity: 0; }
-        .fade-3 { animation: fadeUp 0.6s ease 0.3s forwards; opacity: 0; }
-        .fade-4 { animation: fadeUp 0.6s ease 0.45s forwards; opacity: 0; }
-        .fade-5 { animation: fadeUp 0.6s ease 0.6s forwards; opacity: 0; }
+        .grain::after {
+          content: '';
+          position: fixed;
+          inset: -200%;
+          width: 400%;
+          height: 400%;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+          animation: grain 0.5s steps(1) infinite;
+          pointer-events: none;
+          z-index: 0;
+          opacity: 0.4;
+        }
+        .f1 { animation: fadeUp 0.7s ease 0.1s both; }
+        .f2 { animation: fadeUp 0.7s ease 0.25s both; }
+        .f3 { animation: fadeUp 0.7s ease 0.4s both; }
+        .f4 { animation: fadeUp 0.7s ease 0.55s both; }
+        .f5 { animation: fadeUp 0.7s ease 0.7s both; }
+        .cta-primary { transition: background 0.2s, transform 0.15s; }
+        .cta-primary:hover { background: #D4723D !important; transform: translateY(-1px); }
+        .cta-secondary:hover { border-color: #C4622D !important; color: #C4622D !important; }
+        .feature-card:hover { border-color: #2E2A24 !important; background: #161410 !important; }
       `}</style>
 
-      {/* Nav */}
-      <div style={{ padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 22, fontStyle: 'italic' }}>Advance</span>
-          <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#C4622D' }}>AI ✦</span>
-        </div>
-        <button onClick={() => router.push('/auth/signin')}
-          style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#8A8580', background: 'transparent', border: '1px solid #2A2520', borderRadius: 4, padding: '8px 16px', cursor: 'pointer' }}>
-          SIGN IN
-        </button>
-      </div>
+      <div className="grain" style={{ position: 'relative', zIndex: 1 }}>
 
-      {/* Hero */}
-      <div style={{ maxWidth: 800, margin: '0 auto', padding: '80px 32px 60px', textAlign: 'center' }}>
-        <div className="fade-1" style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 4, color: '#C4622D', marginBottom: 24 }}>
-          TOUR MANAGEMENT · REINVENTED
+        {/* Nav */}
+        <nav style={{ padding: '0 32px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1E1C18', position: 'sticky', top: 0, background: 'rgba(15,14,12,0.9)', backdropFilter: 'blur(12px)', zIndex: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+            <span style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 22, fontStyle: 'italic', letterSpacing: '-0.02em' }}>Advance</span>
+            <span style={{ fontFamily: 'monospace', fontSize: 8, letterSpacing: '0.25em', color: '#C4622D' }}>AI ✦</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => router.push('/auth/signin')}
+              style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #2E2A24', borderRadius: 6, color: '#8A8580', cursor: 'pointer', fontSize: 13, fontFamily: '"Georgia", serif', transition: 'border-color 0.2s, color 0.2s' }}
+              className="cta-secondary">
+              Sign in
+            </button>
+            <button onClick={() => router.push('/auth/signup')}
+              style={{ padding: '8px 18px', background: '#C4622D', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontSize: 13, fontFamily: '"Georgia", serif' }}
+              className="cta-primary">
+              Get started
+            </button>
+          </div>
+        </nav>
+
+        {/* Hero */}
+        <section style={{ maxWidth: 900, margin: '0 auto', padding: '110px 32px 90px', textAlign: 'center' }}>
+          <div className="f1" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '5px 14px', border: '1px solid #2E2A24', borderRadius: 20, marginBottom: 32, fontSize: 11, fontFamily: 'monospace', letterSpacing: '0.2em', color: '#C4622D' }}>
+            ✦ TOUR MANAGEMENT · REINVENTED
+          </div>
+          <h1 className="f2" style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 'clamp(44px, 7vw, 76px)', fontWeight: 700, lineHeight: 1.05, marginBottom: 28, letterSpacing: '-0.02em', color: '#F4EFE6' }}>
+            Everything your tour needs.<br />
+            <em style={{ color: '#6A6058', fontWeight: 400 }}>Nothing it doesn't.</em>
+          </h1>
+          <p className="f3" style={{ fontSize: 18, color: '#6A6058', lineHeight: 1.75, marginBottom: 44, maxWidth: 500, margin: '0 auto 44px' }}>
+            Drop any document. AI extracts your shows, flights, hotels, contacts. Everything updates live as new info comes in.
+          </p>
+          <div className="f4" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => router.push('/auth/signup')} className="cta-primary"
+              style={{ padding: '14px 36px', background: '#C4622D', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 11, letterSpacing: '0.2em', cursor: 'pointer' }}>
+              GET STARTED FREE
+            </button>
+            <button onClick={() => router.push('/auth/signin')} className="cta-secondary"
+              style={{ padding: '14px 36px', background: 'transparent', color: '#6A6058', border: '1px solid #2E2A24', borderRadius: 8, fontFamily: 'monospace', fontSize: 11, letterSpacing: '0.2em', cursor: 'pointer', transition: 'all 0.2s' }}>
+              SIGN IN
+            </button>
+          </div>
+        </section>
+
+        {/* Divider */}
+        <div style={{ maxWidth: 900, margin: '0 auto 80px', padding: '0 32px' }}>
+          <div style={{ borderTop: '1px solid #1E1C18', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 24, gap: 32, flexWrap: 'wrap' }}>
+            {['Drop any document', 'AI fills the gaps', 'Share with crew instantly'].map((item, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#4A4540', fontFamily: 'monospace', letterSpacing: '0.1em' }}>
+                <span style={{ color: '#C4622D' }}>✦</span> {item.toUpperCase()}
+              </div>
+            ))}
+          </div>
         </div>
-        <h1 className="fade-2" style={{ fontSize: 'clamp(36px, 6vw, 64px)', fontWeight: 400, lineHeight: 1.15, marginBottom: 24, letterSpacing: '-0.5px' }}>
-          Everything your tour needs.<br />
-          <span style={{ fontStyle: 'italic', color: '#8A8580' }}>Nothing it doesn't.</span>
-        </h1>
-        <p className="fade-3" style={{ fontSize: 18, color: '#8A8580', lineHeight: 1.7, marginBottom: 40, maxWidth: 520, margin: '0 auto 40px' }}>
-          Advance replaces the spreadsheets, email threads and master tour subscriptions your team has been duct-taping together for years.
-        </p>
-        <div className="fade-4" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button onClick={() => router.push('/auth/signup')}
-            style={{ padding: '14px 32px', background: '#C4622D', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: 'pointer' }}>
+
+        {/* Features */}
+        <section className="f5" style={{ maxWidth: 1000, margin: '0 auto', padding: '0 32px 100px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 1, background: '#1A1814', borderRadius: 16, overflow: 'hidden', border: '1px solid #1A1814' }}>
+            {[
+              { icon: '✦', title: 'Smart Document Import', desc: 'PDF, Word, Excel, email — drop anything. AI extracts shows, flights, hotels and contacts, then merges with what\'s already there.' },
+              { icon: '▦', title: 'Living Tour', desc: 'Import from your booking agent, then the travel agent, then each venue. Each doc fills the gaps. Nothing gets duplicated.' },
+              { icon: '⚠', title: 'Logistics Warnings', desc: 'Automatic flags for missing travel between cities, shows with no hotel, tight international jumps. Catches what you\'d miss.' },
+              { icon: '📄', title: 'Day Sheets', desc: 'Auto-generated for every show — times, hotel, travel, contacts. Print or share a link. Updates as info comes in.' },
+              { icon: '🔗', title: 'Crew Share Links', desc: 'One link for the whole tour. Band and crew see everything they need, tap to call contacts, tap to map the hotel.' },
+              { icon: '💬', title: 'Tour AI', desc: 'Full context on every tour. Ask anything, draft emails to promoters, find gaps, get answers in seconds.' },
+            ].map((f, i) => (
+              <div key={i} className="feature-card"
+                style={{ padding: '32px 28px', background: '#0F0E0C', transition: 'background 0.2s, border-color 0.2s', borderRight: '1px solid #1A1814', borderBottom: '1px solid #1A1814', cursor: 'default' }}>
+                <div style={{ fontSize: 20, marginBottom: 16, color: '#C4622D' }}>{f.icon}</div>
+                <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 17, fontWeight: 700, marginBottom: 10, color: '#F4EFE6', lineHeight: 1.3 }}>{f.title}</div>
+                <div style={{ fontSize: 13, color: '#5A5450', lineHeight: 1.75 }}>{f.desc}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Bottom CTA */}
+        <section style={{ borderTop: '1px solid #1E1C18', padding: '80px 32px', textAlign: 'center' }}>
+          <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 'clamp(28px, 4vw, 42px)', marginBottom: 20, color: '#F4EFE6', lineHeight: 1.2 }}>
+            Built for managers who are<br /><em style={{ color: '#6A6058' }}>done patching things together.</em>
+          </div>
+          <div style={{ fontSize: 14, color: '#4A4540', marginBottom: 36, fontFamily: 'monospace', letterSpacing: '0.1em' }}>
+            REPLACE MASTER TOUR · SPREADSHEETS · EMAIL THREADS
+          </div>
+          <button onClick={() => router.push('/auth/signup')} className="cta-primary"
+            style={{ padding: '14px 40px', background: '#C4622D', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 11, letterSpacing: '0.2em', cursor: 'pointer' }}>
             GET STARTED
           </button>
-          <button onClick={() => router.push('/auth/signin')}
-            style={{ padding: '14px 32px', background: 'transparent', color: '#F5F0E8', border: '1px solid #2A2520', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: 'pointer' }}>
-            SIGN IN
-          </button>
-        </div>
-      </div>
+        </section>
 
-      {/* Feature grid */}
-      <div className="fade-5" style={{ maxWidth: 900, margin: '0 auto', padding: '40px 32px 80px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 1, border: '1px solid #2A2520', borderRadius: 16, overflow: 'hidden' }}>
-        {[
-          { icon: '✦', title: 'AI Document Import', desc: 'Drop any PDF, email, or spreadsheet. AI extracts shows, flights, hotels and contacts instantly.' },
-          { icon: '📅', title: 'Calendar + iCal', desc: 'Every show, flight and hotel in one view. Export to Google Calendar or Apple Calendar in one click.' },
-          { icon: '📄', title: 'Day Sheets', desc: 'Auto-generated printable day sheets for every show. Send to the band the morning of the gig.' },
-          { icon: '🔗', title: 'Crew Share Links', desc: 'Share a read-only tour link with band and crew. No login required. Tap to call, tap to map.' },
-          { icon: '⚠', title: 'Logistics Warnings', desc: 'Automatically flags missing travel, hotels on show nights, tight international jumps.' },
-          { icon: '💬', title: 'Tour AI Assistant', desc: 'Ask anything about the tour. Draft emails, find gaps, get answers instantly.' },
-        ].map((f, i) => (
-          <div key={i} style={{ padding: '28px 24px', background: '#1A1714', borderRight: '1px solid #2A2520', borderBottom: '1px solid #2A2520' }}>
-            <div style={{ fontSize: 24, marginBottom: 12 }}>{f.icon}</div>
-            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>{f.title}</div>
-            <div style={{ fontSize: 13, color: '#8A8580', lineHeight: 1.6 }}>{f.desc}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Social proof / positioning */}
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: '20px 32px 80px', textAlign: 'center' }}>
-        <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, color: '#2A2520', marginBottom: 20 }}>BUILT FOR</div>
-        <div style={{ fontSize: 14, color: '#8A8580', lineHeight: 1.8 }}>
-          Independent artist managers who are done paying $75/month per artist for software that still doesn't have a calendar export.
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div style={{ borderTop: '1px solid #2A2520', padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#2A2520' }}>ADVANCE · AI-POWERED TOUR MANAGEMENT</div>
-        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#2A2520' }}>MONDA MANAGEMENT</div>
+        {/* Footer */}
+        <footer style={{ borderTop: '1px solid #1A1814', padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 16, fontStyle: 'italic', color: '#2E2A24' }}>Advance</div>
+          <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.2em', color: '#2E2A24' }}>MONDA MANAGEMENT · AI-POWERED TOUR MANAGEMENT</div>
+        </footer>
       </div>
     </div>
   )

@@ -8,13 +8,13 @@ export default function DashboardPage() {
   const [artists, setArtists] = useState<any[]>([])
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
-  const [darkMode, setDarkMode] = useState(false)
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteName, setInviteName] = useState('')
   const [inviting, setInviting] = useState(false)
   const [inviteMsg, setInviteMsg] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -40,7 +40,6 @@ export default function DashboardPage() {
     if (!inviteEmail.trim()) return
     setInviting(true)
     setInviteMsg('')
-    // Use Supabase magic link invite
     const res = await fetch('/api/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -57,124 +56,158 @@ export default function DashboardPage() {
     setInviting(false)
   }
 
-  const bg = darkMode ? '#1a1a1a' : '#F5F0E8'
-  const card = darkMode ? '#2a2a2a' : '#fff'
-  const text = darkMode ? '#e8e0d0' : '#1A1714'
-  const muted = darkMode ? '#888' : '#8A8580'
-  const border = darkMode ? '#333' : '#DDD8CE'
-  const accent = '#C4622D'
-
-  if (loading) return <div style={{ background: bg, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: text, fontFamily: 'Georgia, serif' }}>Loading...</div>
+  if (loading) return (
+    <div style={{ background: '#0F0E0C', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ fontFamily: '"Georgia", serif', fontSize: 13, color: '#4a4540', letterSpacing: '0.2em' }}>LOADING</div>
+    </div>
+  )
 
   return (
-    <div style={{ background: bg, minHeight: '100vh', fontFamily: 'Georgia, serif', color: text }}>
+    <div style={{ background: '#F4EFE6', minHeight: '100vh', fontFamily: '"Georgia", serif' }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+        * { box-sizing: border-box; }
+        .artist-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.12) !important; }
+        .artist-card:hover .card-arrow { opacity: 1 !important; transform: translateX(0) !important; }
+        .nav-btn:hover { background: rgba(255,255,255,0.08) !important; }
+        .action-btn:hover { opacity: 0.85; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
+        .fade-in { animation: fadeIn 0.4s ease forwards; }
+      `}</style>
 
       {/* Invite modal */}
       {showInvite && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
           onClick={() => setShowInvite(false)}>
-          <div style={{ background: card, borderRadius: 16, padding: 28, width: '100%', maxWidth: 400 }}
+          <div style={{ background: '#FAF7F2', borderRadius: 16, padding: 32, width: '100%', maxWidth: 400, boxShadow: '0 24px 80px rgba(0,0,0,0.2)' }}
             onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-              <div style={{ fontFamily: 'monospace', fontSize: 11, letterSpacing: 3, color: muted }}>INVITE TEAM MEMBER</div>
-              <button onClick={() => setShowInvite(false)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 20 }}>×</button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+              <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 20 }}>Invite someone</div>
+              <button onClick={() => setShowInvite(false)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#8A8580', lineHeight: 1 }}>×</button>
             </div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: 2, color: muted, display: 'block', marginBottom: 6 }}>NAME</label>
-              <input value={inviteName} onChange={e => setInviteName(e.target.value)} placeholder="Their name"
-                style={{ width: '100%', padding: '10px 12px', border: `1px solid ${border}`, borderRadius: 8, background: bg, color: text, fontSize: 14, fontFamily: 'Georgia, serif', boxSizing: 'border-box' as const, outline: 'none' }} />
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: 2, color: muted, display: 'block', marginBottom: 6 }}>EMAIL</label>
-              <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="colleague@email.com" type="email"
-                style={{ width: '100%', padding: '10px 12px', border: `1px solid ${border}`, borderRadius: 8, background: bg, color: text, fontSize: 14, fontFamily: 'Georgia, serif', boxSizing: 'border-box' as const, outline: 'none' }} />
-            </div>
-            {inviteMsg && <div style={{ marginBottom: 14, fontSize: 13, color: inviteMsg.includes('sent') ? '#2d7a4f' : '#c00', fontFamily: 'monospace' }}>{inviteMsg}</div>}
+            {[
+              { label: 'Name', value: inviteName, set: setInviteName, placeholder: 'Their name', type: 'text' },
+              { label: 'Email', value: inviteEmail, set: setInviteEmail, placeholder: 'colleague@email.com', type: 'email' },
+            ].map(f => (
+              <div key={f.label} style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: '0.15em', color: '#8A8580', display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>{f.label}</label>
+                <input type={f.type} value={f.value} onChange={e => f.set(e.target.value)} placeholder={f.placeholder}
+                  style={{ width: '100%', padding: '11px 14px', border: '1px solid #E0D8CC', borderRadius: 8, fontSize: 14, fontFamily: '"Georgia", serif', color: '#1A1714', outline: 'none', background: '#F4EFE6' }} />
+              </div>
+            ))}
+            {inviteMsg && <div style={{ marginBottom: 14, fontSize: 12, color: inviteMsg.includes('sent') ? '#3D7A50' : '#C00', fontFamily: 'monospace' }}>{inviteMsg}</div>}
             <button onClick={handleInvite} disabled={inviting || !inviteEmail.trim()}
-              style={{ width: '100%', padding: 12, background: accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 3 }}>
+              style={{ width: '100%', padding: '13px', background: '#C4622D', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 11, letterSpacing: '0.2em', cursor: 'pointer', opacity: !inviteEmail.trim() ? 0.5 : 1 }}>
               {inviting ? 'SENDING...' : 'SEND INVITE'}
             </button>
-            <div style={{ marginTop: 14, fontSize: 12, color: muted, textAlign: 'center', lineHeight: 1.6 }}>
-              They'll receive a magic link to set up their account and access the same roster.
-            </div>
           </div>
         </div>
       )}
 
       {/* Header */}
-      <div style={{ background: darkMode ? '#111' : '#1A1714', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 20, fontStyle: 'italic', color: '#F5F0E8' }}>Advance</span>
-          <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: accent }}>AI ✦</span>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={() => setDarkMode(!darkMode)}
-            style={{ background: 'none', border: '1px solid #333', borderRadius: 6, padding: '6px 10px', color: '#F5F0E8', cursor: 'pointer', fontSize: 12 }}>
-            {darkMode ? '☀️' : '🌙'}
-          </button>
-          <button onClick={() => setShowInvite(true)}
-            style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#8A8580', background: 'transparent', border: '1px solid #2A2520', borderRadius: 4, padding: '6px 10px', cursor: 'pointer' }}>
-            + INVITE
-          </button>
-          <button onClick={handleSignout}
-            style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#8A8580', background: 'transparent', border: '1px solid #2A2520', borderRadius: 4, padding: '6px 10px', cursor: 'pointer' }}>
-            OUT
-          </button>
-        </div>
-      </div>
+      <header style={{ background: '#0F0E0C', borderBottom: '1px solid #1E1C18' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {/* Logo */}
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+            <span style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 22, fontStyle: 'italic', color: '#F4EFE6', letterSpacing: '-0.02em' }}>Advance</span>
+            <span style={{ fontFamily: 'monospace', fontSize: 8, letterSpacing: '0.25em', color: '#C4622D' }}>AI ✦</span>
+          </div>
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
+          {/* Nav */}
+          <nav style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {[
+              { label: 'Calendar', path: '/dashboard/calendar', icon: '▦' },
+              { label: 'Search', path: '/dashboard/search', icon: '⌕' },
+            ].map(item => (
+              <button key={item.path} onClick={() => router.push(item.path)} className="nav-btn"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'transparent', border: 'none', color: '#7A7570', cursor: 'pointer', borderRadius: 6, fontSize: 13, fontFamily: '"Georgia", serif', transition: 'background 0.15s' }}>
+                <span style={{ fontSize: 11, opacity: 0.7 }}>{item.icon}</span> {item.label}
+              </button>
+            ))}
+            <div style={{ width: 1, height: 20, background: '#2A2520', margin: '0 4px' }} />
+            <button onClick={() => setShowInvite(true)} className="nav-btn"
+              style={{ padding: '6px 12px', background: 'transparent', border: 'none', color: '#7A7570', cursor: 'pointer', borderRadius: 6, fontSize: 13, fontFamily: '"Georgia", serif', transition: 'background 0.15s' }}>
+              + Invite
+            </button>
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setMenuOpen(!menuOpen)} className="nav-btn"
+                style={{ width: 32, height: 32, borderRadius: '50%', background: '#C4622D', border: 'none', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {(profile?.full_name || user?.email || 'M').charAt(0).toUpperCase()}
+              </button>
+              {menuOpen && (
+                <div style={{ position: 'absolute', right: 0, top: 40, background: '#1A1714', borderRadius: 10, padding: '6px', minWidth: 160, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 50 }}
+                  onMouseLeave={() => setMenuOpen(false)}>
+                  <div style={{ padding: '8px 12px', fontSize: 12, color: '#7A7570', fontFamily: 'monospace', borderBottom: '1px solid #2A2520', marginBottom: 4 }}>
+                    {profile?.full_name || user?.email}
+                  </div>
+                  <button onClick={handleSignout}
+                    style={{ width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: '#F4EFE6', cursor: 'pointer', borderRadius: 6, fontSize: 13, textAlign: 'left', fontFamily: '"Georgia", serif' }}>
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          </nav>
+        </div>
+      </header>
 
-        {/* Actions - responsive wrap */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 28, flexWrap: 'wrap' }}>
-          <button onClick={() => router.push('/dashboard/import')}
-            style={{ flex: '1 1 auto', minWidth: 120, padding: '12px 16px', background: accent, color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, cursor: 'pointer' }}>
-            ✦ IMPORT DOC
-          </button>
-          <button onClick={() => router.push('/dashboard/search')}
-            style={{ flex: '1 1 auto', minWidth: 100, padding: '12px 16px', background: 'transparent', color: text, border: `1px solid ${border}`, borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, cursor: 'pointer' }}>
-            🔍 SEARCH
-          </button>
-          <button onClick={() => router.push('/dashboard/calendar')}
-            style={{ flex: '1 1 auto', minWidth: 100, padding: '12px 16px', background: 'transparent', color: text, border: `1px solid ${border}`, borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, cursor: 'pointer' }}>
-            ▦ CALENDAR
-          </button>
-          <button onClick={() => router.push('/dashboard/artists/new')}
-            style={{ flex: '1 1 auto', minWidth: 100, padding: '12px 16px', background: 'transparent', color: text, border: `1px solid ${border}`, borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, cursor: 'pointer' }}>
-            + ARTIST
-          </button>
+      {/* Main */}
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px' }}>
+
+        {/* Page header */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 36, flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.25em', color: '#B8A898', marginBottom: 6, textTransform: 'uppercase' }}>
+              {new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </div>
+            <h1 style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 36, fontWeight: 400, color: '#1A1714', margin: 0, lineHeight: 1.1 }}>
+              Your Roster
+            </h1>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => router.push('/dashboard/import')} className="action-btn"
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', background: '#C4622D', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', cursor: 'pointer', transition: 'opacity 0.15s' }}>
+              <span style={{ fontSize: 14 }}>✦</span> IMPORT DOC
+            </button>
+            <button onClick={() => router.push('/dashboard/artists/new')} className="action-btn"
+              style={{ padding: '10px 20px', background: 'transparent', color: '#1A1714', border: '1.5px solid #C8BFB0', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', cursor: 'pointer', transition: 'opacity 0.15s' }}>
+              + ARTIST
+            </button>
+          </div>
         </div>
 
-        {/* Roster label */}
-        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: muted, marginBottom: 14, textTransform: 'uppercase' }}>
-          Roster — {artists.length} Artists
-        </div>
-
-        {artists.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: muted }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>🎵</div>
-            <div>No artists yet. Add one or import a document to get started.</div>
+        {/* Artist grid */}
+        {artists.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '80px 20px' }}>
+            <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 28, color: '#C8BFB0', fontStyle: 'italic', marginBottom: 12 }}>No artists yet</div>
+            <div style={{ color: '#B8A898', fontSize: 14, marginBottom: 24 }}>Add an artist or import a tour document to get started.</div>
+            <button onClick={() => router.push('/dashboard/artists/new')}
+              style={{ padding: '12px 28px', background: '#C4622D', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', cursor: 'pointer' }}>
+              + ADD ARTIST
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+            {artists.map((artist, i) => (
+              <div key={artist.id} className="artist-card fade-in" onClick={() => router.push(`/dashboard/artists/${artist.id}`)}
+                style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', cursor: 'pointer', border: '1px solid #E8E0D4', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', animationDelay: `${i * 0.06}s`, animationFillMode: 'both' }}>
+                {/* Colour band */}
+                <div style={{ height: 5, background: artist.color || '#C4622D' }} />
+                <div style={{ padding: '20px 22px 22px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 10, background: artist.color || '#C4622D', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 700, fontFamily: '"Playfair Display", Georgia, serif', fontStyle: 'italic' }}>
+                      {artist.name.charAt(0)}
+                    </div>
+                    <span className="card-arrow" style={{ color: '#C8BFB0', fontSize: 18, opacity: 0, transform: 'translateX(-4px)', transition: 'all 0.2s' }}>→</span>
+                  </div>
+                  <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 18, fontWeight: 700, color: '#1A1714', marginBottom: 4, lineHeight: 1.2 }}>{artist.name}</div>
+                  <div style={{ fontSize: 12, color: '#B8A898', fontStyle: 'italic', lineHeight: 1.4 }}>{artist.project || 'No active project'}</div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
-
-        {/* Artist grid - 1 col mobile, 2-3 col desktop */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
-          {artists.map(artist => (
-            <div key={artist.id} onClick={() => router.push(`/dashboard/artists/${artist.id}`)}
-              style={{ background: card, borderRadius: 10, padding: '16px 18px', border: `1px solid ${border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14 }}
-              onMouseEnter={e => (e.currentTarget.style.borderColor = accent)}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = border)}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', background: artist.color || accent, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 16, fontWeight: 'bold' }}>
-                {artist.name.charAt(0)}
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{artist.name}</div>
-                <div style={{ fontSize: 12, color: muted, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{artist.project || 'No active project'}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      </main>
     </div>
   )
 }
