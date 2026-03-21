@@ -22,7 +22,7 @@ export default function ArtistPage() {
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
   const [sharing, setSharing] = useState(false)
-  const [view, setView] = useState<'list' | 'calendar'>('list')
+  const [view, setView] = useState<'list' | 'calendar' | 'notes'>('list')
   const [calMonth, setCalMonth] = useState(new Date())
   const [modal, setModal] = useState<ModalType>(null)
   const [saving, setSaving] = useState(false)
@@ -33,6 +33,10 @@ export default function ArtistPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [warnings, setWarnings] = useState<string[]>([])
+  const [notes, setNotes] = useState<any[]>([])
+  const [newNote, setNewNote] = useState('')
+  const [postingNote, setPostingNote] = useState(false)
+  const [userName, setUserName] = useState('Manager')
 
   useEffect(() => { loadArtist() }, [params.id])
   useEffect(() => { if (selectedTour) loadTourData(selectedTour.id) }, [selectedTour])
@@ -44,6 +48,12 @@ export default function ArtistPage() {
     const { data: toursData } = await supabase.from('tours').select('*').eq('artist_id', params.id).order('start_date', { ascending: true })
     setTours(toursData || [])
     if (toursData && toursData.length > 0) setSelectedTour(toursData[0])
+    // Get user name
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+      if (profile?.full_name) setUserName(profile.full_name)
+    }
     setLoading(false)
   }
 
@@ -62,6 +72,28 @@ export default function ArtistPage() {
     setAccommodation(accomData)
     setContacts(c.data || [])
     setWarnings(computeWarnings(showsData, travelData, accomData))
+    // Load notes
+    const { data: notesData } = await supabase.from('tour_notes').select('*').eq('tour_id', tourId).order('created_at', { ascending: true })
+    setNotes(notesData || [])
+  }
+
+  async function postNote() {
+    if (!newNote.trim() || !selectedTour) return
+    setPostingNote(true)
+    const { data } = await supabase.from('tour_notes').insert({
+      tour_id: selectedTour.id,
+      org_id: selectedTour.org_id,
+      author_name: userName,
+      content: newNote.trim(),
+    }).select().single()
+    if (data) setNotes(prev => [...prev, data])
+    setNewNote('')
+    setPostingNote(false)
+  }
+
+  async function deleteNote(id: string) {
+    await supabase.from('tour_notes').delete().eq('id', id)
+    setNotes(prev => prev.filter(n => n.id !== id))
   }
 
   async function handleDelete() {
@@ -631,8 +663,8 @@ export default function ArtistPage() {
         {selectedTour && (
           <>
             {/* Toolbar */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <button onClick={handleShare} disabled={sharing}
                   style={{ padding: '9px 16px', background: copied ? '#2d7a4f' : accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2 }}>
                   {copied ? '✓ COPIED' : '🔗 SHARE'}
@@ -646,10 +678,10 @@ export default function ArtistPage() {
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {/* Add buttons */}
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {([['show', '+ Show'], ['travel', '+ Travel'], ['accommodation', '+ Hotel'], ['contact', '+ Contact']] as const).map(([type, label]) => (
                     <button key={type} onClick={() => openModal(type)}
-                      style={{ padding: '8px 12px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, whiteSpace: 'nowrap' }}>
+                      style={{ padding: '7px 10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, whiteSpace: 'nowrap' }}>
                       {label}
                     </button>
                   ))}
@@ -657,10 +689,10 @@ export default function ArtistPage() {
 
                 {/* View toggle */}
                 <div style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: 8, overflow: 'hidden' }}>
-                  {(['list', 'calendar'] as const).map(v => (
-                    <button key={v} onClick={() => setView(v)}
-                      style={{ padding: '8px 12px', background: view === v ? accent : 'transparent', color: view === v ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase' }}>
-                      {v === 'list' ? '☰' : '▦'}
+                  {([['list', '☰'], ['calendar', '▦'], ['notes', '💬']] as const).map(([v, icon]) => (
+                    <button key={v} onClick={() => setView(v as any)}
+                      style={{ padding: '8px 12px', background: view === v ? accent : 'transparent', color: view === v ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, position: 'relative' }}>
+                      {icon}{v === 'notes' && notes.length > 0 && <span style={{ position: 'absolute', top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', background: '#f59e0b' }} />}
                     </button>
                   ))}
                 </div>
@@ -793,6 +825,58 @@ export default function ArtistPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* NOTES VIEW */}
+            {view === 'notes' && (
+              <div style={{ display: 'grid', gap: 0 }}>
+                <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
+                  <div style={{ padding: '12px 20px', borderBottom: `1px solid ${border}`, fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: muted }}>
+                    TOUR NOTES — {selectedTour?.name}
+                  </div>
+
+                  {/* Notes list */}
+                  <div style={{ padding: notes.length === 0 ? '40px 20px' : '8px 0', minHeight: 120 }}>
+                    {notes.length === 0 && (
+                      <div style={{ textAlign: 'center', color: muted, fontSize: 13 }}>No notes yet. Leave the first one below.</div>
+                    )}
+                    {notes.map((note, i) => (
+                      <div key={note.id} style={{ padding: '14px 20px', borderBottom: i < notes.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', background: accent, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>
+                          {note.author_name?.charAt(0) || '?'}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 13, fontWeight: 600 }}>{note.author_name}</span>
+                            <span style={{ fontSize: 11, color: muted, fontFamily: 'monospace' }}>
+                              {new Date(note.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 14, lineHeight: 1.6, color: text }}>{note.content}</div>
+                        </div>
+                        <button onClick={() => deleteNote(note.id)}
+                          style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 16, padding: '2px 4px', flexShrink: 0, opacity: 0.5 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* New note input */}
+                  <div style={{ padding: '16px 20px', borderTop: `1px solid ${border}`, display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                    <textarea
+                      value={newNote}
+                      onChange={e => setNewNote(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postNote() } }}
+                      placeholder="Add a note... (Enter to post, Shift+Enter for new line)"
+                      style={{ flex: 1, padding: '10px 12px', border: `1px solid ${border}`, borderRadius: 8, background: bg, color: text, fontSize: 14, fontFamily: 'Georgia, serif', resize: 'none', minHeight: 44, outline: 'none', lineHeight: 1.5 }}
+                      rows={2}
+                    />
+                    <button onClick={postNote} disabled={postingNote || !newNote.trim()}
+                      style={{ padding: '10px 16px', background: newNote.trim() ? accent : border, color: '#fff', border: 'none', borderRadius: 8, cursor: newNote.trim() ? 'pointer' : 'default', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, flexShrink: 0, height: 44 }}>
+                      {postingNote ? '...' : 'POST'}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
