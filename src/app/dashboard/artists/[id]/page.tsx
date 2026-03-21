@@ -895,10 +895,11 @@ export default function ArtistPage() {
         </div>
 
         {tours.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 60, color: muted }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>📄</div>
-            <div>No tours yet — create one above or import a document.</div>
-          </div>
+          <TourStarter artistId={params.id as string} darkMode={darkMode} onCreated={(tour) => {
+            setTours([tour])
+            setSelectedTour(tour)
+            setView('import')
+          }} />
         )}
 
         {selectedTour && (
@@ -1430,6 +1431,69 @@ export default function ArtistPage() {
             )}
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+function TourStarter({ artistId, darkMode, onCreated }: { artistId: string, darkMode: boolean, onCreated: (tour: any) => void }) {
+  const supabaseLocal = createClient()
+  const [tourName, setTourName] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const bg = darkMode ? '#1a1a1a' : '#F4EFE6'
+  const card = darkMode ? '#2a2a2a' : '#fff'
+  const text = darkMode ? '#e8e0d0' : '#1A1714'
+  const muted = darkMode ? '#888' : '#8A8580'
+  const border = darkMode ? '#333' : '#DDD8CE'
+  const accent = '#C4622D'
+
+  async function createTour() {
+    if (!tourName.trim()) return
+    setCreating(true)
+    const { data: { user } } = await supabaseLocal.auth.getUser()
+    if (!user) return
+    const { data: profile } = await supabaseLocal.from('profiles').select('org_id').eq('id', user.id).single()
+    const { data: tour } = await supabaseLocal.from('tours')
+      .insert({ name: tourName.trim(), artist_id: artistId, org_id: profile?.org_id, status: 'routing' })
+      .select().single()
+    if (tour) onCreated(tour)
+    setCreating(false)
+  }
+
+  return (
+    <div style={{ maxWidth: 560, margin: '40px auto 0', padding: '0 16px' }}>
+      <style>{`.drop-zone:hover { border-color: ${accent} !important; } .drop-zone.active { border-color: ${accent} !important; background: ${darkMode ? '#2a1f18' : '#FDF5EF'} !important; }`}</style>
+
+      {/* Step 1 - Name the tour */}
+      <div style={{ background: card, borderRadius: 14, padding: 28, border: `1px solid ${border}`, marginBottom: 12 }}>
+        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.25em', color: muted, marginBottom: 16, textTransform: 'uppercase' }}>
+          Start a new tour
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <input
+            value={tourName}
+            onChange={e => setTourName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && createTour()}
+            placeholder="e.g. Hamer Hall NAIDOC 2025, East Coast Run..."
+            autoFocus
+            style={{ flex: 1, padding: '12px 14px', border: `1px solid ${border}`, borderRadius: 8, background: bg, color: text, fontSize: 14, fontFamily: '"Georgia", serif', outline: 'none' }}
+          />
+          <button onClick={createTour} disabled={creating || !tourName.trim()}
+            style={{ padding: '12px 20px', background: tourName.trim() ? accent : border, color: '#fff', border: 'none', borderRadius: 8, cursor: tourName.trim() ? 'pointer' : 'default', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.15em', whiteSpace: 'nowrap', transition: 'background 0.15s' }}>
+            {creating ? '...' : 'CREATE →'}
+          </button>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 12, color: muted, lineHeight: 1.6 }}>
+          Once created, drop in any docs your agent sends — itinerary, contracts, hotel bookings. AI builds the tour as you go.
+        </div>
+      </div>
+
+      {/* Visual hint of what comes next */}
+      <div style={{ background: darkMode ? '#1e1e1e' : '#FAF7F2', borderRadius: 14, padding: 24, border: `2px dashed ${border}`, textAlign: 'center', opacity: 0.5 }}>
+        <div style={{ fontSize: 28, marginBottom: 8 }}>⊕</div>
+        <div style={{ fontSize: 13, color: muted }}>Drop zone unlocks after naming the tour</div>
+        <div style={{ fontFamily: 'monospace', fontSize: 10, color: muted, letterSpacing: '0.15em', marginTop: 6 }}>PDF · DOCX · XLSX · CSV</div>
       </div>
     </div>
   )
