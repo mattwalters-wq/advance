@@ -15,7 +15,8 @@
     "next": "14.2.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "mammoth": "^1.8.0"
+    "mammoth": "^1.8.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^20",

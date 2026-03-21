@@ -46,6 +46,24 @@ async function extractWordText(file: File): Promise<string> {
   return result.value
 }
 
+async function extractExcelText(file: File): Promise<string> {
+  const XLSX = await import('xlsx')
+  const arrayBuffer = await file.arrayBuffer()
+  const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+  const lines: string[] = []
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName]
+    const csv = XLSX.utils.sheet_to_csv(sheet)
+    if (csv.trim()) {
+      lines.push(`Sheet: ${sheetName}`)
+      lines.push(csv)
+    }
+  }
+  return lines.join('
+
+')
+}
+
 export default function ImportPage() {
   const router = useRouter()
   const [artists, setArtists] = useState<any[]>([])
@@ -82,6 +100,9 @@ export default function ImportPage() {
       } else if (ext === 'docx' || ext === 'doc') {
         const text = await extractWordText(job.file)
         body.text = text
+      } else if (ext === 'xlsx' || ext === 'xls') {
+        const text = await extractExcelText(job.file)
+        body.text = text
       } else {
         // txt, md, csv, etc
         const text = await fileToText(job.file)
@@ -107,7 +128,7 @@ export default function ImportPage() {
   async function addFiles(files: File[]) {
     const allowed = files.filter(f => {
       const ext = f.name.split('.').pop()?.toLowerCase()
-      return ['pdf', 'doc', 'docx', 'txt', 'md', 'csv'].includes(ext || '')
+      return ['pdf', 'doc', 'docx', 'txt', 'md', 'csv', 'xlsx', 'xls'].includes(ext || '')
     })
     if (!allowed.length) return
 
@@ -251,7 +272,7 @@ export default function ImportPage() {
             cursor: 'pointer', background: dragging ? (darkMode ? '#2a1f18' : '#FDF5EF') : card,
             transition: 'all 0.15s', marginBottom: 28,
           }}>
-          <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.txt,.md,.csv"
+          <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.txt,.md,.csv,.xlsx,.xls"
             style={{ display: 'none' }} onChange={e => addFiles(Array.from(e.target.files || []))} />
           <div style={{ fontSize: 36, marginBottom: 12 }}>📂</div>
           <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
@@ -259,7 +280,7 @@ export default function ImportPage() {
           </div>
           <div style={{ fontSize: 13, color: muted, marginBottom: 4 }}>or click to browse</div>
           <div style={{ fontFamily: 'monospace', fontSize: 10, color: muted, letterSpacing: 2, marginTop: 12 }}>
-            PDF · DOCX · DOC · TXT · Multiple files OK
+            PDF · DOCX · XLSX · CSV · TXT · Multiple files OK
           </div>
         </div>
 
