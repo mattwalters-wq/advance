@@ -818,6 +818,10 @@ export default function ArtistPage() {
             {/* Toolbar */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <button onClick={() => router.push(`/tour-ai/${selectedTour.id}`)}
+                  style={{ padding: '9px 16px', background: '#1A1714', color: '#F5F0E8', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, whiteSpace: 'nowrap' }}>
+                  ✦ ASK AI
+                </button>
                 <button onClick={handleShare} disabled={sharing}
                   style={{ padding: '9px 16px', background: copied ? '#2d7a4f' : accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2 }}>
                   {copied ? '✓ COPIED' : '🔗 SHARE'}
@@ -825,6 +829,10 @@ export default function ArtistPage() {
                 <button onClick={handleExportIcal}
                   style={{ padding: '9px 16px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, whiteSpace: 'nowrap' }}>
                   📅 ICAL
+                </button>
+                <button onClick={() => router.push(`/dashboard/artists/${params.id}/budget`)}
+                  style={{ padding: '9px 16px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, whiteSpace: 'nowrap' }}>
+                  💰 BUDGET
                 </button>
                 {copied && <span style={{ fontSize: 12, color: '#2d7a4f' }}>Link copied — send to band & crew</span>}
               </div>
