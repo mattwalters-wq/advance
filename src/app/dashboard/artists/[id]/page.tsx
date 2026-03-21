@@ -77,6 +77,10 @@ export default function ArtistPage() {
     setAccommodation(accomData)
     setContacts(c.data || [])
     setWarnings(computeWarnings(showsData, travelData, accomData))
+    // Auto-switch to import tab if tour is empty
+    if (showsData.length === 0 && travelData.length === 0 && accomData.length === 0) {
+      setView('import')
+    }
     // Load notes
     const { data: notesData } = await supabase.from('tour_notes').select('*').eq('tour_id', tourId).order('created_at', { ascending: true })
     setNotes(notesData || [])
@@ -912,10 +916,10 @@ export default function ArtistPage() {
 
                 {/* View toggle */}
                 <div style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: 8, overflow: 'hidden' }}>
-                  {([['list', '☰'], ['calendar', '▦'], ['notes', '💬'], ['import', '⊕']] as const).map(([v, icon]) => (
+                  {([['list', '☰ LIST'], ['calendar', '▦ CAL'], ['notes', '💬 NOTES'], ['import', '⊕ IMPORT']] as const).map(([v, label]) => (
                     <button key={v} onClick={() => setView(v as any)}
-                      style={{ padding: '8px 12px', background: view === v ? accent : 'transparent', color: view === v ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, position: 'relative' }}>
-                      {icon}{v === 'notes' && notes.length > 0 && <span style={{ position: 'absolute', top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', background: '#f59e0b' }} />}
+                      style={{ padding: '8px 10px', background: view === v ? (v === 'import' ? '#1A1714' : accent) : 'transparent', color: view === v ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, position: 'relative', whiteSpace: 'nowrap' }}>
+                      {label}{v === 'notes' && notes.length > 0 && <span style={{ position: 'absolute', top: 4, right: 4, width: 5, height: 5, borderRadius: '50%', background: '#f59e0b' }} />}
                     </button>
                   ))}
                 </div>
