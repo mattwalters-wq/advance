@@ -1437,10 +1437,9 @@ export default function ArtistPage() {
 }
 
 function TourStarter({ artistId, darkMode, onCreated }: { artistId: string, darkMode: boolean, onCreated: (tour: any) => void }) {
-  const supabaseLocal = createClient()
   const [tourName, setTourName] = useState('')
   const [creating, setCreating] = useState(false)
-  const [dragging, setDragging] = useState(false)
+  const [error, setError] = useState('')
   const bg = darkMode ? '#1a1a1a' : '#F4EFE6'
   const card = darkMode ? '#2a2a2a' : '#fff'
   const text = darkMode ? '#e8e0d0' : '#1A1714'
@@ -1451,14 +1450,20 @@ function TourStarter({ artistId, darkMode, onCreated }: { artistId: string, dark
   async function createTour() {
     if (!tourName.trim()) return
     setCreating(true)
-    const { data: { user } } = await supabaseLocal.auth.getUser()
-    if (!user) return
-    const { data: profile } = await supabaseLocal.from('profiles').select('org_id').eq('id', user.id).single()
-    const { data: tour } = await supabaseLocal.from('tours')
-      .insert({ name: tourName.trim(), artist_id: artistId, org_id: profile?.org_id, status: 'routing' })
-      .select().single()
-    if (tour) onCreated(tour)
-    setCreating(false)
+    setError('')
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) throw new Error('Not logged in')
+      const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
+      const { data: tour, error: insertError } = await supabase.from('tours')
+        .insert({ name: tourName.trim(), artist_id: artistId, org_id: profile?.org_id, status: 'routing' })
+        .select().single()
+      if (insertError) throw insertError
+      if (tour) onCreated(tour)
+    } catch (err: any) {
+      setError(err.message || 'Failed to create tour')
+      setCreating(false)
+    }
   }
 
   return (
@@ -1484,6 +1489,7 @@ function TourStarter({ artistId, darkMode, onCreated }: { artistId: string, dark
             {creating ? '...' : 'CREATE →'}
           </button>
         </div>
+        {error && <div style={{ marginTop: 8, fontSize: 12, color: '#C00', fontFamily: 'monospace' }}>{error}</div>}
         <div style={{ marginTop: 10, fontSize: 12, color: muted, lineHeight: 1.6 }}>
           Once created, drop in any docs your agent sends — itinerary, contracts, hotel bookings. AI builds the tour as you go.
         </div>
