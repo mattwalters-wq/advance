@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase'
 
 const supabase = createClient()
 
-type ModalType = 'show' | 'travel' | 'accommodation' | 'contact' | 'tour' | 'rider' | null
+type ModalType = 'show' | 'travel' | 'accommodation' | 'contact' | 'tour' | 'rider' | 'settlement' | null
 
 export default function ArtistPage() {
   const params = useParams()
@@ -35,6 +35,8 @@ export default function ArtistPage() {
   const [warnings, setWarnings] = useState<string[]>([])
   const [notes, setNotes] = useState<any[]>([])
   const [rider, setRider] = useState<any>(null)
+  const [settlements, setSettlements] = useState<any[]>([])
+  const [settlementShow, setSettlementShow] = useState<any>(null)
   const [newNote, setNewNote] = useState('')
   const [postingNote, setPostingNote] = useState(false)
   const [userName, setUserName] = useState('Manager')
@@ -78,6 +80,8 @@ export default function ArtistPage() {
     setNotes(notesData || [])
     const { data: riderData } = await supabase.from('riders').select('*').eq('tour_id', tourId).single()
     setRider(riderData || null)
+    const { data: settlementsData } = await supabase.from('settlements').select('*').eq('tour_id', tourId)
+    setSettlements(settlementsData || [])
   }
 
   async function postNote() {
@@ -208,6 +212,22 @@ export default function ArtistPage() {
 
     if (!selectedTour) { setSaving(false); return }
     const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id }
+
+    if (modal === 'settlement') {
+      const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id, show_id: settlementShow?.id }
+      const existing = settlements.find(s => s.show_id === settlementShow?.id)
+      if (existing) {
+        const { id, tour_id, org_id, show_id, created_at, ...updates } = form
+        await supabase.from('settlements').update(updates).eq('id', existing.id)
+        setSettlements(prev => prev.map(s => s.id === existing.id ? { ...s, ...updates } : s))
+      } else {
+        const { data } = await supabase.from('settlements').insert({ ...base, ...form }).select().single()
+        if (data) setSettlements(prev => [...prev, data])
+      }
+      setSaving(false)
+      closeModal()
+      return
+    }
 
     if (modal === 'rider') {
       if (rider?.id) {
@@ -613,6 +633,60 @@ export default function ArtistPage() {
               </>
             )}
 
+            {modal === 'settlement' && (
+              <>
+                <div style={{ marginBottom: 8, fontSize: 13, color: muted, fontStyle: 'italic' }}>
+                  {settlementShow?.venue} — {settlementShow?.date}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                  <div>
+                    <label style={labelStyle}>Deal type</label>
+                    <select style={inputStyle} value={form.deal_type || ''} onChange={e => setForm({ ...form, deal_type: e.target.value })}>
+                      <option value="">Select...</option>
+                      <option value="guarantee">Guarantee</option>
+                      <option value="door">Door deal</option>
+                      <option value="vs">Guarantee vs %</option>
+                      <option value="flat">Flat fee</option>
+                      <option value="profit_share">Profit share</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Agreed amount</label>
+                    <input style={inputStyle} type="number" value={form.agreed_amount || ''} onChange={e => setForm({ ...form, agreed_amount: e.target.value })} placeholder="0.00" />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                  <div>
+                    <label style={labelStyle}>Amount paid</label>
+                    <input style={inputStyle} type="number" value={form.paid_amount || ''} onChange={e => setForm({ ...form, paid_amount: e.target.value })} placeholder="0.00" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Currency</label>
+                    <input style={inputStyle} value={form.currency || 'AUD'} onChange={e => setForm({ ...form, currency: e.target.value })} placeholder="AUD" />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                  <div>
+                    <label style={labelStyle}>Status</label>
+                    <select style={inputStyle} value={form.status || 'pending'} onChange={e => setForm({ ...form, status: e.target.value })}>
+                      <option value="pending">Pending</option>
+                      <option value="partial">Partial</option>
+                      <option value="paid">Paid in full</option>
+                      <option value="disputed">Disputed</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Payment date</label>
+                    <input style={inputStyle} type="date" value={form.payment_date || ''} onChange={e => setForm({ ...form, payment_date: e.target.value })} />
+                  </div>
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={labelStyle}>Notes / deductions</label>
+                  <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: 70 }} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Production deductions, parking, hospitality buyout..." />
+                </div>
+              </>
+            )}
+
             {modal === 'rider' && (
               <>
                 <div style={{ marginBottom: 16 }}>
@@ -813,6 +887,17 @@ export default function ArtistPage() {
                           <button onClick={() => window.open(`/daysheet/${show.id}`, '_blank')}
                             style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 10, padding: '3px 8px', fontFamily: 'monospace', letterSpacing: 1 }}
                             title="Day Sheet">DAY SHEET</button>
+                          {(() => {
+                            const s = settlements.find(s => s.show_id === show.id)
+                            const statusColor: Record<string,string> = { paid: '#2d7a4f', partial: '#B8860B', pending: muted, disputed: '#C00' }
+                            return (
+                              <button onClick={() => { setSettlementShow(show); openModal('settlement', s || {}) }}
+                                style={{ background: s ? (s.status === 'paid' ? '#f0fff4' : s.status === 'disputed' ? '#fff0f0' : '#FFF8E6') : 'transparent', border: `1px solid ${s ? statusColor[s.status] || border : border}`, borderRadius: 6, color: s ? statusColor[s.status] || muted : muted, cursor: 'pointer', fontSize: 10, padding: '3px 8px', fontFamily: 'monospace', letterSpacing: 1 }}
+                                title="Settlement">
+                                {s ? `$${s.status}` : '$ settle'}
+                              </button>
+                            )
+                          })()}
                           <button onClick={() => openModal('show', show)}
                             style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 11, padding: '3px 8px' }}
                             title="Edit">✎</button>
@@ -894,6 +979,55 @@ export default function ArtistPage() {
                     ))}
                   </div>
                 )}
+                {settlements.length > 0 && (
+                  <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
+                    <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Settlements — {settlements.length} show{settlements.length !== 1 ? 's' : ''}</div>
+                    {(() => {
+                      const total = settlements.reduce((sum, s) => sum + (parseFloat(s.paid_amount) || 0), 0)
+                      const agreed = settlements.reduce((sum, s) => sum + (parseFloat(s.agreed_amount) || 0), 0)
+                      const outstanding = agreed - total
+                      const statusColor: Record<string,string> = { paid: '#2d7a4f', partial: '#B8860B', pending: muted, disputed: '#C00' }
+                      return (
+                        <>
+                          <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+                            <div style={{ background: '#F5F0E8', borderRadius: 8, padding: '10px 16px', textAlign: 'center' }}>
+                              <div style={{ fontSize: 11, fontFamily: 'monospace', color: muted, letterSpacing: 1, marginBottom: 4 }}>AGREED</div>
+                              <div style={{ fontSize: 18, fontWeight: 700 }}>${agreed.toLocaleString()}</div>
+                            </div>
+                            <div style={{ background: '#F5F0E8', borderRadius: 8, padding: '10px 16px', textAlign: 'center' }}>
+                              <div style={{ fontSize: 11, fontFamily: 'monospace', color: muted, letterSpacing: 1, marginBottom: 4 }}>RECEIVED</div>
+                              <div style={{ fontSize: 18, fontWeight: 700, color: '#2d7a4f' }}>${total.toLocaleString()}</div>
+                            </div>
+                            {outstanding > 0 && (
+                              <div style={{ background: '#FFF8E6', borderRadius: 8, padding: '10px 16px', textAlign: 'center' }}>
+                                <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#B8860B', letterSpacing: 1, marginBottom: 4 }}>OUTSTANDING</div>
+                                <div style={{ fontSize: 18, fontWeight: 700, color: '#B8860B' }}>${outstanding.toLocaleString()}</div>
+                              </div>
+                            )}
+                          </div>
+                          {settlements.map((s, i) => {
+                            const show = shows.find(sh => sh.id === s.show_id)
+                            return (
+                              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < settlements.length - 1 ? `1px solid ${border}` : 'none', flexWrap: 'wrap', gap: 8 }}>
+                                <div>
+                                  <div style={{ fontSize: 13, fontWeight: 600 }}>{show?.venue || 'Unknown venue'}</div>
+                                  <div style={{ fontSize: 11, color: muted }}>{show?.date} · {s.deal_type}</div>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  <span style={{ fontSize: 13, fontWeight: 600 }}>${parseFloat(s.paid_amount || 0).toLocaleString()}</span>
+                                  <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, padding: '2px 8px', borderRadius: 10, background: s.status === 'paid' ? '#f0fff4' : s.status === 'disputed' ? '#fff0f0' : '#FFF8E6', color: statusColor[s.status] || muted }}>
+                                    {s.status}
+                                  </span>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </>
+                      )
+                    })()}
+                  </div>
+                )}
+
                 {rider && (rider.tech_notes || rider.hospitality || rider.set_length || rider.band_size || rider.input_list) && (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
