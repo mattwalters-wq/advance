@@ -695,6 +695,9 @@ export default function ArtistPage() {
                           {show.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{show.notes}</div>}
                         </div>
                         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                          <button onClick={() => window.open(`/daysheet/${show.id}`, '_blank')}
+                            style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 10, padding: '3px 8px', fontFamily: 'monospace', letterSpacing: 1 }}
+                            title="Day Sheet">DAY SHEET</button>
                           <button onClick={() => openModal('show', show)}
                             style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 11, padding: '3px 8px' }}
                             title="Edit">✎</button>
