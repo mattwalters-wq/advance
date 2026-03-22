@@ -20,7 +20,15 @@ export default function SignupPage() {
     try {
       const { data, error } = await supabase.auth.signUp({ email, password })
       if (error) throw error
-      if (data.user) router.push('/onboarding')
+      if (data.user) {
+        // Create profile row immediately — upsert so it's safe to call multiple times
+        await supabase.from('profiles').upsert({
+          id: data.user.id,
+          full_name: '',
+          role: 'member',
+        }, { onConflict: 'id' })
+        router.push('/onboarding')
+      }
     } catch (err: any) {
       setError(err.message)
     } finally {

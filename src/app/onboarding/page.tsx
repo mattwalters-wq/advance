@@ -17,7 +17,11 @@ export default function OnboardingPage() {
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      await supabase.from('profiles').update({ full_name: name.trim() }).eq('id', user.id)
+      await supabase.from('profiles').upsert({
+        id: user.id,
+        full_name: name.trim(),
+        role: 'member',
+      }, { onConflict: 'id' })
     }
     setSaving(false)
     setStep(2)

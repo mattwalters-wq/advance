@@ -30,7 +30,15 @@ export default function DashboardPage() {
       supabase.from('profiles').select('*').eq('id', user.id).single(),
       supabase.from('artists').select('*').order('name'),
     ])
-    setProfile(profileRes.data)
+    let profile = profileRes.data
+    // If no profile exists, create one now (handles users who slipped through signup)
+    if (!profile) {
+      const { data: newProfile } = await supabase.from('profiles')
+        .upsert({ id: user.id, full_name: user.email?.split('@')[0] || '', role: 'member' }, { onConflict: 'id' })
+        .select().single()
+      profile = newProfile
+    }
+    setProfile(profile)
     setArtists(artistsRes.data || [])
     setLoading(false)
   }
