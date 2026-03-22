@@ -34,6 +34,7 @@ export default function ArtistPage() {
   const [deleting, setDeleting] = useState(false)
   const [warnings, setWarnings] = useState<string[]>([])
   const [dismissedWarnings, setDismissedWarnings] = useState<Set<string>>(new Set())
+  const [showWarnings, setShowWarnings] = useState(false)
   const [notes, setNotes] = useState<any[]>([])
   const [rider, setRider] = useState<any>(null)
   const [settlements, setSettlements] = useState<any[]>([])
@@ -1178,6 +1179,49 @@ export default function ArtistPage() {
                   style={{ padding: '7px 10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 7, cursor: 'pointer', fontSize: 13 }} title="Export iCal">
                   📅
                 </button>
+                <div style={{ position: 'relative' as const }}>
+                  <button onClick={() => setShowWarnings(!showWarnings)}
+                    title="Logistics flags"
+                    style={{ padding: '7px 10px', background: showWarnings ? (darkMode ? '#2a2a2a' : '#FFF8E6') : 'transparent', color: warnings.filter(w => !dismissedWarnings.has(w)).length > 0 ? '#B8860B' : muted, border: `1px solid ${warnings.filter(w => !dismissedWarnings.has(w)).length > 0 ? '#F0C040' : border}`, borderRadius: 7, cursor: 'pointer', fontSize: 13, position: 'relative' as const }}>
+                    🔔
+                    {warnings.filter(w => !dismissedWarnings.has(w)).length > 0 && (
+                      <span style={{ position: 'absolute' as const, top: -6, right: -6, background: '#B8860B', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', fontWeight: 700 }}>
+                        {warnings.filter(w => !dismissedWarnings.has(w)).length}
+                      </span>
+                    )}
+                  </button>
+
+                  {showWarnings && (
+                    <div style={{ position: 'absolute' as const, right: 0, top: 42, width: 380, background: card, border: `1px solid ${border}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.15)', zIndex: 50, overflow: 'hidden' }}>
+                      <div style={{ padding: '12px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#B8860B' }}>
+                          ⚠ LOGISTICS FLAGS
+                        </div>
+                        {warnings.filter(w => !dismissedWarnings.has(w)).length === 0 && (
+                          <div style={{ fontSize: 12, color: '#2d7a4f' }}>✓ All clear</div>
+                        )}
+                        <button onClick={() => setShowWarnings(false)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 16, padding: 0 }}>×</button>
+                      </div>
+                      <div style={{ maxHeight: 360, overflowY: 'auto' as const }}>
+                        {warnings.filter(w => !dismissedWarnings.has(w)).length === 0 ? (
+                          <div style={{ padding: '20px 16px', textAlign: 'center', fontSize: 13, color: muted }}>No flags for this tour.</div>
+                        ) : (
+                          warnings.filter(w => !dismissedWarnings.has(w)).map((w, i) => (
+                            <div key={i} style={{ padding: '10px 16px', borderBottom: `1px solid ${border}`, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                              <span style={{ color: '#F0C040', flexShrink: 0, marginTop: 1 }}>—</span>
+                              <span style={{ flex: 1, fontSize: 12, color: darkMode ? '#e8c840' : '#7a5800', lineHeight: 1.5 }}>{w}</span>
+                              <button onClick={() => setDismissedWarnings(prev => new Set([...prev, w]))}
+                                style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 5, color: muted, cursor: 'pointer', fontSize: 9, padding: '2px 8px', fontFamily: 'monospace', letterSpacing: 1, flexShrink: 0, whiteSpace: 'nowrap' as const }}>
+                                RESOLVE
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <button onClick={() => router.push(`/dashboard/artists/${params.id}/settings`)}
                   style={{ padding: '7px 10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 7, cursor: 'pointer', fontSize: 13 }} title="Settings">
                   ⚙
@@ -1701,26 +1745,9 @@ export default function ArtistPage() {
                   </div>
                 )}
 
-                {/* Gap warnings */}
-                {warnings.filter(w => !dismissedWarnings.has(w)).length > 0 && (
-                  <div style={{ background: darkMode ? '#2a1f00' : '#FFF8E6', border: `1px solid ${darkMode ? '#5a3a00' : '#F0C040'}`, borderRadius: 10, padding: '14px 18px' }}>
-                    <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: '#B8860B', marginBottom: 10 }}>⚠ STILL MISSING — {warnings.filter(w => !dismissedWarnings.has(w)).length}</div>
-                    {warnings.filter(w => !dismissedWarnings.has(w)).map((w, i, arr) => (
-                      <div key={i} style={{ fontSize: 13, color: darkMode ? '#e8c840' : '#7a5800', marginBottom: i < arr.length - 1 ? 8 : 0, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                        <span style={{ opacity: 0.4, marginTop: 1 }}>—</span>
-                        <span style={{ flex: 1 }}>{w}</span>
-                        <button onClick={() => setDismissedWarnings(prev => new Set([...prev, w]))}
-                          style={{ background: 'none', border: '1px solid #F0C040', borderRadius: 5, color: '#B8860B', cursor: 'pointer', fontSize: 10, padding: '2px 8px', fontFamily: 'monospace', letterSpacing: 1, flexShrink: 0 }}>
-                          ✓ RESOLVE
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {warnings.filter(w => !dismissedWarnings.has(w)).length === 0 && importJobs.some(j => j.status === 'done') && (
+                {importJobs.some(j => j.status === 'done') && warnings.filter(w => !dismissedWarnings.has(w)).length === 0 && (
                   <div style={{ background: darkMode ? '#0a2a1a' : '#F0FFF4', border: `1px solid #2d7a4f`, borderRadius: 10, padding: '14px 18px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 14, color: '#2d7a4f', fontWeight: 600 }}>✓ No gaps detected — tour looks complete</div>
+                    <div style={{ fontSize: 14, color: '#2d7a4f', fontWeight: 600 }}>✓ No gaps detected</div>
                   </div>
                 )}
               </div>
