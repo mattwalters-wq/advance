@@ -26,12 +26,17 @@ export default function NewArtistPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not logged in')
       let { data: profile } = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
-      // Auto-create profile if missing (new users who slipped through onboarding)
-      if (!profile) {
-        const { data: newProfile } = await supabase.from('profiles')
-          .upsert({ id: user.id, full_name: user.email?.split('@')[0] || '', role: 'member' }, { onConflict: 'id' })
-          .select('org_id').single()
-        profile = newProfile
+      // If no profile or no org_id, run full account setup
+      if (!profile?.org_id) {
+        const res = await fetch('/api/setup-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, email: user.email, fullName: (profile as any)?.full_name || '' }),
+        })
+        const setupData = await res.json()
+        if (setupData.success) {
+          profile = { ...profile, org_id: setupData.org_id }
+        }
       }
       const { error } = await supabase.from('artists').insert({ name, project, org_id: profile?.org_id, color, status: 'active' })
       if (error) throw error

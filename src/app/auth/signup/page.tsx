@@ -21,12 +21,12 @@ export default function SignupPage() {
       const { data, error } = await supabase.auth.signUp({ email, password })
       if (error) throw error
       if (data.user) {
-        // Create profile row immediately — upsert so it's safe to call multiple times
-        await supabase.from('profiles').upsert({
-          id: data.user.id,
-          full_name: '',
-          role: 'member',
-        }, { onConflict: 'id' })
+        // Create profile + personal org via service role API
+        await fetch('/api/setup-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: data.user.id, email: data.user.email, fullName: '' }),
+        })
         router.push('/onboarding')
       }
     } catch (err: any) {

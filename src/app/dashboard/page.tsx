@@ -31,12 +31,18 @@ export default function DashboardPage() {
       supabase.from('artists').select('*').order('name'),
     ])
     let profile = profileRes.data
-    // If no profile exists, create one now (handles users who slipped through signup)
-    if (!profile) {
-      const { data: newProfile } = await supabase.from('profiles')
-        .upsert({ id: user.id, full_name: user.email?.split('@')[0] || '', role: 'member' }, { onConflict: 'id' })
-        .select().single()
-      profile = newProfile
+    // If no profile or no org, run full setup
+    if (!profile?.org_id) {
+      const res = await fetch('/api/setup-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, email: user.email, fullName: profile?.full_name || '' }),
+      })
+      const setupData = await res.json()
+      if (setupData.success) {
+        const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+        profile = refreshed
+      }
     }
     setProfile(profile)
     setArtists(artistsRes.data || [])
