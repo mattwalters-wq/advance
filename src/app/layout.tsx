@@ -1,8 +1,30 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Advance — Tour Management",
-  description: "AI-powered tour management for artist managers",
+  title: "Advance — AI-Powered Tour Management",
+  description: "Drop a doc. Your tour builds itself. Advance reads itineraries, flight confirmations, hotel bookings and venue worksheets — then builds and updates the tour automatically. Built for indie artist managers.",
+  openGraph: {
+    title: "Advance — AI-Powered Tour Management",
+    description: "Drop a doc. Your tour builds itself. Built for indie artist managers who are done patching things together. Replaces Master Tour, spreadsheets, PDF day sheets and email threads.",
+    url: "https://getadvance.co",
+    siteName: "Advance",
+    images: [
+      {
+        url: "https://getadvance.co/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Advance — AI-Powered Tour Management",
+      },
+    ],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Advance — AI-Powered Tour Management",
+    description: "Drop a doc. Your tour builds itself. Built for indie artist managers who are done patching things together.",
+    images: ["https://getadvance.co/og-image.png"],
+  },
+  metadataBase: new URL("https://getadvance.co"),
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

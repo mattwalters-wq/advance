@@ -645,7 +645,7 @@ export default function ArtistPage() {
         <div className="sk" style={{ width: 32, height: 32, borderRadius: 8, background: '#2A2520' }} />
         <div className="sk" style={{ width: 120, height: 16, background: '#2A2520' }} />
       </div>
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '16px 12px' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '16px 12px', position: 'relative' as const }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
           {[1,2,3].map(i => <div key={i} className="sk" style={{ width: 100, height: 36, borderRadius: 20 }} />)}
         </div>
@@ -1157,7 +1157,7 @@ export default function ArtistPage() {
             )}
 
             {/* Toolbar */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 8, overflowX: 'hidden' as const }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 8 }}>
 
               {/* Main tabs */}
               <div className="toolbar-tabs" style={{ display: 'flex', gap: 2, background: darkMode ? '#222' : '#EDE8DF', borderRadius: 10, padding: 3, overflowX: 'auto' as const, maxWidth: '100%' }}>
@@ -1213,6 +1213,7 @@ export default function ArtistPage() {
                   📅
                 </button>
                 <div style={{ position: 'relative' as const }}>
+                  {showWarnings && <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setShowWarnings(false)} />}
                   <button onClick={() => setShowWarnings(!showWarnings)}
                     title="Logistics flags"
                     style={{ padding: '7px 10px', background: showWarnings ? (darkMode ? '#2a2a2a' : '#FFF8E6') : 'transparent', color: warnings.filter(w => !dismissedWarnings.has(w)).length > 0 ? '#B8860B' : muted, border: `1px solid ${warnings.filter(w => !dismissedWarnings.has(w)).length > 0 ? '#F0C040' : border}`, borderRadius: 7, cursor: 'pointer', fontSize: 13, position: 'relative' as const }}>
