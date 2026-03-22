@@ -1230,25 +1230,6 @@ export default function ArtistPage() {
             </div>
 
                         {/* Warnings */}
-            {warnings.filter(w => !dismissedWarnings.has(w)).length > 0 && (
-              <div style={{ background: darkMode ? '#2a1f00' : '#FFF8E6', border: `1px solid ${darkMode ? '#5a3a00' : '#F0C040'}`, borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
-                <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: '#B8860B', marginBottom: 10 }}>
-                  ⚠ LOGISTICS FLAGS — {warnings.filter(w => !dismissedWarnings.has(w)).length}
-                </div>
-                {warnings.filter(w => !dismissedWarnings.has(w)).map((w, i, arr) => (
-                  <div key={i} style={{ fontSize: 13, color: darkMode ? '#e8c840' : '#7a5800', marginBottom: i < arr.length - 1 ? 8 : 0, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                    <span style={{ opacity: 0.4, marginTop: 1 }}>—</span>
-                    <span style={{ flex: 1 }}>{w}</span>
-                    <button onClick={() => setDismissedWarnings(prev => new Set([...prev, w]))}
-                      title="Mark as resolved"
-                      style={{ background: 'none', border: '1px solid #F0C040', borderRadius: 5, color: '#B8860B', cursor: 'pointer', fontSize: 10, padding: '2px 8px', fontFamily: 'monospace', letterSpacing: 1, flexShrink: 0, opacity: 0.8 }}>
-                      ✓ RESOLVE
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {/* LIST VIEW */}
             {view === 'list' && (
               <div style={{ display: 'grid', gap: 20 }}>
