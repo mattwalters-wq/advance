@@ -645,7 +645,7 @@ export default function ArtistPage() {
         <div className="sk" style={{ width: 32, height: 32, borderRadius: 8, background: '#2A2520' }} />
         <div className="sk" style={{ width: 120, height: 16, background: '#2A2520' }} />
       </div>
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '16px 12px' }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
           {[1,2,3].map(i => <div key={i} className="sk" style={{ width: 100, height: 36, borderRadius: 20 }} />)}
         </div>
@@ -1053,8 +1053,21 @@ export default function ArtistPage() {
         </div>
       )}
 
+      <style>{`
+        @media (max-width: 600px) {
+          .toolbar-tabs button { padding: 7px 8px !important; font-size: 8px !important; letter-spacing: 0 !important; }
+          .toolbar-tabs button span { display: none; }
+          .toolbar-right { flex-wrap: nowrap !important; }
+          .add-row { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; }
+          .show-actions { flex-direction: column !important; align-items: flex-end !important; gap: 4px !important; }
+          .show-actions button { font-size: 9px !important; padding: 4px 6px !important; }
+          .warnings-dropdown { right: -60px !important; width: 300px !important; }
+          .tour-tabs { flex-wrap: wrap !important; }
+        }
+      `}</style>
+
       {/* Header */}
-      <div style={{ background: darkMode ? '#111' : '#0F0E0C', borderBottom: `1px solid ${darkMode ? '#222' : '#1E1C18'}`, padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ background: darkMode ? '#111' : '#0F0E0C', borderBottom: `1px solid ${darkMode ? '#222' : '#1E1C18'}`, padding: '0 16px', minHeight: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <button onClick={() => router.push('/dashboard')}
             style={{ background: 'none', border: 'none', color: '#5A5450', cursor: 'pointer', fontSize: 13, fontFamily: '"Georgia", serif', display: 'flex', alignItems: 'center', gap: 6, padding: 0 }}>
@@ -1144,10 +1157,10 @@ export default function ArtistPage() {
             )}
 
             {/* Toolbar */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 8, overflowX: 'hidden' as const }}>
 
               {/* Main tabs */}
-              <div style={{ display: 'flex', gap: 2, background: darkMode ? '#222' : '#EDE8DF', borderRadius: 10, padding: 3 }}>
+              <div className="toolbar-tabs" style={{ display: 'flex', gap: 2, background: darkMode ? '#222' : '#EDE8DF', borderRadius: 10, padding: 3, overflowX: 'auto' as const, maxWidth: '100%' }}>
                 {([
                   ['list', '☰ Tour'],
                   ['import', '⊕ Import'],
@@ -1180,7 +1193,17 @@ export default function ArtistPage() {
               </div>
 
               {/* Right actions */}
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <div className="toolbar-right" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <button onClick={() => {
+                  const today = new Date().toISOString().slice(0, 10)
+                  const upcoming = shows.filter(s => s.date >= today).sort((a,b) => a.date.localeCompare(b.date))
+                  const target = upcoming[0]?.date || shows[0]?.date || today
+                  router.push(`/day?tourId=${selectedTour?.id}&date=${target}`)
+                }}
+                  style={{ padding: '7px 14px', background: darkMode ? '#2a2a2a' : '#1A1714', color: '#F4EFE6', border: 'none', borderRadius: 7, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', whiteSpace: 'nowrap' as const }}
+                  title="Open day schedule view">
+                  ▦ SCHEDULE
+                </button>
                 <button onClick={handleShare} disabled={sharing}
                   style={{ padding: '7px 14px', background: copied ? '#2d7a4f' : accent, color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em' }}>
                   {copied ? '✓ COPIED' : '🔗 SHARE'}
@@ -1202,7 +1225,7 @@ export default function ArtistPage() {
                   </button>
 
                   {showWarnings && (
-                    <div style={{ position: 'absolute' as const, right: 0, top: 42, width: 380, background: card, border: `1px solid ${border}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.15)', zIndex: 50, overflow: 'hidden' }}>
+                    <div className="warnings-dropdown" style={{ position: 'absolute' as const, right: 0, top: 42, width: 380, background: card, border: `1px solid ${border}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.15)', zIndex: 50, overflow: 'hidden' }}>
                       <div style={{ padding: '12px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#B8860B' }}>
                           ⚠ LOGISTICS FLAGS
@@ -1244,7 +1267,7 @@ export default function ArtistPage() {
             {view === 'list' && (
               <div style={{ display: 'grid', gap: 20 }}>
                 {/* Manual add row */}
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <div className="add-row" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {([['show', '+ Show'], ['travel', '+ Travel'], ['accommodation', '+ Hotel'], ['contact', '+ Contact']] as const).map(([type, label]) => (
                     <button key={type} onClick={() => openModal(type)}
                       style={{ padding: '6px 12px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
@@ -1264,16 +1287,39 @@ export default function ArtistPage() {
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
                     <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Shows — {shows.length}</div>
                     {shows.map((show, i) => (
-                      <div key={i} style={{ padding: '12px 0', borderBottom: i < shows.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 600, marginBottom: 4 }}>{show.venue}</div>
-                          <div style={{ fontSize: 13, color: muted }}>{show.date}{show.set_time ? ` · Stage ${formatTime(show.set_time)}` : ''}{show.stage ? ` · ${show.stage}` : ''}</div>
-                          {show.city && <div style={{ fontSize: 13, color: muted }}>{show.city}{show.country ? `, ${show.country}` : ''}</div>}
-                          {show.catering && <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>🍽 {show.catering}</div>}
-                          {show.backline && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>🎸 {show.backline}</div>}
-                          {show.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{show.notes}</div>}
+                      <div key={i} style={{ padding: '14px 0', borderBottom: i < shows.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                        {/* Date block - Master Tour style */}
+                        <div style={{ flexShrink: 0, width: 48, textAlign: 'center', paddingTop: 2 }}>
+                          <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: muted, textTransform: 'uppercase' }}>
+                            {show.date ? new Date(show.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' }) : ''}
+                          </div>
+                          <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 22, fontWeight: 700, lineHeight: 1, color: text }}>
+                            {show.date ? new Date(show.date + 'T00:00:00').getDate() : ''}
+                          </div>
+                          <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.05em', color: muted }}>
+                            {show.date ? new Date(show.date + 'T00:00:00').toLocaleDateString('en-AU', { month: 'short' }) : ''}
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                        {/* Divider */}
+                        <div style={{ width: 1, background: border, alignSelf: 'stretch', flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 16, fontWeight: 700, marginBottom: 2, lineHeight: 1.2 }}>{show.venue}</div>
+                          {show.city && <div style={{ fontSize: 12, color: muted, marginBottom: 4 }}>{show.city}{show.country ? `, ${show.country}` : ''}</div>}
+                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 11, color: muted, fontFamily: 'monospace' }}>
+                            {show.doors_time && <span>Doors {formatTime(show.doors_time)}</span>}
+                            {show.soundcheck_time && <span>SC {formatTime(show.soundcheck_time)}</span>}
+                            {show.set_time && <span style={{ color: accent, fontWeight: 700 }}>Stage {formatTime(show.set_time)}</span>}
+                            {show.stage && <span>{show.stage}</span>}
+                          </div>
+                          {(show.catering || show.backline) && (
+                            <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 11, color: muted }}>
+                              {show.catering && <span>🍽 {show.catering}</span>}
+                              {show.backline && <span>🎸 {show.backline}</span>}
+                            </div>
+                          )}
+                          {show.notes && <div style={{ fontSize: 11, color: muted, marginTop: 4, fontStyle: 'italic' }}>{show.notes}</div>}
+                        </div>
+                        <div className="show-actions" style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                           <button onClick={() => window.open(`/daysheet/${show.id}`, '_blank')}
                             style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 10, padding: '3px 8px', fontFamily: 'monospace', letterSpacing: 1 }}
                             title="Day Sheet">DAY SHEET</button>

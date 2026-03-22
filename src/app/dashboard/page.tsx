@@ -101,6 +101,12 @@ export default function DashboardPage() {
     <div style={{ background: '#F4EFE6', minHeight: '100vh', fontFamily: '"Georgia", serif' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+        @media (max-width: 600px) {
+          .dashboard-header { flex-direction: column !important; align-items: flex-start !important; }
+          .dashboard-header h1 { font-size: 26px !important; }
+          .dashboard-nav { gap: 0 !important; }
+          .dashboard-nav button { padding: 6px 8px !important; font-size: 12px !important; }
+        }
         * { box-sizing: border-box; }
         .artist-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.12) !important; }
         .artist-card:hover .card-arrow { opacity: 1 !important; transform: translateX(0) !important; }
