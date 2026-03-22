@@ -35,12 +35,16 @@ export default function ArtistPage() {
   const [warnings, setWarnings] = useState<string[]>([])
   const [dismissedWarnings, setDismissedWarnings] = useState<Set<string>>(new Set())
   const [showWarnings, setShowWarnings] = useState(false)
+  const [calPopover, setCalPopover] = useState<{ date: string, shows: any[], travel: any[], accom: any[] } | null>(null)
   const [notes, setNotes] = useState<any[]>([])
   const [rider, setRider] = useState<any>(null)
   const [settlements, setSettlements] = useState<any[]>([])
   const [settlementShow, setSettlementShow] = useState<any>(null)
   const [importJobs, setImportJobs] = useState<any[]>([])
   const [importDragging, setImportDragging] = useState(false)
+  const [importTab, setImportTab] = useState<'drop' | 'paste'>('drop')
+  const [pasteText, setPasteText] = useState('')
+  const [pasteLabel, setPasteLabel] = useState('')
   const [aiMessages, setAiMessages] = useState<any[]>([])
   const [travelScanMode, setTravelScanMode] = useState<'scan' | 'manual'>('scan')
   const [travelScanning, setTravelScanning] = useState(false)
@@ -588,6 +592,12 @@ export default function ArtistPage() {
   }
 
   // Calendar helpers
+  function formatDate(dateStr: string) {
+    if (!dateStr) return ''
+    const d = new Date(dateStr + 'T00:00:00')
+    return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+  }
+
   function getDaysInMonth(year: number, month: number) { return new Date(year, month + 1, 0).getDate() }
   function getFirstDayOfMonth(year: number, month: number) { return new Date(year, month, 1).getDay() }
   function showsOnDate(dateStr: string) { return shows.filter(s => s.date === dateStr) }
@@ -1295,9 +1305,10 @@ export default function ArtistPage() {
                     {travel.map((t, i) => (
                       <div key={i} style={{ padding: '12px 0', borderBottom: i < travel.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                         <div style={{ flex: 1 }}>
+                          <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, color: accent, marginBottom: 4 }}>{formatDate(t.travel_date)}</div>
                           <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.from_location} → {t.to_location}</div>
-                          <div style={{ fontSize: 13, color: muted }}>{t.travel_date}{t.carrier ? ` · ${t.carrier}` : ''}{t.reference ? ` ${t.reference}` : ''}</div>
-                          {t.departure_time && <div style={{ fontSize: 13, color: muted }}>Departs {formatTime(t.departure_time)}{t.arrival_time ? ` · Arrives ${formatTime(t.arrival_time)}` : ''}</div>}
+                          <div style={{ fontSize: 13, color: muted }}>{t.carrier ? `${t.carrier}` : t.travel_type || 'Travel'}{t.reference ? ` · Ref: ${t.reference}` : ''}</div>
+                          {t.departure_time && <div style={{ fontSize: 13, color: muted }}>Dep {formatTime(t.departure_time)}{t.arrival_time ? ` · Arr ${formatTime(t.arrival_time)}` : ''}</div>}
                           {t.travellers && <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>👤 {t.travellers}</div>}
                           {t.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{t.notes}</div>}
                         </div>
@@ -1319,9 +1330,9 @@ export default function ArtistPage() {
                     {accommodation.map((a, i) => (
                       <div key={i} style={{ padding: '12px 0', borderBottom: i < accommodation.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                         <div style={{ flex: 1 }}>
+                          <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, color: accent, marginBottom: 4 }}>{formatDate(a.check_in)}{a.check_out ? ` — ${formatDate(a.check_out)}` : ''}</div>
                           <div style={{ fontWeight: 600, marginBottom: 4 }}>{a.name}</div>
                           {a.address && <div style={{ fontSize: 13, color: muted }}>{a.address}</div>}
-                          <div style={{ fontSize: 13, color: muted }}>Check in: {a.check_in}{a.check_out ? ` · Check out: ${a.check_out}` : ''}</div>
                           {a.confirmation && <div style={{ fontSize: 13, color: muted }}>Ref: {a.confirmation}</div>}
                           {a.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{a.notes}</div>}
                         </div>
@@ -1622,41 +1633,103 @@ export default function ArtistPage() {
             {view === 'import' && (
               <div style={{ display: 'grid', gap: 16 }}>
 
-                {/* Drop zone - always available */}
-                <div
-                  onDrop={e => {
-                    e.preventDefault(); setImportDragging(false)
-                    const newFiles = Array.from(e.dataTransfer.files) as File[]
-                    setImportJobs(prev => [...prev, ...newFiles.map(f => ({
-                      id: Math.random().toString(36).slice(2), name: f.name, file: f,
-                      status: 'queued' as const, result: null, error: null
-                    }))])
-                  }}
-                  onDragOver={e => { e.preventDefault(); setImportDragging(true) }}
-                  onDragLeave={() => setImportDragging(false)}
-                  onClick={() => {
-                    const inp = document.createElement('input')
-                    inp.type = 'file'; inp.multiple = true
-                    inp.accept = '.pdf,.doc,.docx,.txt,.csv,.xlsx,.xls'
-                    inp.onchange = (e: any) => {
-                      const newFiles = Array.from(e.target.files || []) as File[]
-                      setImportJobs(prev => [...prev, ...newFiles.map(f => ({
-                        id: Math.random().toString(36).slice(2), name: f.name, file: f,
-                        status: 'queued' as const, result: null, error: null
-                      }))])
-                    }
-                    inp.click()
-                  }}
-                  style={{ border: `2px dashed ${importDragging ? accent : border}`, borderRadius: 14, padding: '28px 24px', textAlign: 'center', cursor: 'pointer', background: importDragging ? (darkMode ? '#2a1f18' : '#FDF5EF') : card, transition: 'all 0.15s' }}>
-                  <div style={{ fontSize: 26, marginBottom: 8 }}>⊕</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: text }}>
-                    {importDragging ? 'Drop to add to queue' : 'Drop documents here'}
-                  </div>
-                  <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>Click to browse · Add more any time</div>
-                  <div style={{ fontFamily: 'monospace', fontSize: 9, color: muted, letterSpacing: 2 }}>PDF · DOCX · XLSX · CSV · TXT</div>
+                {/* Tab toggle */}
+                <div style={{ display: 'flex', gap: 0, background: darkMode ? '#222' : '#EDE8DF', borderRadius: 8, padding: 3, alignSelf: 'flex-start' }}>
+                  {([['drop', '⊕ Drop files'], ['paste', '⌘ Paste text']] as const).map(([t, label]) => (
+                    <button key={t} onClick={() => setImportTab(t)}
+                      style={{ padding: '7px 16px', borderRadius: 6, background: importTab === t ? (darkMode ? '#333' : '#fff') : 'transparent', color: importTab === t ? text : muted, border: 'none', cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', fontWeight: importTab === t ? 700 : 400, boxShadow: importTab === t ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s', whiteSpace: 'nowrap' as const }}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
 
-                {/* Queue */}
+                {/* DROP TAB */}
+                {importTab === 'drop' && (
+                  <>
+                    <div
+                      onDrop={e => {
+                        e.preventDefault(); setImportDragging(false)
+                        const newFiles = Array.from(e.dataTransfer.files) as File[]
+                        setImportJobs(prev => [...prev, ...newFiles.map(f => ({
+                          id: Math.random().toString(36).slice(2), name: f.name, file: f,
+                          status: 'queued' as const, result: null, error: null
+                        }))])
+                      }}
+                      onDragOver={e => { e.preventDefault(); setImportDragging(true) }}
+                      onDragLeave={() => setImportDragging(false)}
+                      onClick={() => {
+                        const inp = document.createElement('input')
+                        inp.type = 'file'; inp.multiple = true
+                        inp.accept = '.pdf,.doc,.docx,.txt,.csv,.xlsx,.xls'
+                        inp.onchange = (e: any) => {
+                          const newFiles = Array.from(e.target.files || []) as File[]
+                          setImportJobs(prev => [...prev, ...newFiles.map(f => ({
+                            id: Math.random().toString(36).slice(2), name: f.name, file: f,
+                            status: 'queued' as const, result: null, error: null
+                          }))])
+                        }
+                        inp.click()
+                      }}
+                      style={{ border: `2px dashed ${importDragging ? accent : border}`, borderRadius: 14, padding: '28px 24px', textAlign: 'center', cursor: 'pointer', background: importDragging ? (darkMode ? '#2a1f18' : '#FDF5EF') : card, transition: 'all 0.15s' }}>
+                      <div style={{ fontSize: 26, marginBottom: 8 }}>⊕</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: text }}>
+                        {importDragging ? 'Drop to add to queue' : 'Drop documents here'}
+                      </div>
+                      <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>Click to browse · Add more any time</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 9, color: muted, letterSpacing: 2 }}>PDF · DOCX · XLSX · CSV · TXT</div>
+                    </div>
+                  </>
+                )}
+
+                {/* PASTE TAB */}
+                {importTab === 'paste' && (
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: 20 }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.2em', color: muted, marginBottom: 10 }}>WHAT IS THIS?</div>
+                      <input
+                        value={pasteLabel}
+                        onChange={e => setPasteLabel(e.target.value)}
+                        placeholder="e.g. EU tour email thread from Rola Music, Venue worksheet from Leeds"
+                        style={{ width: '100%', padding: '10px 12px', border: `1px solid ${border}`, borderRadius: 8, background: darkMode ? '#1a1a1a' : '#F9F6F1', color: text, fontSize: 13, fontFamily: '"Georgia", serif', outline: 'none', boxSizing: 'border-box' as const, marginBottom: 12 }}
+                      />
+                      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.2em', color: muted, marginBottom: 10 }}>PASTE YOUR TEXT</div>
+                      <textarea
+                        value={pasteText}
+                        onChange={e => setPasteText(e.target.value)}
+                        placeholder="Paste email threads, booking confirmations, WhatsApp messages, promoter emails. AI will extract shows, flights, hotels and contacts."
+                        style={{ width: '100%', padding: '12px', border: `1px solid ${border}`, borderRadius: 8, background: darkMode ? '#1a1a1a' : '#F9F6F1', color: text, fontSize: 13, fontFamily: '"Georgia", serif', outline: 'none', resize: 'vertical' as const, minHeight: 200, lineHeight: 1.6, boxSizing: 'border-box' as const }}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+                        <div style={{ fontSize: 12, color: muted }}>
+                          {pasteText.length > 0 ? `${pasteText.length.toLocaleString()} characters` : 'Supports plain text, email threads, copied web pages'}
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (!pasteText.trim()) return
+                            const label = pasteLabel.trim() || 'Pasted text'
+                            const file = new File([pasteText], `${label}.txt`, { type: 'text/plain' })
+                            setImportJobs(prev => [...prev, {
+                              id: Math.random().toString(36).slice(2),
+                              name: label,
+                              file,
+                              status: 'queued' as const,
+                              result: null,
+                              error: null,
+                            }])
+                            setPasteText('')
+                            setPasteLabel('')
+                            setImportTab('drop') // switch to queue view
+                          }}
+                          disabled={!pasteText.trim()}
+                          style={{ padding: '9px 20px', background: pasteText.trim() ? accent : border, color: '#fff', border: 'none', borderRadius: 8, cursor: pasteText.trim() ? 'pointer' : 'default', fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', transition: 'background 0.15s' }}>
+                          ADD TO QUEUE →
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Queue — shown on drop tab when jobs exist */}
                 {importJobs.length > 0 && (
                   <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
                     <div style={{ padding: '12px 20px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1671,7 +1744,6 @@ export default function ArtistPage() {
                       </button>
                     </div>
 
-                    {/* File list */}
                     {importJobs.map((job, i) => (
                       <div key={job.id} style={{ padding: '12px 20px', borderBottom: i < importJobs.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                         <span style={{ fontSize: 15, marginTop: 1, flexShrink: 0 }}>
@@ -1681,11 +1753,11 @@ export default function ArtistPage() {
                           {job.status === 'error' && <span style={{ color: '#C00' }}>✕</span>}
                         </span>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.name}</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{job.name}</div>
                           {job.status === 'queued' && <div style={{ fontSize: 11, color: muted, fontFamily: 'monospace', letterSpacing: 1, marginTop: 2 }}>Waiting...</div>}
                           {job.status === 'parsing' && <div style={{ fontSize: 11, color: accent, fontFamily: 'monospace', letterSpacing: 1, marginTop: 2 }}>Reading with AI...</div>}
                           {job.status === 'done' && job.result && (
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginTop: 6 }}>
                               {[['shows','🎵'],['travel','✈️'],['accommodation','🏨'],['contacts','👤']].map(([key, icon]) => {
                                 const r = job.result[key]
                                 if (!r) return null
@@ -1706,7 +1778,6 @@ export default function ArtistPage() {
                       </div>
                     ))}
 
-                    {/* Process button - only shows when queued files exist */}
                     {importJobs.some(j => j.status === 'queued') && (
                       <div style={{ padding: '14px 20px', borderTop: `1px solid ${border}`, background: darkMode ? '#222' : '#FAFAF8' }}>
                         <button onClick={async () => {
@@ -1764,7 +1835,11 @@ export default function ArtistPage() {
                     const today = new Date()
                     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day
                     return (
-                      <div key={day} style={{ minHeight: 80, padding: '6px 8px', borderRight: col < 6 ? `1px solid ${border}` : 'none', borderBottom: `1px solid ${border}`, background: hasAnything ? (darkMode ? '#2a2218' : '#fffaf4') : 'transparent' }}>
+                      <div key={day}
+                        onClick={() => hasAnything && setCalPopover({ date: dateStr, shows: dayShows, travel: dayTravel, accom: dayAccom })}
+                        onDoubleClick={() => hasAnything && router.push(`/day?tourId=${selectedTour?.id}&date=${dateStr}`)}
+                        title={hasAnything ? 'Click for details · Double-click for full day view' : ''}
+                        style={{ minHeight: 80, padding: '6px 8px', borderRight: col < 6 ? `1px solid ${border}` : 'none', borderBottom: `1px solid ${border}`, background: hasAnything ? (darkMode ? '#2a2218' : '#fffaf4') : 'transparent', cursor: hasAnything ? 'pointer' : 'default', transition: 'background 0.1s' }}>
                         <div style={{ fontSize: 12, marginBottom: 4, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: isToday ? accent : 'transparent', color: isToday ? '#fff' : hasAnything ? text : muted, fontWeight: isToday ? 700 : 400 }}>{day}</div>
                         {dayShows.map((show, si) => (
                           <div key={si} style={{ fontSize: 10, background: accent, color: '#fff', borderRadius: 3, padding: '2px 5px', marginBottom: 2, lineHeight: 1.3, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
@@ -1791,6 +1866,68 @@ export default function ArtistPage() {
                       <div style={{ width: 10, height: 10, borderRadius: 2, background: color }} /> {label}
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Calendar day popover */}
+            {calPopover && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+                onClick={() => setCalPopover(null)}>
+                <div style={{ background: card, borderRadius: 16, padding: 0, width: '100%', maxWidth: 420, boxShadow: '0 16px 48px rgba(0,0,0,0.2)', overflow: 'hidden' }}
+                  onClick={e => e.stopPropagation()}>
+                  <div style={{ padding: '16px 20px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 17, fontWeight: 700 }}>{formatDate(calPopover.date)}</div>
+                    <button onClick={() => setCalPopover(null)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>x</button>
+                  </div>
+                  <div style={{ padding: '12px 20px', borderBottom: `1px solid ${border}`, display: 'flex', justifyContent: 'flex-end' }}>
+                    <button onClick={() => { setCalPopover(null); router.push(`/day?tourId=${selectedTour?.id}&date=${calPopover?.date}`) }}
+                      style={{ padding: '6px 14px', background: accent, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em' }}>
+                      FULL DAY VIEW
+                    </button>
+                  </div>
+                  <div style={{ padding: '16px 20px', display: 'grid', gap: 14, maxHeight: '70vh', overflowY: 'auto' }}>
+                    {calPopover.shows.map((show, i) => (
+                      <div key={i} style={{ padding: '12px 14px', background: darkMode ? '#2a1f18' : '#FDF5EF', borderLeft: `3px solid ${accent}`, borderRadius: 8 }}>
+                        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: accent, marginBottom: 6 }}>SHOW</div>
+                        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{show.venue}</div>
+                        {show.city && <div style={{ fontSize: 13, color: muted, marginBottom: 4 }}>{show.city}{show.country ? `, ${show.country}` : ''}</div>}
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12, color: muted }}>
+                          {show.doors_time && <span>Doors {formatTime(show.doors_time)}</span>}
+                          {show.soundcheck_time && <span>SC {formatTime(show.soundcheck_time)}</span>}
+                          {show.set_time && <span style={{ color: accent, fontWeight: 600 }}>Stage {formatTime(show.set_time)}</span>}
+                        </div>
+                        {show.catering && <div style={{ fontSize: 12, color: muted, marginTop: 6 }}>🍽 {show.catering}</div>}
+                        {show.backline && <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>🎸 {show.backline}</div>}
+                        {show.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{show.notes}</div>}
+                      </div>
+                    ))}
+                    {calPopover.travel.map((t, i) => (
+                      <div key={i} style={{ padding: '12px 14px', background: darkMode ? '#1a2a3a' : '#EEF4FB', borderLeft: '3px solid #4a8ab4', borderRadius: 8 }}>
+                        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#4a8ab4', marginBottom: 6 }}>{(t.travel_type || 'TRAVEL').toUpperCase()}</div>
+                        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{t.from_location} → {t.to_location}</div>
+                        {t.carrier && <div style={{ fontSize: 13, color: muted, marginBottom: 4 }}>{t.carrier}{t.reference ? ` · Ref: ${t.reference}` : ''}</div>}
+                        <div style={{ display: 'flex', gap: 12, fontSize: 12, color: muted }}>
+                          {t.departure_time && <span>Dep {formatTime(t.departure_time)}</span>}
+                          {t.arrival_time && <span>Arr {formatTime(t.arrival_time)}</span>}
+                        </div>
+                        {t.travellers && <div style={{ fontSize: 12, marginTop: 6, color: muted }}>👤 {t.travellers}</div>}
+                        {t.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{t.notes}</div>}
+                      </div>
+                    ))}
+                    {calPopover.accom.map((a, i) => (
+                      <div key={i} style={{ padding: '12px 14px', background: darkMode ? '#1a2a1a' : '#EEF7EE', borderLeft: '3px solid #4a8a4a', borderRadius: 8 }}>
+                        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#4a8a4a', marginBottom: 6 }}>HOTEL CHECK-IN</div>
+                        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{a.name}</div>
+                        {a.address && <div style={{ fontSize: 13, color: muted, marginBottom: 4 }}>{a.address}</div>}
+                        <div style={{ fontSize: 12, color: muted }}>
+                          Check in {formatDate(a.check_in)}{a.check_out ? ` · Check out ${formatDate(a.check_out)}` : ''}
+                        </div>
+                        {a.confirmation && <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>Ref: {a.confirmation}</div>}
+                        {a.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{a.notes}</div>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
