@@ -199,6 +199,7 @@ export default function DaySheetPage() {
                     {t.departure_time && <Detail label="Departs" value={formatTime(t.departure_time)} />}
                     {t.arrival_time && <Detail label="Arrives" value={formatTime(t.arrival_time)} />}
                   </div>
+                  {t.travellers && <div style={{ marginTop: 6, fontSize: 13, color: muted }}>👤 {t.travellers}</div>}
                   {t.notes && <div style={{ marginTop: 8, fontSize: 13, color: muted, fontStyle: 'italic' }}>{t.notes}</div>}
                 </div>
               ))}

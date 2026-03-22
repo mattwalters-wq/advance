@@ -115,7 +115,7 @@ ${existingContext}
 Return ONLY a JSON object with these fields (omit any not found):
 {
   "shows": [{ "date": "YYYY-MM-DD", "venue": "", "city": "", "country": "", "stage": "", "set_time": "HH:MM", "doors_time": "HH:MM", "soundcheck_time": "HH:MM", "notes": "", "catering": "", "backline": "" }],
-  "travel": [{ "travel_date": "YYYY-MM-DD", "travel_type": "", "departure_time": "HH:MM", "arrival_time": "HH:MM", "from_location": "", "to_location": "", "carrier": "", "reference": "", "notes": "" }],
+  "travel": [{ "travel_date": "YYYY-MM-DD", "travel_type": "", "departure_time": "HH:MM", "arrival_time": "HH:MM", "from_location": "", "to_location": "", "carrier": "", "reference": "", "travellers": "", "notes": "" }],
   "accommodation": [{ "check_in": "YYYY-MM-DD", "check_out": "YYYY-MM-DD", "name": "", "address": "", "confirmation": "", "notes": "" }],
   "contacts": [{ "name": "", "role": "", "phone": "", "email": "" }]
 }

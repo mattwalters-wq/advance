@@ -212,6 +212,7 @@ export default function PublicTourPage() {
                   {t.departure_time && <Tag label="Departs" value={formatTime(t.departure_time)} accent={accent} />}
                   {t.arrival_time && <Tag label="Arrives" value={formatTime(t.arrival_time)} accent={accent} />}
                 </div>
+                {t.travellers && <div style={{ marginTop: 6, fontSize: 13, color: muted }}>👤 {t.travellers}</div>}
                 {t.notes && <div style={{ marginTop: 8, fontSize: 13, color: muted, fontStyle: 'italic', borderLeft: `2px solid ${accent}`, paddingLeft: 10 }}>{t.notes}</div>}
               </Item>
             ))}

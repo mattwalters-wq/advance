@@ -863,6 +863,11 @@ export default function ArtistPage() {
                       <input style={inputStyle} value={form.reference || ''} onChange={e => setForm({ ...form, reference: e.target.value })} placeholder="ABC123" />
                     </div>
                     <div style={fieldStyle}>
+                      <label style={labelStyle}>Travellers</label>
+                      <input style={inputStyle} value={form.travellers || ''} onChange={e => setForm({ ...form, travellers: e.target.value })} placeholder="e.g. Emma, Sarah (keys), Dave (drums)" />
+                      <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Who is on this leg? Leave blank if everyone.</div>
+                    </div>
+                    <div style={fieldStyle}>
                       <label style={labelStyle}>Notes</label>
                       <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: 60 }} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any notes..." />
                     </div>
@@ -1268,6 +1273,7 @@ export default function ArtistPage() {
                           <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.from_location} → {t.to_location}</div>
                           <div style={{ fontSize: 13, color: muted }}>{t.travel_date}{t.carrier ? ` · ${t.carrier}` : ''}{t.reference ? ` ${t.reference}` : ''}</div>
                           {t.departure_time && <div style={{ fontSize: 13, color: muted }}>Departs {formatTime(t.departure_time)}{t.arrival_time ? ` · Arrives ${formatTime(t.arrival_time)}` : ''}</div>}
+                          {t.travellers && <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>👤 {t.travellers}</div>}
                           {t.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{t.notes}</div>}
                         </div>
                         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>

@@ -68,6 +68,7 @@ const TOOLS: any[] = [
         departure_time: { type: 'string', description: 'HH:MM 24hr' },
         arrival_time: { type: 'string', description: 'HH:MM 24hr' },
         reference: { type: 'string' },
+        travellers: { type: 'string', description: 'Names of people on this leg' },
         notes: { type: 'string' },
       },
       required: ['travel_date', 'from_location', 'to_location'],
@@ -268,7 +269,7 @@ SHOWS (${shows.length}):
 ${shows.length ? shows.map(s => `- id:${s.id} | ${s.date} | ${s.venue}, ${s.city || ''}${s.set_time ? ' | Stage '+s.set_time : ''}${s.doors_time ? ' | Doors '+s.doors_time : ''}${s.soundcheck_time ? ' | SC '+s.soundcheck_time : ''}${s.catering ? ' | Catering: '+s.catering : ''}${s.notes ? ' | Notes: '+s.notes : ''}`).join('\n') : 'None'}
 
 TRAVEL (${travel.length}):
-${travel.length ? travel.map(t => `- id:${t.id} | ${t.travel_date} | ${t.from_location} → ${t.to_location}${t.carrier ? ' | '+t.carrier : ''}${t.departure_time ? ' | Dep '+t.departure_time : ''}${t.arrival_time ? ' | Arr '+t.arrival_time : ''}${t.reference ? ' | Ref: '+t.reference : ''}`).join('\n') : 'None'}
+${travel.length ? travel.map(t => `- id:${t.id} | ${t.travel_date} | ${t.from_location} → ${t.to_location}${t.carrier ? ' | '+t.carrier : ''}${t.departure_time ? ' | Dep '+t.departure_time : ''}${t.arrival_time ? ' | Arr '+t.arrival_time : ''}${t.reference ? ' | Ref: '+t.reference : ''}${t.travellers ? ' | 👤 '+t.travellers : ''}`).join('\n') : 'None'}
 
 ACCOMMODATION (${accommodation.length}):
 ${accommodation.length ? accommodation.map(a => `- id:${a.id} | ${a.check_in}${a.check_out ? ' to '+a.check_out : ''} | ${a.name}${a.address ? ', '+a.address : ''}${a.confirmation ? ' | Ref: '+a.confirmation : ''}`).join('\n') : 'None'}
