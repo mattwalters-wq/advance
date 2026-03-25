@@ -32,18 +32,18 @@ export default function AdminPage() {
   }
 
   async function loadAll() {
-    const [profilesRes, artistsRes, toursRes, showsRes, travelRes] = await Promise.all([
-      supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-      supabase.from('artists').select('*, profiles(full_name, id)').order('created_at', { ascending: false }),
-      supabase.from('tours').select('*, artists(name)').order('created_at', { ascending: false }),
-      supabase.from('shows').select('*').order('date', { ascending: false }),
-      supabase.from('travel').select('*').order('travel_date', { ascending: false }),
-    ])
-    setUsers(profilesRes.data || [])
-    setArtists(artistsRes.data || [])
-    setTours(toursRes.data || [])
-    setShows(showsRes.data || [])
-    setTravel(travelRes.data || [])
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const res = await fetch('/api/admin', {
+      headers: { 'Authorization': `Bearer ${session.access_token}` }
+    })
+    if (!res.ok) { router.push('/dashboard'); return }
+    const data = await res.json()
+    setUsers(data.users || [])
+    setArtists(data.artists || [])
+    setTours(data.tours || [])
+    setShows(data.shows || [])
+    setTravel(data.travel || [])
   }
 
   const bg = darkMode ? '#0A0908' : '#F7F3EE'
