@@ -62,7 +62,17 @@ export async function POST(request: NextRequest) {
 
     const raw = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
     const clean = raw.replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/\n?```$/, '').trim()
-    const travel = JSON.parse(clean)
+
+    if (!clean || clean === 'null' || clean === '[]') {
+      return NextResponse.json({ success: true, travel: [] })
+    }
+
+    let travel
+    try {
+      travel = JSON.parse(clean)
+    } catch {
+      return NextResponse.json({ success: true, travel: [] })
+    }
 
     return NextResponse.json({ success: true, travel: Array.isArray(travel) ? travel : [travel] })
   } catch (err: any) {

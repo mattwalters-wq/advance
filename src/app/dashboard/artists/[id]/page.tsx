@@ -249,8 +249,13 @@ export default function ArtistPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const data = await res.json()
-      if (!data.success) throw new Error(data.error)
+      let data: any
+      try {
+        data = await res.json()
+      } catch {
+        throw new Error('Server error — try again or paste the text instead')
+      }
+      if (!data.success) throw new Error(data.error || 'Could not process this document')
 
       update({ status: 'done', result: data.result })
       // Reload tour data to reflect merged changes

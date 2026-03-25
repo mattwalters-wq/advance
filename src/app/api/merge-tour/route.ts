@@ -134,7 +134,7 @@ Rules:
         { type: 'text', text: `Extract all touring information from this document${filename ? ` (${filename})` : ''}. ${SYSTEM_PROMPT}` },
       ]
     } else {
-      messageContent = [{ type: 'text', text: `${SYSTEM_PROMPT}\n\nDocument${filename ? ` (${filename})` : ''}:\n${(text || '').slice(0, 8000)}` }]
+      messageContent = [{ type: 'text', text: `${SYSTEM_PROMPT}\n\nDocument${filename ? ` (${filename})` : ''}:\n${(text || '').slice(0, 20000)}` }]
     }
 
     const message = await anthropic.messages.create({
@@ -145,7 +145,14 @@ Rules:
 
     let jsonText = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
     jsonText = jsonText.replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/\n?```$/, '').trim()
-    const extracted = JSON.parse(jsonText)
+    let extracted: any = {}
+    try {
+      extracted = JSON.parse(jsonText)
+    } catch (parseErr) {
+      // Claude didn't return valid JSON — likely an error or empty response
+      console.error('JSON parse failed:', jsonText.slice(0, 200))
+      return NextResponse.json({ success: false, error: 'Could not extract data from this document. Try a different format or paste the text instead.' }, { status: 422 })
+    }
 
     // 4. Get tour org_id
     const { data: tour } = await supabase.from('tours').select('org_id').eq('id', tourId).single()
