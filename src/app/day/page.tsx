@@ -87,7 +87,11 @@ function DayScheduleContent() {
     const start = new Date(sorted[0] + 'T00:00:00')
     const end = new Date(sorted[sorted.length - 1] + 'T00:00:00')
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      all.push(d.toISOString().slice(0, 10))
+      // Use local date parts to avoid UTC offset shifting the date
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      all.push(`${y}-${m}-${day}`)
     }
     return all
   })()
