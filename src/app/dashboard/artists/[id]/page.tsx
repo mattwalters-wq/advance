@@ -475,6 +475,10 @@ export default function ArtistPage() {
       const t = timeStr.replace(':', '')
       return `${dateStr.replace(/-/g, '')}T${t}00`
     }
+    function toIcalDateTimeWithTZ(dateStr: string, timeStr: string) {
+      if (!timeStr) return `VALUE=DATE:${toIcalDate(dateStr)}`
+      return `TZID=Australia/Melbourne:${toIcalDateTime(dateStr, timeStr)}`
+    }
     function uid() {
       return Math.random().toString(36).slice(2) + '@advance'
     }
@@ -490,6 +494,23 @@ export default function ArtistPage() {
       'X-WR-TIMEZONE:Australia/Melbourne',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
+      'BEGIN:VTIMEZONE',
+      'TZID:Australia/Melbourne',
+      'BEGIN:STANDARD',
+      'DTSTART:19710101T020000',
+      'TZOFFSETFROM:+1100',
+      'TZOFFSETTO:+1000',
+      'TZNAME:AEST',
+      'RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4',
+      'END:STANDARD',
+      'BEGIN:DAYLIGHT',
+      'DTSTART:19711001T020000',
+      'TZOFFSETFROM:+1000',
+      'TZOFFSETTO:+1100',
+      'TZNAME:AEDT',
+      'RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10',
+      'END:DAYLIGHT',
+      'END:VTIMEZONE',
     ]
 
     // Shows
@@ -670,7 +691,7 @@ export default function ArtistPage() {
   )
 
   return (
-    <div style={{ background: bg, minHeight: '100vh', fontFamily: 'Georgia, serif', color: text }}>
+    <div style={{ background: bg, minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif', color: text }}>
 
       {/* Modal overlay */}
       {modal && (
@@ -1169,7 +1190,7 @@ export default function ArtistPage() {
                 {([
                   ['list', '☰ Tour'],
                   ['import', '⊕ Import'],
-                  ['ai', '✦ Ask AI'],
+                  ['ai', '✦ Assistant'],
                   ['calendar', '▦ Calendar'],
                   ['notes', '💬 Notes'],
                 ] as const).map(([v, label]) => (

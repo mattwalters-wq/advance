@@ -27,6 +27,11 @@ export async function GET(request: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
+    // Get emails from auth.users (service role only)
+    const { data: { users: authUsers } } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+    const emailMap: Record<string, string> = {}
+    authUsers?.forEach((u: any) => { emailMap[u.id] = u.email })
+
     const [profilesRes, artistsRes, toursRes, showsRes, travelRes] = await Promise.all([
       supabase.from('profiles').select('*').order('created_at', { ascending: false }),
       supabase.from('artists').select('*, profiles(full_name)').order('created_at', { ascending: false }),
@@ -35,8 +40,13 @@ export async function GET(request: NextRequest) {
       supabase.from('travel').select('id, travel_date, from_location, to_location, tour_id').order('travel_date', { ascending: false }),
     ])
 
+    const usersWithEmail = (profilesRes.data || []).map((p: any) => ({
+      ...p,
+      email: emailMap[p.id] || null,
+    }))
+
     return NextResponse.json({
-      users: profilesRes.data || [],
+      users: usersWithEmail,
       artists: artistsRes.data || [],
       tours: toursRes.data || [],
       shows: showsRes.data || [],

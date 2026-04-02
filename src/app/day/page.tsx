@@ -127,7 +127,7 @@ function DayScheduleContent() {
   dayTravel.forEach(t => {
     const tIcon = t.travel_type === 'Drive' ? '🚗' : t.travel_type === 'Train' ? '🚂' : t.travel_type === 'Bus' ? '🚌' : t.travel_type === 'Ferry' ? '⛴' : '✈️'
     if (t.departure_time) timeline.push({ time: fmt(t.departure_time), sort: t.departure_time, icon: tIcon, label: `${t.from_location} → ${t.to_location}`, sub: [t.carrier, t.reference ? `Ref: ${t.reference}` : ''].filter(Boolean).join(' · ') || undefined, detail: t.travellers ? `👤 ${t.travellers}` : undefined, color: '#2E6B8A', major: true })
-    if (t.arrival_time) timeline.push({ time: fmt(t.arrival_time), sort: t.arrival_time, icon: '📍', label: `Arrive ${t.to_location}`, sub: t.notes || undefined, color: '#2E6B8A' })
+    if (t.arrival_time) timeline.push({ time: fmt(t.arrival_time), sort: t.arrival_time, icon: '📍', label: `Arrive ${t.to_location}`, sub: t.travellers ? `👤 ${t.travellers}` : (t.notes || undefined), color: '#2E6B8A' })
   })
 
   // Hotel check-in

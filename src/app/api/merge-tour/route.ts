@@ -36,6 +36,15 @@ function findMatchingShow(newShow: any, existingShows: any[]): any | null {
 }
 
 function findMatchingTravel(newTravel: any, existingTravel: any[]): any | null {
+  // First try: same date + same carrier/flight number (catches same flight, different booking ref)
+  if (newTravel.carrier) {
+    const byCarrier = existingTravel.find(t =>
+      t.travel_date === newTravel.travel_date &&
+      t.carrier && t.carrier.toUpperCase().trim() === newTravel.carrier.toUpperCase().trim()
+    )
+    if (byCarrier) return byCarrier
+  }
+  // Second try: same date + same route
   return existingTravel.find(t =>
     t.travel_date === newTravel.travel_date &&
     stringSimilarity(t.from_location || '', newTravel.from_location || '') > 0.5 &&
@@ -115,7 +124,7 @@ ${existingContext}
 Return ONLY a JSON object with these fields (omit any not found):
 {
   "shows": [{ "date": "YYYY-MM-DD", "venue": "", "city": "", "country": "", "stage": "", "set_time": "HH:MM", "doors_time": "HH:MM", "soundcheck_time": "HH:MM", "notes": "", "catering": "", "backline": "" }],
-  "travel": [{ "travel_date": "YYYY-MM-DD", "travel_type": "", "departure_time": "HH:MM", "arrival_time": "HH:MM", "from_location": "", "to_location": "", "carrier": "", "reference": "", "travellers": "", "notes": "" }],
+  "travel": [{ "travel_date": "YYYY-MM-DD", "travel_type": "Flight/Drive/Train/Bus/Ferry", "departure_time": "HH:MM", "arrival_time": "HH:MM", "from_location": "City name", "to_location": "City name", "carrier": "AIRLINE + FLIGHT NUMBER e.g. VA703 or QF465 (not booking reference)", "reference": "BOOKING REFERENCE CODE only e.g. ABC123 (not flight number)", "travellers": "passenger names if shown", "notes": "" }],
   "accommodation": [{ "check_in": "YYYY-MM-DD", "check_out": "YYYY-MM-DD", "name": "", "address": "", "confirmation": "", "notes": "" }],
   "contacts": [{ "name": "", "role": "", "phone": "", "email": "" }]
 }

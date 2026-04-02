@@ -128,7 +128,7 @@ export default function AdminPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${border}` }}>
-                  {['Name', 'User ID', 'Org ID', 'Role', 'Joined'].map(h => (
+                  {['Name', 'Email', 'Org ID', 'Role', 'Joined'].map(h => (
                     <th key={h} style={{ padding: '10px 20px', textAlign: 'left', fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: muted, fontWeight: 400 }}>{h.toUpperCase()}</th>
                   ))}
                 </tr>
@@ -137,7 +137,7 @@ export default function AdminPage() {
                 {filteredUsers.map((u, i) => (
                   <tr key={u.id} style={{ borderBottom: i < filteredUsers.length - 1 ? `1px solid ${border}` : 'none', background: i % 2 === 0 ? 'transparent' : (darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)') }}>
                     <td style={{ padding: '12px 20px', fontSize: 14, fontWeight: 600 }}>{u.full_name || <span style={{ color: muted, fontStyle: 'italic' }}>No name</span>}</td>
-                    <td style={{ padding: '12px 20px', fontSize: 11, fontFamily: 'monospace', color: muted }}>{u.id?.slice(0, 8)}...</td>
+                    <td style={{ padding: '12px 20px', fontSize: 12, color: muted }}>{u.email || <span style={{ fontStyle: 'italic' }}>no email</span>}</td>
                     <td style={{ padding: '12px 20px', fontSize: 11, fontFamily: 'monospace', color: muted }}>{u.org_id ? u.org_id.slice(0, 8) + '...' : <span style={{ color: '#C00' }}>none</span>}</td>
                     <td style={{ padding: '12px 20px' }}>
                       <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, padding: '2px 8px', borderRadius: 10, background: u.role === 'admin' ? accent : (darkMode ? '#1E1C18' : '#F0EBE2'), color: u.role === 'admin' ? '#fff' : muted }}>
