@@ -4,10 +4,24 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
+const supabase = createClient()
+
+function fmt(t: string) {
+  if (!t) return ''
+  const [h, m] = t.split(':')
+  const hour = parseInt(h)
+  return `${hour % 12 || 12}:${m}${hour >= 12 ? 'pm' : 'am'}`
+}
+
+function fmtDate(d: string) {
+  if (!d) return ''
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  })
+}
+
 export default function DaySheetPage() {
   const params = useParams()
-  const supabase = createClient()
-
   const [show, setShow] = useState<any>(null)
   const [tour, setTour] = useState<any>(null)
   const [artist, setArtist] = useState<any>(null)
@@ -21,9 +35,7 @@ export default function DaySheetPage() {
   useEffect(() => { loadData() }, [params.show_id])
 
   async function loadData() {
-    const { data: showData } = await supabase
-      .from('shows').select('*').eq('id', params.show_id).single()
-
+    const { data: showData } = await supabase.from('shows').select('*').eq('id', params.show_id).single()
     if (!showData) { setNotFound(true); setLoading(false); return }
     setShow(showData)
 
@@ -37,250 +49,245 @@ export default function DaySheetPage() {
 
     const tourData = tourRes.data
     setTour(tourData)
-
     if (tourData) {
-      const { data: artistData } = await supabase
-        .from('artists').select('*').eq('id', tourData.artist_id).single()
+      const { data: artistData } = await supabase.from('artists').select('*').eq('id', tourData.artist_id).single()
       setArtist(artistData)
     }
 
-    // Filter travel arriving or departing on show date
     const showDate = showData.date
-    const relevantTravel = (travelRes.data || []).filter((t: any) =>
-      t.travel_date === showDate ||
-      t.travel_date === showData.date
-    )
-    setTravel(relevantTravel)
-
-    // Filter accommodation covering show night
-    const relevantAccom = (accomRes.data || []).filter((a: any) => {
+    setTravel((travelRes.data || []).filter((t: any) => t.travel_date === showDate))
+    setAccommodation((accomRes.data || []).filter((a: any) => {
       if (!a.check_in) return false
-      const checkIn = a.check_in
-      const checkOut = a.check_out || checkIn
-      return checkIn <= showDate && checkOut >= showDate
-    })
-    setAccommodation(relevantAccom)
-
+      return a.check_in <= showDate && (a.check_out || a.check_in) >= showDate
+    }))
     setContacts(contactsRes.data || [])
     setRider(riderRes.data || null)
     setLoading(false)
   }
 
-  function formatTime(t: string) {
-    if (!t) return ''
-    const [h, m] = t.split(':')
-    const hour = parseInt(h)
-    return `${hour % 12 || 12}:${m}${hour >= 12 ? 'pm' : 'am'}`
-  }
-
-  function formatDate(d: string) {
-    if (!d) return ''
-    return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-    })
-  }
-
   const accent = '#C4622D'
-  const border = '#E8E0D0'
+  const accentLight = '#FDF5EF'
+  const border = '#E8E2D8'
   const muted = '#8A8580'
   const text = '#1A1714'
+  const sectionBg = '#F9F6F2'
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Georgia, serif', color: muted, background: '#F5F0E8' }}>
-      Loading...
-    </div>
-  )
+  if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F9F6F2', fontFamily: 'sans-serif', color: muted }}>Loading...</div>
+  if (notFound) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F9F6F2', fontFamily: 'sans-serif', color: muted }}>Show not found.</div>
 
-  if (notFound) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Georgia, serif', color: muted, background: '#F5F0E8' }}>
-      Show not found.
-    </div>
-  )
+  // Build schedule timeline from show data
+  const schedule: { time: string; sort: string; event: string; note?: string }[] = []
+  if (show?.soundcheck_time) schedule.push({ time: fmt(show.soundcheck_time), sort: show.soundcheck_time, event: 'Soundcheck' })
+  if (show?.doors_time) schedule.push({ time: fmt(show.doors_time), sort: show.doors_time, event: 'Doors open' })
+  if (show?.set_time) schedule.push({ time: fmt(show.set_time), sort: show.set_time, event: 'Performance', note: 'Stage time' })
+  schedule.sort((a, b) => a.sort.localeCompare(b.sort))
 
   return (
-    <div style={{ background: '#F5F0E8', minHeight: '100vh', fontFamily: 'Georgia, serif', color: text }}>
-
-      {/* Print styles */}
+    <div style={{ background: sectionBg, minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif', color: text }}>
       <style>{`
+        * { box-sizing: border-box; }
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; }
-          .print-page { box-shadow: none !important; }
+          @page { margin: 1.5cm; size: A4; }
         }
-        @page { margin: 1.5cm; }
+        @media (max-width: 600px) {
+          .times-grid { grid-template-columns: repeat(2, 1fr) !important; }
+        }
       `}</style>
 
-      {/* Toolbar - no print */}
-      <div className="no-print" style={{ background: '#1A1714', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 18, fontStyle: 'italic', color: '#F5F0E8' }}>Advance</span>
+      {/* Toolbar */}
+      <div className="no-print" style={{ background: '#1A1714', padding: '0 24px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 17, fontStyle: 'italic', color: '#F5F0E8', fontFamily: 'Georgia, serif' }}>Advance</span>
           <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: accent }}>DAY SHEET</span>
         </div>
         <button onClick={() => window.print()}
-          style={{ padding: '8px 20px', background: accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2 }}>
-          🖨 PRINT
+          style={{ padding: '7px 18px', background: accent, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2 }}>
+          PRINT
         </button>
       </div>
 
-      {/* Day sheet content */}
-      <div className="print-page" style={{ maxWidth: 680, margin: '32px auto', padding: '0 16px 48px' }}>
+      {/* Page */}
+      <div style={{ maxWidth: 700, margin: '0 auto', padding: '32px 16px 60px' }}>
 
-        {/* Header */}
-        <div style={{ borderBottom: `3px solid ${text}`, paddingBottom: 20, marginBottom: 28 }}>
-          <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, color: muted, textTransform: 'uppercase', marginBottom: 8 }}>
-            Day Sheet
+        {/* ── HEADER ── */}
+        <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
+          {/* Artist colour strip */}
+          <div style={{ height: 5, background: artist?.color || accent }} />
+          <div style={{ padding: '24px 28px' }}>
+            <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: muted, marginBottom: 6, textTransform: 'uppercase' }}>Call Sheet</div>
+            <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 2, lineHeight: 1.1 }}>{artist?.name}</div>
+            {tour?.name && <div style={{ fontSize: 14, color: muted, marginBottom: 12 }}>{tour.name}</div>}
+            <div style={{ fontSize: 18, fontWeight: 600, color: text }}>{fmtDate(show?.date)}</div>
           </div>
-          <div style={{ fontSize: 32, fontWeight: 700, marginBottom: 4 }}>{artist?.name}</div>
-          <div style={{ fontSize: 16, color: muted, fontStyle: 'italic', marginBottom: 12 }}>{tour?.name}</div>
-          <div style={{ fontSize: 18, fontWeight: 600 }}>{formatDate(show?.date)}</div>
         </div>
 
-        {/* Show info - the centrepiece */}
-        <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 20 }}>
-          <div style={{ background: text, padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, color: '#F5F0E8', textTransform: 'uppercase' }}>Show</span>
+        {/* ── VENUE ── */}
+        <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
+          <div style={{ background: text, padding: '10px 20px' }}>
+            <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: '#F5F0E8', textTransform: 'uppercase' }}>Venue</span>
           </div>
-          <div style={{ padding: 20 }}>
-            <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>{show?.venue}</div>
-            {show?.city && <div style={{ fontSize: 15, color: muted, marginBottom: 16 }}>{show.city}{show.country ? `, ${show.country}` : ''}</div>}
-
-            {/* Times grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
-              {show?.doors_time && (
-                <TimeBlock label="Doors" time={formatTime(show.doors_time)} accent={accent} />
-              )}
-              {show?.soundcheck_time && (
-                <TimeBlock label="Soundcheck" time={formatTime(show.soundcheck_time)} accent={accent} />
-              )}
-              {show?.set_time && (
-                <TimeBlock label="Stage" time={formatTime(show.set_time)} accent={accent} highlight />
-              )}
+          <div style={{ padding: '20px 24px' }}>
+            {/* Venue name — truncate gracefully */}
+            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: show?.city ? 4 : 16, lineHeight: 1.3, wordBreak: 'break-word' }}>
+              {show?.venue}
             </div>
-
-            {show?.stage && (
-              <div style={{ marginTop: 14, fontSize: 13, color: muted }}>
-                Stage: <strong>{show.stage}</strong>
+            {show?.city && (
+              <div style={{ fontSize: 14, color: muted, marginBottom: 16 }}>
+                {show.city}{show.country && show.country !== 'AU' ? `, ${show.country}` : ''}
               </div>
             )}
+            {show?.stage && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', background: sectionBg, borderRadius: 20, border: `1px solid ${border}`, fontSize: 12, color: muted, marginBottom: 16 }}>
+                Stage: <strong style={{ color: text }}>{show.stage}</strong>
+              </div>
+            )}
+
+            {/* Times — clean grid */}
+            {schedule.length > 0 && (
+              <div className="times-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(schedule.length, 3)}, 1fr)`, gap: 10, marginBottom: show?.catering || show?.backline || show?.notes ? 16 : 0 }}>
+                {schedule.map((s, i) => (
+                  <div key={i} style={{ background: s.event === 'Performance' ? accent : sectionBg, borderRadius: 8, padding: '14px 16px', textAlign: 'center' }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: s.event === 'Performance' ? 'rgba(255,255,255,0.75)' : muted, textTransform: 'uppercase', marginBottom: 5 }}>{s.event}</div>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: s.event === 'Performance' ? '#fff' : text, lineHeight: 1 }}>{s.time}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Catering */}
             {show?.catering && (
-              <div style={{ marginTop: 14, padding: '12px 14px', background: '#F0FFF4', borderLeft: `3px solid #3D6B50`, borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.6 }}>
-                <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, color: '#3D6B50', display: 'block', marginBottom: 4 }}>🍽 CATERING</span>
+              <div style={{ padding: '12px 14px', background: '#F0FFF4', borderLeft: '3px solid #3D6B50', borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.7, marginTop: 12 }}>
+                <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: '#3D6B50', marginBottom: 4 }}>CATERING</div>
                 {show.catering}
               </div>
             )}
+
+            {/* Backline */}
             {show?.backline && (
-              <div style={{ marginTop: 10, padding: '12px 14px', background: '#F5F0FF', borderLeft: `3px solid #5B4B8A`, borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.6 }}>
-                <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, color: '#5B4B8A', display: 'block', marginBottom: 4 }}>🎸 BACKLINE</span>
+              <div style={{ padding: '12px 14px', background: '#F5F0FF', borderLeft: '3px solid #5B4B8A', borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.7, marginTop: 10 }}>
+                <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: '#5B4B8A', marginBottom: 4 }}>BACKLINE</div>
                 {show.backline}
               </div>
             )}
+
+            {/* Notes — keep but style clearly */}
             {show?.notes && (
-              <div style={{ marginTop: 10, padding: '10px 14px', background: '#FFF8F0', borderLeft: `3px solid ${accent}`, borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.6 }}>
+              <div style={{ padding: '12px 14px', background: accentLight, borderLeft: `3px solid ${accent}`, borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.75, marginTop: 10 }}>
+                <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: accent, marginBottom: 4 }}>NOTES</div>
                 {show.notes}
               </div>
             )}
           </div>
         </div>
 
-        {/* Travel today */}
+        {/* ── TRAVEL TODAY ── */}
         {travel.length > 0 && (
-          <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 20 }}>
-            <SectionHeader label="Travel Today" />
-            <div style={{ padding: '4px 20px' }}>
+          <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
+            <SectionHeader label="Travel" />
+            <div style={{ padding: '4px 24px' }}>
               {travel.map((t, i) => (
                 <div key={i} style={{ padding: '14px 0', borderBottom: i < travel.length - 1 ? `1px solid ${border}` : 'none' }}>
-                  <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>
-                    {t.from_location} → {t.to_location}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <span style={{ fontSize: 16 }}>{t.travel_type === 'Drive' ? '🚗' : t.travel_type === 'Train' ? '🚂' : '✈️'}</span>
+                    <span style={{ fontSize: 16, fontWeight: 700 }}>{t.from_location} → {t.to_location}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-                    {t.travel_type && <Detail label="Type" value={t.travel_type} />}
-                    {t.carrier && <Detail label="Carrier" value={t.carrier} />}
-                    {t.reference && <Detail label="Ref" value={t.reference} />}
-                    {t.departure_time && <Detail label="Departs" value={formatTime(t.departure_time)} />}
-                    {t.arrival_time && <Detail label="Arrives" value={formatTime(t.arrival_time)} />}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
+                    {t.carrier && <Pill label="Flight" value={t.carrier} />}
+                    {t.departure_time && <Pill label="Departs" value={fmt(t.departure_time)} />}
+                    {t.arrival_time && <Pill label="Arrives" value={fmt(t.arrival_time)} />}
+                    {t.reference && <Pill label="Ref" value={t.reference} />}
                   </div>
-                  {t.travellers && <div style={{ marginTop: 6, fontSize: 13, color: muted }}>👤 {t.travellers}</div>}
-                  {t.notes && <div style={{ marginTop: 8, fontSize: 13, color: muted, fontStyle: 'italic' }}>{t.notes}</div>}
+                  {t.travellers && <div style={{ marginTop: 8, fontSize: 13, color: muted }}>👤 {t.travellers}</div>}
+                  {t.notes && <div style={{ marginTop: 6, fontSize: 12, color: muted, fontStyle: 'italic' }}>{t.notes}</div>}
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Hotel tonight */}
+        {/* ── HOTEL ── */}
         {accommodation.length > 0 && (
-          <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
             <SectionHeader label="Hotel Tonight" />
-            <div style={{ padding: '4px 20px' }}>
+            <div style={{ padding: '4px 24px' }}>
               {accommodation.map((a, i) => (
                 <div key={i} style={{ padding: '14px 0', borderBottom: i < accommodation.length - 1 ? `1px solid ${border}` : 'none' }}>
-                  <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>{a.name}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{a.name}</div>
                   {a.address && (
                     <a href={`https://maps.google.com/?q=${encodeURIComponent(a.address)}`}
                       target="_blank" rel="noreferrer"
-                      style={{ fontSize: 13, color: accent, display: 'block', marginBottom: 8, textDecoration: 'none' }}>
+                      style={{ fontSize: 13, color: accent, display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 10, textDecoration: 'none' }}>
                       📍 {a.address}
                     </a>
                   )}
-                  <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-                    {a.check_in && <Detail label="Check in" value={a.check_in} />}
-                    {a.check_out && <Detail label="Check out" value={a.check_out} />}
-                    {a.confirmation && <Detail label="Confirmation" value={a.confirmation} />}
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {a.check_in && <Pill label="Check in" value={a.check_in} />}
+                    {a.check_out && <Pill label="Check out" value={a.check_out} />}
+                    {a.confirmation && <Pill label="Ref" value={a.confirmation} />}
                   </div>
-                  {a.notes && <div style={{ marginTop: 8, fontSize: 13, color: muted, fontStyle: 'italic' }}>{a.notes}</div>}
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Key contacts */}
+        {/* ── CONTACTS ── */}
         {contacts.length > 0 && (
-          <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
             <SectionHeader label="Key Contacts" />
-            <div style={{ padding: '4px 20px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               {contacts.map((c, i) => (
-                <div key={i} style={{ padding: '14px 0', borderBottom: i < contacts.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 15 }}>{c.name}</div>
-                    {c.role && <div style={{ fontSize: 12, color: muted, fontFamily: 'monospace', letterSpacing: 1, textTransform: 'uppercase', marginTop: 2 }}>{c.role}</div>}
-                  </div>
-                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                    {c.phone && (
-                      <a href={`tel:${c.phone}`} style={{ fontSize: 14, color: accent, textDecoration: 'none', fontWeight: 600 }}>
-                        📞 {c.phone}
-                      </a>
-                    )}
-                    {c.email && (
-                      <a href={`mailto:${c.email}`} style={{ fontSize: 14, color: accent, textDecoration: 'none' }}>
-                        ✉️ {c.email}
-                      </a>
-                    )}
-                  </div>
-                </div>
+                <tr key={i} style={{ borderBottom: i < contacts.length - 1 ? `1px solid ${border}` : 'none' }}>
+                  <td style={{ padding: '13px 24px', verticalAlign: 'middle' }}>
+                    <div style={{ fontSize: 15, fontWeight: 600 }}>{c.name}</div>
+                    {c.role && <div style={{ fontSize: 11, color: muted, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>{c.role}</div>}
+                  </td>
+                  <td style={{ padding: '13px 24px', textAlign: 'right', verticalAlign: 'middle' }}>
+                    <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      {c.phone && (
+                        <a href={`tel:${c.phone}`} style={{ fontSize: 14, color: accent, textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          {c.phone}
+                        </a>
+                      )}
+                      {c.email && (
+                        <a href={`mailto:${c.email}`} style={{ fontSize: 13, color: muted, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                          {c.email}
+                        </a>
+                      )}
+                    </div>
+                  </td>
+                </tr>
               ))}
-            </div>
+            </table>
           </div>
         )}
 
-        {/* Tech rider link */}
-        {rider?.tech_rider_url && (
-          <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 20 }}>
-            <SectionHeader label="Tech Rider" />
-            <div style={{ padding: '16px 20px' }}>
-              <a href={rider.tech_rider_url} target="_blank" rel="noreferrer"
-                style={{ fontSize: 14, color: accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
-                📄 Open tech rider document ↗
-              </a>
+        {/* ── RIDER ── */}
+        {rider && (rider.tech_notes || rider.hospitality || rider.set_length || rider.band_size || rider.input_list || rider.tech_rider_url) && (
+          <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
+            <SectionHeader label="Rider / Tech Spec" />
+            <div style={{ padding: '16px 24px', display: 'grid', gap: 12 }}>
+              {rider.band_size && <RiderRow label="Band" value={rider.band_size} />}
+              {rider.set_length && <RiderRow label="Set" value={rider.set_length} />}
+              {rider.tech_notes && <RiderRow label="Technical" value={rider.tech_notes} />}
+              {rider.hospitality && <RiderRow label="Hospitality" value={rider.hospitality} />}
+              {rider.input_list && <RiderRow label="Input list" value={rider.input_list} />}
+              {rider.tech_rider_url && (
+                <a href={rider.tech_rider_url} target="_blank" rel="noreferrer"
+                  style={{ fontSize: 13, color: accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                  📄 Full tech rider ↗
+                </a>
+              )}
             </div>
           </div>
         )}
 
         {/* Footer */}
-        <div style={{ textAlign: 'center', paddingTop: 24, fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: muted }}>
+        <div style={{ textAlign: 'center', paddingTop: 20, fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: '#C8BFB0' }}>
           ADVANCE · {artist?.name?.toUpperCase()} · {show?.date}
         </div>
-
       </div>
     </div>
   )
@@ -288,27 +295,27 @@ export default function DaySheetPage() {
 
 function SectionHeader({ label }: { label: string }) {
   return (
-    <div style={{ padding: '10px 20px', borderBottom: '1px solid #E8E0D0', display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ width: 3, height: 14, background: '#C4622D', borderRadius: 2 }} />
-      <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: '#8A8580', textTransform: 'uppercase' }}>{label}</span>
+    <div style={{ padding: '11px 24px', borderBottom: '1px solid #E8E2D8', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ width: 3, height: 14, background: '#C4622D', borderRadius: 2, flexShrink: 0 }} />
+      <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: '#8A8580', textTransform: 'uppercase' }}>{label}</span>
     </div>
   )
 }
 
-function TimeBlock({ label, time, accent, highlight }: { label: string, time: string, accent: string, highlight?: boolean }) {
+function Pill({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ background: highlight ? accent : '#F5F0E8', borderRadius: 8, padding: '12px 16px', textAlign: 'center' }}>
-      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: highlight ? 'rgba(255,255,255,0.7)' : '#8A8580', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: highlight ? '#fff' : '#1A1714' }}>{time}</div>
+    <div style={{ background: '#F9F6F2', border: '1px solid #E8E2D8', borderRadius: 6, padding: '6px 12px', display: 'inline-block' }}>
+      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: '#8A8580', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1714' }}>{value}</div>
     </div>
   )
 }
 
-function Detail({ label, value }: { label: string, value: string }) {
+function RiderRow({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ fontSize: 13 }}>
-      <span style={{ color: '#8A8580', marginRight: 4 }}>{label}:</span>
-      <span style={{ fontWeight: 600 }}>{value}</span>
+    <div>
+      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: '#8A8580', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 13, color: '#1A1714', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{value}</div>
     </div>
   )
 }
