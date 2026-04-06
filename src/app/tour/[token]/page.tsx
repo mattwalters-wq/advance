@@ -33,24 +33,25 @@ export default function PublicTourPage() {
   const [contacts, setContacts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-  const [activeDate, setActiveDate] = useState<string | null>(null)
+
 
   useEffect(() => { loadTour() }, [params.token])
 
   async function loadTour() {
-    const { data: tourData } = await supabase.from('tours').select('*').eq('share_token', params.token).single()
+    const { data: tourData } = await supabase.from('tours')
+      .select('*, artists(*)')
+      .eq('share_token', params.token).single()
     if (!tourData) { setNotFound(true); setLoading(false); return }
     setTour(tourData)
+    setArtist(tourData.artists)
 
-    const [artistRes, showsRes, travelRes, accomRes, contactsRes] = await Promise.all([
-      supabase.from('artists').select('*').eq('id', tourData.artist_id).single(),
+    const [showsRes, travelRes, accomRes, contactsRes] = await Promise.all([
       supabase.from('shows').select('*').eq('tour_id', tourData.id).order('date'),
       supabase.from('travel').select('*').eq('tour_id', tourData.id).order('travel_date'),
       supabase.from('accommodation').select('*').eq('tour_id', tourData.id).order('check_in'),
       supabase.from('contacts').select('*').eq('tour_id', tourData.id),
     ])
 
-    setArtist(artistRes.data)
     setShows(showsRes.data || [])
     setTravel(travelRes.data || [])
     setAccommodation(accomRes.data || [])
@@ -99,10 +100,6 @@ export default function PublicTourPage() {
   const bg = '#F9F6F2'
   const card = '#fff'
 
-  // Group shows by date for quick lookup
-  const travelByDate: Record<string, any[]> = {}
-  travel.forEach(t => { if (!travelByDate[t.travel_date]) travelByDate[t.travel_date] = []; travelByDate[t.travel_date].push(t) })
-
   if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, fontFamily: 'sans-serif', color: muted }}>Loading...</div>
   if (notFound) return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: bg, fontFamily: 'sans-serif', color: muted, padding: 24 }}>
@@ -139,7 +136,6 @@ export default function PublicTourPage() {
             <SectionHead label={`Shows — ${shows.length}`} accent={accent} />
             {shows.map((show, i) => {
               const isLast = i === shows.length - 1
-              const isOpen = activeDate === show.id
               // Detect if venue name is very long (contains directions)
               const venueName = show.venue && show.venue.length > 60
                 ? show.venue.split(/[-–]|via |Access /)[0].trim()
@@ -151,8 +147,7 @@ export default function PublicTourPage() {
               return (
                 <div key={i} style={{ borderBottom: isLast ? 'none' : `1px solid ${border}` }}>
                   <div
-                    onClick={() => setActiveDate(isOpen ? null : show.id)}
-                    style={{ padding: '14px 18px', cursor: 'pointer' }}>
+                    style={{ padding: '16px 18px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.1em', color: accent, marginBottom: 3 }}>{fmtDate(show.date)}</div>
@@ -165,13 +160,12 @@ export default function PublicTourPage() {
                             {fmt(show.set_time)}
                           </div>
                         )}
-                        <div style={{ fontSize: 11, color: muted }}>{isOpen ? '▲' : '▼'}</div>
                       </div>
                     </div>
                   </div>
 
                   {/* Expanded detail */}
-                  {isOpen && (
+                  {(
                     <div style={{ padding: '0 18px 16px', borderTop: `1px solid ${border}` }}>
                       {/* Times row */}
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 14, marginBottom: 12 }}>

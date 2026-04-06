@@ -40,7 +40,7 @@ export default function DaySheetPage() {
     setShow(showData)
 
     const [tourRes, travelRes, accomRes, contactsRes, riderRes] = await Promise.all([
-      supabase.from('tours').select('*').eq('id', showData.tour_id).single(),
+      supabase.from('tours').select('*, artists(*)').eq('id', showData.tour_id).single(),
       supabase.from('travel').select('*').eq('tour_id', showData.tour_id).order('travel_date'),
       supabase.from('accommodation').select('*').eq('tour_id', showData.tour_id).order('check_in'),
       supabase.from('contacts').select('*').eq('tour_id', showData.tour_id),
@@ -49,9 +49,8 @@ export default function DaySheetPage() {
 
     const tourData = tourRes.data
     setTour(tourData)
-    if (tourData) {
-      const { data: artistData } = await supabase.from('artists').select('*').eq('id', tourData.artist_id).single()
-      setArtist(artistData)
+    if (tourData?.artists) {
+      setArtist(tourData.artists)
     }
 
     const showDate = showData.date
