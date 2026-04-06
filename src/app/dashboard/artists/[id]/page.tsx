@@ -1232,7 +1232,7 @@ export default function ArtistPage() {
                 </button>
                 <button onClick={handleShare} disabled={sharing}
                   style={{ padding: '7px 14px', background: copied ? '#2d7a4f' : accent, color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em' }}>
-                  {copied ? '✓ COPIED' : '🔗 SHARE'}
+                  {copied ? '✓ COPIED' : '🔗 CREW LINK'}
                 </button>
                 <button onClick={handleExportIcal}
                   style={{ padding: '7px 10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 7, cursor: 'pointer', fontSize: 13 }} title="Export iCal">
@@ -1349,7 +1349,7 @@ export default function ArtistPage() {
                         <div className="show-actions" style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                           <button onClick={() => window.open(`/daysheet/${show.id}`, '_blank')}
                             style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 10, padding: '3px 8px', fontFamily: 'monospace', letterSpacing: 1 }}
-                            title="Day Sheet">DAY SHEET</button>
+                            title="Day Sheet">DAY SHEET ↗</button>
                           {(() => {
                             const s = settlements.find(s => s.show_id === show.id)
                             const statusColor: Record<string,string> = { paid: '#2d7a4f', partial: '#B8860B', pending: muted, disputed: '#C00' }
