@@ -129,10 +129,27 @@ export default function DaySheetPage() {
             <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: '#F5F0E8', textTransform: 'uppercase' }}>Venue</span>
           </div>
           <div style={{ padding: '20px 24px' }}>
-            {/* Venue name — truncate gracefully */}
-            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: show?.city ? 4 : 16, lineHeight: 1.3, wordBreak: 'break-word' }}>
-              {show?.venue}
-            </div>
+            {/* Venue name — split if overly long (contains directions) */}
+            {(() => {
+              const venue = show?.venue || ''
+              const isLong = venue.length > 60
+              const venueName = isLong ? venue.split(/\s*[-–]\s*(?:Access|Park|Contact|via|Turn|From)/i)[0].trim() : venue
+              const venueDetail = isLong && venue.length > venueName.length
+                ? venue.substring(venueName.length).replace(/^[\s\-–]+/, '').trim()
+                : null
+              return (
+                <>
+                  <div style={{ fontSize: 20, fontWeight: 700, marginBottom: show?.city ? 4 : (venueDetail ? 8 : 16), lineHeight: 1.3 }}>
+                    {venueName}
+                  </div>
+                  {venueDetail && (
+                    <div style={{ fontSize: 13, color: muted, lineHeight: 1.7, marginBottom: 14, padding: '10px 12px', background: '#F9F6F2', borderRadius: 6 }}>
+                      {venueDetail}
+                    </div>
+                  )}
+                </>
+              )
+            })()}
             {show?.city && (
               <div style={{ fontSize: 14, color: muted, marginBottom: 16 }}>
                 {show.city}{show.country && show.country !== 'AU' ? `, ${show.country}` : ''}

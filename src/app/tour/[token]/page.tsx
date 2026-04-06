@@ -4,9 +4,27 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
+const supabase = createClient()
+
+function fmt(t: string) {
+  if (!t) return ''
+  const [h, m] = t.split(':')
+  const hour = parseInt(h)
+  return `${hour % 12 || 12}:${m}${hour >= 12 ? 'pm' : 'am'}`
+}
+
+function fmtDate(d: string) {
+  if (!d) return ''
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+function fmtDateLong(d: string) {
+  if (!d) return ''
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+}
+
 export default function PublicTourPage() {
   const params = useParams()
-  const supabase = createClient()
   const [tour, setTour] = useState<any>(null)
   const [artist, setArtist] = useState<any>(null)
   const [shows, setShows] = useState<any[]>([])
@@ -15,16 +33,12 @@ export default function PublicTourPage() {
   const [contacts, setContacts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [activeDate, setActiveDate] = useState<string | null>(null)
 
   useEffect(() => { loadTour() }, [params.token])
 
   async function loadTour() {
-    const { data: tourData } = await supabase
-      .from('tours')
-      .select('*')
-      .eq('share_token', params.token)
-      .single()
-
+    const { data: tourData } = await supabase.from('tours').select('*').eq('share_token', params.token).single()
     if (!tourData) { setNotFound(true); setLoading(false); return }
     setTour(tourData)
 
@@ -44,263 +58,271 @@ export default function PublicTourPage() {
     setLoading(false)
   }
 
-  function formatDate(d: string) {
-    if (!d) return ''
-    const date = new Date(d + 'T00:00:00')
-    return date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
-  }
-
-  function formatTime(t: string) {
-    if (!t) return ''
-    const [h, m] = t.split(':')
-    const hour = parseInt(h)
-    const ampm = hour >= 12 ? 'pm' : 'am'
-    const hour12 = hour % 12 || 12
-    return `${hour12}:${m}${ampm}`
-  }
-
   function handleExportIcal() {
     if (!tour || !artist) return
-    function toIcalDate(d: string) { return d.replace(/-/g, '') }
-    function toIcalDateTime(d: string, t: string) {
-      return `${d.replace(/-/g, '')}T${t.replace(':', '')}00`
-    }
-    function esc(s: string) {
-      if (!s) return ''
-      return s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
-    }
-    function uid() { return Math.random().toString(36).slice(2) + '@advance' }
-    function pad(n: number) { return String(n).padStart(2, '0') }
-
-    const lines = [
-      'BEGIN:VCALENDAR', 'VERSION:2.0',
-      'PRODID:-//Advance//Tour Manager//EN',
-      `X-WR-CALNAME:${esc(artist.name)} - ${esc(tour.name)}`,
-      'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
-    ]
-    for (const show of shows) {
-      const isAllDay = !show.set_time
-      const dtstart = isAllDay ? toIcalDate(show.date) : toIcalDateTime(show.date, show.set_time)
-      const location = [show.venue, show.city, show.country].filter(Boolean).join(', ')
-      const desc = [show.doors_time ? `Doors: ${show.doors_time}` : '', show.soundcheck_time ? `Soundcheck: ${show.soundcheck_time}` : '', show.notes || ''].filter(Boolean).join('\n')
-      lines.push('BEGIN:VEVENT', `UID:show-${uid()}`, `SUMMARY:🎵 ${esc(show.venue)}${show.city ? ' — ' + esc(show.city) : ''}`)
-      if (isAllDay) { lines.push(`DTSTART;VALUE=DATE:${dtstart}`, `DTEND;VALUE=DATE:${dtstart}`) }
-      else {
-        const [h, m] = show.set_time.split(':').map(Number)
-        lines.push(`DTSTART:${dtstart}`, `DTEND:${toIcalDate(show.date)}T${pad((h+2)%24)}${pad(m)}00`)
-      }
-      if (location) lines.push(`LOCATION:${esc(location)}`)
-      if (desc) lines.push(`DESCRIPTION:${desc}`)
+    const toD = (d: string) => d.replace(/-/g, '')
+    const toDT = (d: string, t: string) => `${d.replace(/-/g, '')}T${t.replace(':', '')}00`
+    const esc = (s: string) => (s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n')
+    const uid = () => Math.random().toString(36).slice(2) + '@advance'
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Advance//Tour Manager//EN',
+      `X-WR-CALNAME:${esc(artist.name)} - ${esc(tour.name)}`,'CALSCALE:GREGORIAN','METHOD:PUBLISH']
+    for (const s of shows) {
+      const allDay = !s.set_time
+      const dt = allDay ? toD(s.date) : toDT(s.date, s.set_time)
+      lines.push('BEGIN:VEVENT',`UID:show-${uid()}`,`SUMMARY:🎵 ${esc(s.venue)}${s.city?' - '+esc(s.city):''}`)
+      if (allDay) lines.push(`DTSTART;VALUE=DATE:${dt}`,`DTEND;VALUE=DATE:${dt}`)
+      else { const [h,m] = s.set_time.split(':').map(Number); lines.push(`DTSTART;TZID=Australia/Melbourne:${dt}`,`DTEND;TZID=Australia/Melbourne:${toD(s.date)}T${pad((h+2)%24)}${pad(m)}00`) }
+      if (s.venue) lines.push(`LOCATION:${esc([s.venue,s.city].filter(Boolean).join(', '))}`)
       lines.push('END:VEVENT')
     }
     for (const t of travel) {
-      const isAllDay = !t.departure_time
-      const dtstart = isAllDay ? toIcalDate(t.travel_date) : toIcalDateTime(t.travel_date, t.departure_time)
-      lines.push('BEGIN:VEVENT', `UID:travel-${uid()}`, `SUMMARY:✈️ ${esc(t.from_location)} → ${esc(t.to_location)}`)
-      if (isAllDay) { lines.push(`DTSTART;VALUE=DATE:${dtstart}`, `DTEND;VALUE=DATE:${dtstart}`) }
-      else { lines.push(`DTSTART:${dtstart}`, `DTEND:${t.arrival_time ? toIcalDateTime(t.travel_date, t.arrival_time) : dtstart}`) }
-      const desc = [t.carrier, t.reference ? `Ref: ${t.reference}` : '', t.notes || ''].filter(Boolean).join('\n')
-      if (desc) lines.push(`DESCRIPTION:${esc(desc)}`)
-      lines.push('END:VEVENT')
-    }
-    for (const a of accommodation) {
-      lines.push('BEGIN:VEVENT', `UID:hotel-${uid()}`, `SUMMARY:🏨 ${esc(a.name)}`,
-        `DTSTART;VALUE=DATE:${toIcalDate(a.check_in)}`,
-        `DTEND;VALUE=DATE:${a.check_out ? toIcalDate(a.check_out) : toIcalDate(a.check_in)}`)
-      if (a.address) lines.push(`LOCATION:${esc(a.address)}`)
-      if (a.confirmation) lines.push(`DESCRIPTION:Confirmation: ${esc(a.confirmation)}`)
+      const allDay = !t.departure_time
+      const dt = allDay ? toD(t.travel_date) : toDT(t.travel_date, t.departure_time)
+      lines.push('BEGIN:VEVENT',`UID:travel-${uid()}`,`SUMMARY:✈️ ${esc(t.from_location)} → ${esc(t.to_location)}`)
+      if (allDay) lines.push(`DTSTART;VALUE=DATE:${dt}`,`DTEND;VALUE=DATE:${dt}`)
+      else lines.push(`DTSTART;TZID=Australia/Melbourne:${dt}`,`DTEND;TZID=Australia/Melbourne:${t.arrival_time?toDT(t.travel_date,t.arrival_time):dt}`)
       lines.push('END:VEVENT')
     }
     lines.push('END:VCALENDAR')
     const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' })
     const url = URL.createObjectURL(blob)
-    const el = document.createElement('a')
-    el.href = url
-    el.download = `${artist.name} - ${tour.name}.ics`.replace(/[^a-z0-9 \-\.]/gi, '_')
-    el.click()
-    URL.revokeObjectURL(url)
+    const a = document.createElement('a'); a.href = url
+    a.download = `${artist.name} - ${tour.name}.ics`.replace(/[^a-z0-9 \-\.]/gi, '_')
+    a.click(); URL.revokeObjectURL(url)
   }
 
-  const bg = '#F5F0E8'
-  const card = '#fff'
-  const text = '#1A1714'
-  const muted = '#8A8580'
   const accent = '#C4622D'
-  const border = '#DDD8CE'
+  const border = '#E8E2D8'
+  const muted = '#8A8580'
+  const text = '#1A1714'
+  const bg = '#F9F6F2'
+  const card = '#fff'
 
-  if (loading) return (
-    <div style={{ background: bg, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Georgia, serif', color: muted }}>
-      Loading...
-    </div>
-  )
+  // Group shows by date for quick lookup
+  const travelByDate: Record<string, any[]> = {}
+  travel.forEach(t => { if (!travelByDate[t.travel_date]) travelByDate[t.travel_date] = []; travelByDate[t.travel_date].push(t) })
 
+  if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, fontFamily: 'sans-serif', color: muted }}>Loading...</div>
   if (notFound) return (
-    <div style={{ background: bg, minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Georgia, serif', color: muted, padding: 24 }}>
-      <div style={{ fontSize: 40, marginBottom: 16 }}>🎵</div>
-      <div style={{ fontSize: 18, color: text, marginBottom: 8 }}>Tour not found</div>
-      <div style={{ fontSize: 14 }}>This link may have expired or been removed.</div>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: bg, fontFamily: 'sans-serif', color: muted, padding: 24 }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>🎵</div>
+      <div style={{ fontSize: 18, color: text, marginBottom: 6 }}>Tour not found</div>
+      <div style={{ fontSize: 14 }}>This link may have expired.</div>
     </div>
   )
 
   return (
-    <div style={{ background: bg, minHeight: '100vh', fontFamily: 'Georgia, serif', color: text }}>
+    <div style={{ background: bg, minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif', color: text }}>
+      <style>{`* { box-sizing: border-box; } a { -webkit-tap-highlight-color: transparent; }`}</style>
 
       {/* Header */}
-      <div style={{ background: '#1A1714', padding: '20px 20px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
-          <span style={{ fontSize: 22, fontStyle: 'italic', color: '#F5F0E8' }}>{artist?.name}</span>
-          <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: accent }}>✦ ADVANCE</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ fontFamily: 'monospace', fontSize: 11, letterSpacing: 2, color: '#8A8580', textTransform: 'uppercase' }}>
-            {tour?.name}
+      <div style={{ background: '#1A1714' }}>
+        <div style={{ height: 4, background: artist?.color || accent }} />
+        <div style={{ padding: '16px 20px 14px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#F5F0E8', letterSpacing: '-0.02em', lineHeight: 1.2 }}>{artist?.name}</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.15em', color: '#5A5450', marginTop: 4, textTransform: 'uppercase' }}>{tour?.name}</div>
           </div>
           <button onClick={handleExportIcal}
-            style={{ padding: '7px 14px', background: 'transparent', border: '1px solid #333', borderRadius: 8, color: '#8A8580', cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, whiteSpace: 'nowrap' }}>
-            📅 ADD TO CALENDAR
+            style={{ padding: '8px 14px', background: 'transparent', border: '1px solid #2A2520', borderRadius: 8, color: '#6A6058', cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            ADD TO CAL
           </button>
         </div>
       </div>
 
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: '20px 16px', display: 'grid', gap: 16 }}>
+      <div style={{ maxWidth: 620, margin: '0 auto', padding: '20px 14px 48px', display: 'grid', gap: 12 }}>
 
-        {/* Shows */}
+        {/* SHOWS */}
         {shows.length > 0 && (
-          <Section title={`Shows`} accent={accent} border={border} card={card} muted={muted} text={text}>
-            {shows.map((show, i) => (
-              <Item key={i} last={i === shows.length - 1} border={border}>
-                <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 2 }}>{show.venue}</div>
-                {show.city && <div style={{ fontSize: 13, color: muted, marginBottom: 6 }}>{show.city}{show.country ? `, ${show.country}` : ''}</div>}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px' }}>
-                  <Tag label="Date" value={formatDate(show.date)} accent={accent} />
-                  {show.doors_time && <Tag label="Doors" value={formatTime(show.doors_time)} accent={accent} />}
-                  {show.soundcheck_time && <Tag label="Soundcheck" value={formatTime(show.soundcheck_time)} accent={accent} />}
-                  {show.set_time && <Tag label="Stage" value={formatTime(show.set_time)} accent={accent} />}
-                  {show.stage && <Tag label="Stage name" value={show.stage} accent={accent} />}
+          <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
+            <SectionHead label={`Shows — ${shows.length}`} accent={accent} />
+            {shows.map((show, i) => {
+              const isLast = i === shows.length - 1
+              const isOpen = activeDate === show.id
+              // Detect if venue name is very long (contains directions)
+              const venueName = show.venue && show.venue.length > 60
+                ? show.venue.split(/[-–]|via |Access /)[0].trim()
+                : show.venue
+              const venueDetail = show.venue && show.venue.length > 60
+                ? show.venue.substring(venueName.length).replace(/^[\s\-–]+/, '').trim()
+                : null
+
+              return (
+                <div key={i} style={{ borderBottom: isLast ? 'none' : `1px solid ${border}` }}>
+                  <div
+                    onClick={() => setActiveDate(isOpen ? null : show.id)}
+                    style={{ padding: '14px 18px', cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.1em', color: accent, marginBottom: 3 }}>{fmtDate(show.date)}</div>
+                        <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.25, marginBottom: 2 }}>{venueName}</div>
+                        {show.city && <div style={{ fontSize: 13, color: muted }}>{show.city}{show.country && show.country !== 'AU' ? `, ${show.country}` : ''}</div>}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                        {show.set_time && (
+                          <div style={{ background: accent, color: '#fff', borderRadius: 6, padding: '4px 10px', fontFamily: 'monospace', fontSize: 11, fontWeight: 700 }}>
+                            {fmt(show.set_time)}
+                          </div>
+                        )}
+                        <div style={{ fontSize: 11, color: muted }}>{isOpen ? '▲' : '▼'}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expanded detail */}
+                  {isOpen && (
+                    <div style={{ padding: '0 18px 16px', borderTop: `1px solid ${border}` }}>
+                      {/* Times row */}
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 14, marginBottom: 12 }}>
+                        {show.doors_time && <TimePill label="Doors" time={fmt(show.doors_time)} />}
+                        {show.soundcheck_time && <TimePill label="Soundcheck" time={fmt(show.soundcheck_time)} />}
+                        {show.set_time && <TimePill label="Stage" time={fmt(show.set_time)} highlight accent={accent} />}
+                      </div>
+
+                      {/* Venue detail / directions if separated */}
+                      {venueDetail && (
+                        <div style={{ fontSize: 13, color: muted, lineHeight: 1.65, marginBottom: 10, padding: '10px 12px', background: bg, borderRadius: 6 }}>
+                          {venueDetail}
+                        </div>
+                      )}
+
+                      {show.catering && (
+                        <div style={{ padding: '10px 12px', background: '#F0FFF4', borderLeft: '3px solid #3D6B50', borderRadius: 4, fontSize: 13, lineHeight: 1.65, marginBottom: 8 }}>
+                          <div style={{ fontFamily: 'monospace', fontSize: 9, color: '#3D6B50', letterSpacing: '0.1em', marginBottom: 3 }}>CATERING</div>
+                          {show.catering}
+                        </div>
+                      )}
+                      {show.backline && (
+                        <div style={{ padding: '10px 12px', background: '#F5F0FF', borderLeft: '3px solid #5B4B8A', borderRadius: 4, fontSize: 13, lineHeight: 1.65, marginBottom: 8 }}>
+                          <div style={{ fontFamily: 'monospace', fontSize: 9, color: '#5B4B8A', letterSpacing: '0.1em', marginBottom: 3 }}>BACKLINE</div>
+                          {show.backline}
+                        </div>
+                      )}
+                      {show.notes && (
+                        <div style={{ padding: '10px 12px', background: '#FFF8F2', borderLeft: `3px solid ${accent}`, borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.7 }}>
+                          {show.notes}
+                        </div>
+                      )}
+                      <a href={`/daysheet/${show.id}`} target="_blank" rel="noreferrer"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 12, fontSize: 12, color: accent, textDecoration: 'none', fontWeight: 600, fontFamily: 'monospace', letterSpacing: '0.05em' }}>
+                        VIEW DAY SHEET ↗
+                      </a>
+                    </div>
+                  )}
                 </div>
-                {show.catering && (
-                  <div style={{ marginTop: 8, padding: '8px 12px', background: '#F0FFF4', borderLeft: `2px solid #3D6B50`, borderRadius: 4, fontSize: 13 }}>
-                    <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, color: '#3D6B50', display: 'block', marginBottom: 2 }}>🍽 CATERING</span>
-                    {show.catering}
-                  </div>
-                )}
-                {show.backline && (
-                  <div style={{ marginTop: 6, padding: '8px 12px', background: '#F5F0FF', borderLeft: `2px solid #5B4B8A`, borderRadius: 4, fontSize: 13 }}>
-                    <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, color: '#5B4B8A', display: 'block', marginBottom: 2 }}>🎸 BACKLINE</span>
-                    {show.backline}
-                  </div>
-                )}
-                {show.notes && <div style={{ marginTop: 8, fontSize: 13, color: muted, fontStyle: 'italic', borderLeft: `2px solid ${accent}`, paddingLeft: 10 }}>{show.notes}</div>}
-              </Item>
-            ))}
-          </Section>
+              )
+            })}
+          </div>
         )}
 
-        {/* Travel */}
+        {/* TRAVEL */}
         {travel.length > 0 && (
-          <Section title={`Travel`} accent={accent} border={border} card={card} muted={muted} text={text}>
+          <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
+            <SectionHead label={`Travel — ${travel.length} legs`} accent={accent} />
             {travel.map((t, i) => (
-              <Item key={i} last={i === travel.length - 1} border={border}>
-                <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>
-                  {t.from_location} → {t.to_location}
+              <div key={i} style={{ padding: '14px 18px', borderBottom: i < travel.length - 1 ? `1px solid ${border}` : 'none' }}>
+                <div style={{ fontFamily: 'monospace', fontSize: 10, color: accent, letterSpacing: '0.1em', marginBottom: 4 }}>{fmtDate(t.travel_date)}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 15 }}>{t.travel_type === 'Drive' ? '🚗' : t.travel_type === 'Train' ? '🚂' : t.travel_type === 'Bus' ? '🚌' : '✈️'}</span>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>{t.from_location} → {t.to_location}</span>
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px' }}>
-                  <Tag label="Date" value={formatDate(t.travel_date)} accent={accent} />
-                  {t.travel_type && <Tag label="Type" value={t.travel_type} accent={accent} />}
-                  {t.carrier && <Tag label="Carrier" value={t.carrier} accent={accent} />}
-                  {t.reference && <Tag label="Ref" value={t.reference} accent={accent} />}
-                  {t.departure_time && <Tag label="Departs" value={formatTime(t.departure_time)} accent={accent} />}
-                  {t.arrival_time && <Tag label="Arrives" value={formatTime(t.arrival_time)} accent={accent} />}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {t.carrier && <InfoPill label="Flight" value={t.carrier} />}
+                  {t.departure_time && <InfoPill label="Dep" value={fmt(t.departure_time)} />}
+                  {t.arrival_time && <InfoPill label="Arr" value={fmt(t.arrival_time)} />}
+                  {t.reference && <InfoPill label="Ref" value={t.reference} />}
                 </div>
-                {t.travellers && <div style={{ marginTop: 6, fontSize: 13, color: muted }}>👤 {t.travellers}</div>}
-                {t.notes && <div style={{ marginTop: 8, fontSize: 13, color: muted, fontStyle: 'italic', borderLeft: `2px solid ${accent}`, paddingLeft: 10 }}>{t.notes}</div>}
-              </Item>
+                {t.travellers && <div style={{ marginTop: 8, fontSize: 13, color: muted }}>👤 {t.travellers}</div>}
+                {t.notes && <div style={{ marginTop: 6, fontSize: 12, color: muted, fontStyle: 'italic' }}>{t.notes}</div>}
+              </div>
             ))}
-          </Section>
+          </div>
         )}
 
-        {/* Accommodation */}
+        {/* HOTELS */}
         {accommodation.length > 0 && (
-          <Section title={`Hotels`} accent={accent} border={border} card={card} muted={muted} text={text}>
+          <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
+            <SectionHead label={`Hotels — ${accommodation.length}`} accent={accent} />
             {accommodation.map((a, i) => (
-              <Item key={i} last={i === accommodation.length - 1} border={border}>
-                <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 2 }}>{a.name}</div>
+              <div key={i} style={{ padding: '14px 18px', borderBottom: i < accommodation.length - 1 ? `1px solid ${border}` : 'none' }}>
+                <div style={{ fontFamily: 'monospace', fontSize: 10, color: accent, letterSpacing: '0.1em', marginBottom: 4 }}>{fmtDate(a.check_in)}{a.check_out ? ` — ${fmtDate(a.check_out)}` : ''}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{a.name}</div>
                 {a.address && (
-                  <a href={`https://maps.google.com/?q=${encodeURIComponent(a.address)}`} target="_blank" rel="noreferrer"
-                    style={{ fontSize: 13, color: accent, display: 'block', marginBottom: 6, textDecoration: 'none' }}>
+                  <a href={`https://maps.google.com/?q=${encodeURIComponent(a.address)}`}
+                    target="_blank" rel="noreferrer"
+                    style={{ fontSize: 13, color: accent, display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 8, textDecoration: 'none' }}>
                     📍 {a.address}
                   </a>
                 )}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px' }}>
-                  {a.check_in && <Tag label="Check in" value={formatDate(a.check_in)} accent={accent} />}
-                  {a.check_out && <Tag label="Check out" value={formatDate(a.check_out)} accent={accent} />}
-                  {a.confirmation && <Tag label="Confirmation" value={a.confirmation} accent={accent} />}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {a.check_in && <InfoPill label="Check in" value={fmtDate(a.check_in)} />}
+                  {a.check_out && <InfoPill label="Check out" value={fmtDate(a.check_out)} />}
+                  {a.confirmation && <InfoPill label="Ref" value={a.confirmation} />}
                 </div>
-                {a.notes && <div style={{ marginTop: 8, fontSize: 13, color: muted, fontStyle: 'italic', borderLeft: `2px solid ${accent}`, paddingLeft: 10 }}>{a.notes}</div>}
-              </Item>
+              </div>
             ))}
-          </Section>
+          </div>
         )}
 
-        {/* Contacts */}
+        {/* CONTACTS */}
         {contacts.length > 0 && (
-          <Section title={`Key Contacts`} accent={accent} border={border} card={card} muted={muted} text={text}>
+          <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
+            <SectionHead label="Key Contacts" accent={accent} />
             {contacts.map((c, i) => (
-              <Item key={i} last={i === contacts.length - 1} border={border}>
-                <div style={{ fontWeight: 600, fontSize: 15 }}>{c.name}</div>
-                {c.role && <div style={{ fontSize: 12, color: muted, fontFamily: 'monospace', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>{c.role}</div>}
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div key={i} style={{ padding: '14px 18px', borderBottom: i < contacts.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 600 }}>{c.name}</div>
+                  {c.role && <div style={{ fontSize: 11, color: muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>{c.role}</div>}
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   {c.phone && (
-                    <a href={`tel:${c.phone}`} style={{ fontSize: 14, color: accent, textDecoration: 'none', fontWeight: 500 }}>
-                      📞 {c.phone}
+                    <a href={`tel:${c.phone}`} style={{ fontSize: 15, color: accent, textDecoration: 'none', fontWeight: 700 }}>
+                      {c.phone}
                     </a>
                   )}
                   {c.email && (
-                    <a href={`mailto:${c.email}`} style={{ fontSize: 14, color: accent, textDecoration: 'none', fontWeight: 500 }}>
-                      ✉️ {c.email}
+                    <a href={`mailto:${c.email}`} style={{ fontSize: 13, color: muted, textDecoration: 'none' }}>
+                      {c.email}
                     </a>
                   )}
                 </div>
-              </Item>
+              </div>
             ))}
-          </Section>
+          </div>
         )}
 
-        {/* Footer */}
-        <div style={{ textAlign: 'center', padding: '24px 0 8px', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: muted }}>
+        <div style={{ textAlign: 'center', padding: '12px 0 4px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.15em', color: '#C8BFB0' }}>
           ADVANCE · {artist?.name?.toUpperCase()}
         </div>
-
       </div>
     </div>
   )
 }
 
-function Section({ title, children, accent, border, card, muted, text }: any) {
+function SectionHead({ label, accent }: { label: string; accent: string }) {
   return (
-    <div style={{ background: card, borderRadius: 12, overflow: 'hidden', border: `1px solid ${border}` }}>
-      <div style={{ padding: '12px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ width: 3, height: 14, background: accent, borderRadius: 2 }} />
-        <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: muted, textTransform: 'uppercase' }}>{title}</span>
-      </div>
-      <div style={{ padding: '4px 16px' }}>{children}</div>
+    <div style={{ padding: '11px 18px', borderBottom: '1px solid #E8E2D8', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ width: 3, height: 14, background: accent, borderRadius: 2, flexShrink: 0 }} />
+      <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.15em', color: '#8A8580', textTransform: 'uppercase' }}>{label}</span>
     </div>
   )
 }
 
-function Item({ children, last, border }: any) {
+function TimePill({ label, time, highlight, accent }: { label: string; time: string; highlight?: boolean; accent?: string }) {
   return (
-    <div style={{ padding: '14px 0', borderBottom: last ? 'none' : `1px solid ${border}` }}>
-      {children}
+    <div style={{ background: highlight ? (accent || '#C4622D') : '#F9F6F2', border: highlight ? 'none' : '1px solid #E8E2D8', borderRadius: 6, padding: '7px 12px', textAlign: 'center', minWidth: 80 }}>
+      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: highlight ? 'rgba(255,255,255,0.75)' : '#8A8580', textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: highlight ? '#fff' : '#1A1714' }}>{time}</div>
     </div>
   )
 }
 
-function Tag({ label, value, accent }: any) {
+function InfoPill({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ fontSize: 12 }}>
-      <span style={{ color: '#aaa', marginRight: 4 }}>{label}:</span>
-      <span style={{ fontWeight: 500 }}>{value}</span>
+    <div style={{ background: '#F9F6F2', border: '1px solid #E8E2D8', borderRadius: 6, padding: '5px 10px' }}>
+      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: '#8A8580', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1714' }}>{value}</div>
     </div>
   )
 }
