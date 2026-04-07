@@ -1313,38 +1313,40 @@ export default function ArtistPage() {
                 {shows.length > 0 && (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
                     <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Shows — {shows.length}</div>
-                    {shows.map((show, i) => (
-                      <div key={i} style={{ padding: '14px 0', borderBottom: i < shows.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                        {/* Date block - Master Tour style */}
-                        <div style={{ flexShrink: 0, width: 48, textAlign: 'center', paddingTop: 2 }}>
+                    {shows.map((show, i) => {
+                      const v = show.venue || ''
+                      const venueName = v.length > 55 ? v.split(/\s*[-–]\s*(?:Access|Park in|Contact|via\s|Turn|From\s)/i)[0].trim() : v
+                      const hasDetail = v.length > venueName.length
+                      return (
+                      <div key={i} style={{ padding: '12px 0', borderBottom: i < shows.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                        {/* Date block */}
+                        <div style={{ flexShrink: 0, width: 44, textAlign: 'center', paddingTop: 2 }}>
                           <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: muted, textTransform: 'uppercase' }}>
                             {show.date ? new Date(show.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' }) : ''}
                           </div>
-                          <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 22, fontWeight: 700, lineHeight: 1, color: text }}>
+                          <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: text, fontVariantNumeric: 'tabular-nums' }}>
                             {show.date ? new Date(show.date + 'T00:00:00').getDate() : ''}
                           </div>
                           <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.05em', color: muted }}>
                             {show.date ? new Date(show.date + 'T00:00:00').toLocaleDateString('en-AU', { month: 'short' }) : ''}
                           </div>
                         </div>
-                        {/* Divider */}
                         <div style={{ width: 1, background: border, alignSelf: 'stretch', flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 16, fontWeight: 700, marginBottom: 2, lineHeight: 1.2 }}>{show.venue}</div>
-                          {show.city && <div style={{ fontSize: 12, color: muted, marginBottom: 4 }}>{show.city}{show.country ? `, ${show.country}` : ''}</div>}
-                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 11, color: muted, fontFamily: 'monospace' }}>
-                            {show.doors_time && <span>Doors {formatTime(show.doors_time)}</span>}
-                            {show.soundcheck_time && <span>SC {formatTime(show.soundcheck_time)}</span>}
-                            {show.set_time && <span style={{ color: accent, fontWeight: 700 }}>Stage {formatTime(show.set_time)}</span>}
-                            {show.stage && <span>{show.stage}</span>}
+                          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 1, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{venueName}</div>
+                          <div style={{ fontSize: 12, color: muted, marginBottom: 5 }}>
+                            {[show.city, show.country && show.country !== 'AU' ? show.country : null].filter(Boolean).join(', ')}
+                            {hasDetail && <span style={{ marginLeft: 6, color: muted, fontSize: 11 }}>· access info on day sheet</span>}
                           </div>
-                          {(show.catering || show.backline) && (
-                            <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 11, color: muted }}>
-                              {show.catering && <span>🍽 {show.catering}</span>}
-                              {show.backline && <span>🎸 {show.backline}</span>}
-                            </div>
-                          )}
-                          {show.notes && <div style={{ fontSize: 11, color: muted, marginTop: 4, fontStyle: 'italic' }}>{show.notes}</div>}
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {show.doors_time && <span style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>Doors {formatTime(show.doors_time)}</span>}
+                            {show.soundcheck_time && <span style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>SC {formatTime(show.soundcheck_time)}</span>}
+                            {show.set_time && <span style={{ fontFamily: 'monospace', fontSize: 10, color: accent, fontWeight: 700 }}>Stage {formatTime(show.set_time)}</span>}
+                            {show.stage && <span style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>{show.stage}</span>}
+                            {show.catering && <span style={{ fontSize: 10, color: muted }}>🍽 {show.catering}</span>}
+                            {show.backline && <span style={{ fontSize: 10, color: muted }}>🎸 {show.backline}</span>}
+                          </div>
+                          {show.notes && <div style={{ fontSize: 11, color: muted, marginTop: 4, fontStyle: 'italic', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any }}>{show.notes}</div>}
                         </div>
                         <div className="show-actions" style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                           <button onClick={() => window.open(`/daysheet/${show.id}`, '_blank')}
@@ -1369,21 +1371,27 @@ export default function ArtistPage() {
                             title="Delete">✕</button>
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 )}
                 {travel.length > 0 && (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
                     <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Travel — {travel.length}</div>
                     {travel.map((t, i) => (
-                      <div key={i} style={{ padding: '12px 0', borderBottom: i < travel.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, color: accent, marginBottom: 4 }}>{formatDate(t.travel_date)}</div>
-                          <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.from_location} → {t.to_location}</div>
-                          <div style={{ fontSize: 13, color: muted }}>{t.carrier ? `${t.carrier}` : t.travel_type || 'Travel'}{t.reference ? ` · Ref: ${t.reference}` : ''}</div>
-                          {t.departure_time && <div style={{ fontSize: 13, color: muted }}>Dep {formatTime(t.departure_time)}{t.arrival_time ? ` · Arr ${formatTime(t.arrival_time)}` : ''}</div>}
-                          {t.travellers && <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>👤 {t.travellers}</div>}
-                          {t.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{t.notes}</div>}
+                      <div key={i} style={{ padding: '10px 0', borderBottom: i < travel.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span style={{ fontFamily: 'monospace', fontSize: 10, color: accent, letterSpacing: '0.05em', flexShrink: 0 }}>{formatDate(t.travel_date)}</span>
+                            <span style={{ fontSize: 14, fontWeight: 600 }}>{t.from_location} → {t.to_location}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 3, fontSize: 11, color: muted, fontFamily: 'monospace' }}>
+                            {(t.carrier || t.travel_type) && <span>{t.carrier || t.travel_type}</span>}
+                            {t.departure_time && <span>Dep {formatTime(t.departure_time)}</span>}
+                            {t.arrival_time && <span>Arr {formatTime(t.arrival_time)}</span>}
+                            {t.reference && <span>Ref {t.reference}</span>}
+                            {t.travellers && <span>👤 {t.travellers}</span>}
+                          </div>
+                          {t.notes && <div style={{ fontSize: 11, color: muted, marginTop: 2, fontStyle: 'italic' }}>{t.notes}</div>}
                         </div>
                         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                           <button onClick={() => openModal('travel', t)}
