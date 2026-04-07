@@ -249,11 +249,12 @@ export default function PublicTourPage() {
                     📍 {a.address}
                   </a>
                 )}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: a.travellers ? 8 : 0 }}>
                   {a.check_in && <InfoPill label="Check in" value={fmtDate(a.check_in)} />}
                   {a.check_out && <InfoPill label="Check out" value={fmtDate(a.check_out)} />}
                   {a.confirmation && <InfoPill label="Ref" value={a.confirmation} />}
                 </div>
+                {a.travellers && <div style={{ fontSize: 13, color: muted }}>👤 {a.travellers}</div>}
               </div>
             ))}
           </div>

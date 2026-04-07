@@ -938,6 +938,10 @@ export default function ArtistPage() {
                   <input style={inputStyle} value={form.confirmation || ''} onChange={e => setForm({ ...form, confirmation: e.target.value })} placeholder="e.g. BKG123456" />
                 </div>
                 <div style={fieldStyle}>
+                  <label style={labelStyle}>Guests</label>
+                  <input style={inputStyle} value={form.travellers || ''} onChange={e => setForm({ ...form, travellers: e.target.value })} placeholder="e.g. Emma, Ben" />
+                </div>
+                <div style={fieldStyle}>
                   <label style={labelStyle}>Notes</label>
                   <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: 60 }} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any notes..." />
                 </div>
@@ -1414,8 +1418,9 @@ export default function ArtistPage() {
                           <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, color: accent, marginBottom: 4 }}>{formatDate(a.check_in)}{a.check_out ? ` — ${formatDate(a.check_out)}` : ''}</div>
                           <div style={{ fontWeight: 600, marginBottom: 4 }}>{a.name}</div>
                           {a.address && <div style={{ fontSize: 13, color: muted }}>{a.address}</div>}
-                          {a.confirmation && <div style={{ fontSize: 13, color: muted }}>Ref: {a.confirmation}</div>}
-                          {a.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{a.notes}</div>}
+                          {a.confirmation && <div style={{ fontSize: 12, color: muted }}>Ref: {a.confirmation}</div>}
+                          {a.travellers && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>👤 {a.travellers}</div>}
+                          {a.notes && <div style={{ fontSize: 12, color: muted, marginTop: 2, fontStyle: 'italic' }}>{a.notes}</div>}
                         </div>
                         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                           <button onClick={() => openModal('accommodation', a)}

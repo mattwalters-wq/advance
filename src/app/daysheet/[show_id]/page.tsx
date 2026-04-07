@@ -226,7 +226,7 @@ export default function DaySheetPage() {
         {/* ── HOTEL ── */}
         {accommodation.length > 0 && (
           <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
-            <SectionHeader label="Hotel Tonight" />
+            <SectionHeader label={accommodation.length === 1 ? "Accommodation" : "Accommodation"} />
             <div style={{ padding: '4px 24px' }}>
               {accommodation.map((a, i) => (
                 <div key={i} style={{ padding: '14px 0', borderBottom: i < accommodation.length - 1 ? `1px solid ${border}` : 'none' }}>
@@ -238,11 +238,12 @@ export default function DaySheetPage() {
                       📍 {a.address}
                     </a>
                   )}
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: a.travellers ? 8 : 0 }}>
                     {a.check_in && <Pill label="Check in" value={a.check_in} />}
                     {a.check_out && <Pill label="Check out" value={a.check_out} />}
                     {a.confirmation && <Pill label="Ref" value={a.confirmation} />}
                   </div>
+                  {a.travellers && <div style={{ fontSize: 13, color: muted }}>👤 {a.travellers}</div>}
                 </div>
               ))}
             </div>
