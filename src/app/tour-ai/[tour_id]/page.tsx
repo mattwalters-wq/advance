@@ -35,19 +35,49 @@ export default function TourAIPage() {
   const [tourLoading, setTourLoading] = useState(true)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  // fileInputRef already declared above
+
+  function clearChat() {
+    try { localStorage.removeItem(`advance_chat_${params.tour_id}`) } catch {}
+    setMessages([{
+      role: 'assistant',
+      content: `Chat cleared. I still have full context on **${tour?.name}**. What do you need?`,
+      timestamp: new Date()
+    }])
+  }
 
   useEffect(() => { loadTour() }, [params.tour_id])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
+  // Persist messages per tour in localStorage
+  useEffect(() => {
+    if (!params.tour_id || messages.length === 0) return
+    try {
+      const key = `advance_chat_${params.tour_id}`
+      localStorage.setItem(key, JSON.stringify(messages.map(m => ({ ...m, timestamp: m.timestamp.toISOString() }))))
+    } catch {}
+  }, [messages])
+
   async function loadTour() {
+    // Clear messages immediately when tour changes to avoid bleed-over
+    setMessages([])
     const { data: tourData } = await supabase.from('tours').select('*, artists(*)').eq('id', params.tour_id).single()
     if (!tourData) { router.push('/dashboard'); return }
     setTour(tourData)
     setArtist(tourData.artists)
     setTourLoading(false)
 
-    // Opening message
+    // Restore saved conversation for this specific tour
+    try {
+      const key = `advance_chat_${params.tour_id}`
+      const saved = localStorage.getItem(key)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        setMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })))
+        return
+      }
+    } catch {}
+
+    // Opening message for new tour conversations
     setMessages([{
       role: 'assistant',
       content: `I have full context on **${tourData.name}** — ${tourData.artists?.name}. Ask me anything about the tour, paste in any information you want to add, or ask me to draft something.\n\nWhat do you need?`,
@@ -150,13 +180,20 @@ export default function TourAIPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={() => router.back()} style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#8A8580', background: 'transparent', border: '1px solid #2A2520', borderRadius: 4, padding: '6px 10px', cursor: 'pointer' }}>← BACK</button>
           <div>
-            <span style={{ fontSize: 16, fontStyle: 'italic', color: '#F5F0E8' }}>{artist?.name}</span>
-            <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: accent, marginLeft: 10 }}>✦ AI · {tour?.name}</span>
+            <span style={{ fontSize: 15, fontStyle: 'italic', color: '#F5F0E8' }}>{artist?.name}</span>
+            <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: accent, marginLeft: 8 }}>✦ ASSISTANT</span>
+            <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: '#4A4540', marginLeft: 8 }}>· {tour?.name?.toUpperCase()}</span>
           </div>
         </div>
-        <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'none', border: '1px solid #333', borderRadius: 6, padding: '6px 10px', color: '#F5F0E8', cursor: 'pointer', fontSize: 12 }}>
-          {darkMode ? '☀️' : '🌙'}
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={clearChat} style={{ background: 'none', border: '1px solid #2A2520', borderRadius: 6, padding: '6px 10px', color: '#5A5450', cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em' }}
+            title="Clear this tour's chat history">
+            CLEAR CHAT
+          </button>
+          <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'none', border: '1px solid #333', borderRadius: 6, padding: '6px 10px', color: '#F5F0E8', cursor: 'pointer', fontSize: 12 }}>
+            {darkMode ? '☀️' : '🌙'}
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
