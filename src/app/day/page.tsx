@@ -144,7 +144,39 @@ function DayScheduleContent() {
     }
     if (show.doors_time) timeline.push({ time: fmt(show.doors_time), sort: show.doors_time, icon: '🚪', label: 'Doors', sub: show.venue, color: '#5B4B8A' })
     if (show.set_time) timeline.push({ time: fmt(show.set_time), sort: show.set_time, icon: '🎵', label: artist?.name || 'Stage', sub: show.stage ? `${show.venue} · ${show.stage}` : show.venue, detail: show.backline ? `🎸 ${show.backline}` : undefined, color: accent, major: true })
-    if (show.notes) timeline.push({ time: '', sort: 'zz', icon: '📝', label: show.notes, color: muted })
+    if (show.notes) {
+      const noteLines = show.notes.split('\n')
+      const timeRx = /^(\d{1,2}:\d{2}\s*(?:am|pm)?)\s*[-:]?\s*/i
+      let parsedAny = false
+      noteLines.forEach((line: string) => {
+        const l = line.trim()
+        if (!l) return
+        const m = l.match(timeRx)
+        if (m) {
+          parsedAny = true
+          const rawTime = m[1]
+          const rest = l.slice(m[0].length).trim()
+          if (!rest) return
+          const lower = rest.toLowerCase()
+          const parts = rawTime.toLowerCase().replace(/[^0-9:]/g,'').split(':')
+          let h = parseInt(parts[0])
+          const mn = parts[1] || '00'
+          if (rawTime.toLowerCase().includes('pm') && h !== 12) h += 12
+          if (rawTime.toLowerCase().includes('am') && h === 12) h = 0
+          const sort24 = String(h).padStart(2,'0') + ':' + mn
+          const icon = lower.includes('transfer') || lower.includes('car') ? '🚗'
+            : lower.includes('check in') || lower.includes('check-in') ? '🏨'
+            : lower.includes('soundcheck') ? '🎙'
+            : lower.includes('greenroom') ? '🟢'
+            : lower.includes('performance') || lower.includes('stage') ? '🎵'
+            : lower.includes('catering') ? '🍽'
+            : lower.includes('arrive') ? '📍' : '📋'
+          const isMajor = lower.includes('performance') || lower.includes('stage') || lower.includes('soundcheck')
+          timeline.push({ time: rawTime, sort: sort24, icon, label: rest, color: isMajor ? accent : muted, major: isMajor })
+        }
+      })
+      if (!parsedAny) timeline.push({ time: '', sort: 'zz', icon: '📝', label: show.notes, color: muted })
+    }
   })
 
   timeline.sort((a, b) => {

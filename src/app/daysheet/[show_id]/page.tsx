@@ -188,13 +188,45 @@ export default function DaySheetPage() {
               </div>
             )}
 
-            {/* Notes — keep but style clearly */}
-            {show?.notes && (
-              <div style={{ padding: '12px 14px', background: accentLight, borderLeft: `3px solid ${accent}`, borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.75, marginTop: 10 }}>
-                <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: accent, marginBottom: 4 }}>NOTES</div>
-                {show.notes}
-              </div>
-            )}
+            {/* Notes — parse as schedule if timestamped */}
+            {show?.notes && (() => {
+              const noteLines = show.notes.split('\n')
+              const timeRx = /^(\d{1,2}:\d{2}\s*(?:am|pm)?)\s*[-:]?\s*/i
+              const parsed: {time: string, text: string, bold: boolean}[] = []
+              noteLines.forEach((line: string) => {
+                const l = line.trim()
+                if (!l) return
+                const m = l.match(timeRx)
+                if (m) {
+                  const rest = l.slice(m[0].length).trim()
+                  if (!rest) return
+                  const lower = rest.toLowerCase()
+                  const bold = lower.includes('performance') || lower.includes('stage') || lower.includes('soundcheck') || lower.includes('show call')
+                  parsed.push({ time: m[1], text: rest, bold })
+                }
+              })
+              if (parsed.length >= 3) {
+                return (
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: accent, marginBottom: 10 }}>DETAILED SCHEDULE</div>
+                    <div style={{ borderRadius: 6, overflow: 'hidden', border: `1px solid ${border}` }}>
+                      {parsed.map((entry, i) => (
+                        <div key={i} style={{ display: 'flex', borderBottom: i < parsed.length - 1 ? `1px solid ${border}` : 'none', background: entry.bold ? accentLight : (i % 2 === 0 ? '#fff' : '#FAFAF8') }}>
+                          <div style={{ padding: '8px 14px', fontFamily: 'monospace', fontSize: 12, color: accent, fontWeight: 700, minWidth: 80, flexShrink: 0, borderRight: `1px solid ${border}` }}>{entry.time}</div>
+                          <div style={{ padding: '8px 14px', fontSize: 13, color: text, lineHeight: 1.5, fontWeight: entry.bold ? 600 : 400 }}>{entry.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              }
+              return (
+                <div style={{ padding: '12px 14px', background: accentLight, borderLeft: `3px solid ${accent}`, borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.75, marginTop: 10 }}>
+                  <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: accent, marginBottom: 4 }}>NOTES</div>
+                  {show.notes}
+                </div>
+              )
+            })()}
           </div>
         </div>
 
