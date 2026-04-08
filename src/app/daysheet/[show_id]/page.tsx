@@ -231,29 +231,55 @@ export default function DaySheetPage() {
         </div>
 
         {/* ── TRAVEL TODAY ── */}
-        {travel.length > 0 && (
-          <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
-            <SectionHeader label="Travel" />
-            <div style={{ padding: '4px 24px' }}>
-              {travel.map((t, i) => (
-                <div key={i} style={{ padding: '14px 0', borderBottom: i < travel.length - 1 ? `1px solid ${border}` : 'none' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                    <span style={{ fontSize: 16 }}>{t.travel_type === 'Drive' ? '🚗' : t.travel_type === 'Train' ? '🚂' : '✈️'}</span>
-                    <span style={{ fontSize: 16, fontWeight: 700 }}>{t.from_location} → {t.to_location}</span>
+        {travel.length > 0 && (() => {
+          // Group by flight number (carrier) — merge travellers across separate booking refs
+          const grouped: any[] = []
+          travel.forEach((t: any) => {
+            const key = t.carrier
+              ? `${t.carrier}__${t.from_location}__${t.to_location}`
+              : `${t.travel_type}__${t.from_location}__${t.to_location}__${t.departure_time}`
+            const existing = grouped.find((g: any) => g._key === key)
+            if (existing) {
+              // Merge travellers
+              const existingNames = (existing.travellers || '').split(',').map((n: string) => n.trim()).filter(Boolean)
+              const newNames = (t.travellers || '').split(',').map((n: string) => n.trim()).filter(Boolean)
+              const merged = [...new Set([...existingNames, ...newNames])]
+              existing.travellers = merged.join(', ')
+              // Keep multiple refs if different
+              if (t.reference && !existing.reference?.includes(t.reference)) {
+                existing.reference = existing.reference ? `${existing.reference}, ${t.reference}` : t.reference
+              }
+            } else {
+              grouped.push({ ...t, _key: key })
+            }
+          })
+
+          grouped.sort((a: any, b: any) => (a.departure_time || '').localeCompare(b.departure_time || ''))
+
+          return (
+            <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
+              <SectionHeader label="Travel" />
+              <div style={{ padding: '4px 24px' }}>
+                {grouped.map((t: any, i: number) => (
+                  <div key={i} style={{ padding: '14px 0', borderBottom: i < grouped.length - 1 ? `1px solid ${border}` : 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                      <span style={{ fontSize: 16 }}>{t.travel_type === 'Drive' ? '🚗' : t.travel_type === 'Train' ? '🚂' : '✈️'}</span>
+                      <span style={{ fontSize: 16, fontWeight: 700 }}>{t.from_location} → {t.to_location}</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
+                      {t.carrier && <Pill label="Flight" value={t.carrier} />}
+                      {t.departure_time && <Pill label="Departs" value={fmt(t.departure_time)} />}
+                      {t.arrival_time && <Pill label="Arrives" value={fmt(t.arrival_time)} />}
+                      {t.reference && <Pill label="Ref" value={t.reference} />}
+                    </div>
+                    {t.travellers && <div style={{ marginTop: 8, fontSize: 13, color: muted }}>👤 {t.travellers}</div>}
+                    {t.notes && <div style={{ marginTop: 6, fontSize: 12, color: muted, fontStyle: 'italic' }}>{t.notes}</div>}
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
-                    {t.carrier && <Pill label="Flight" value={t.carrier} />}
-                    {t.departure_time && <Pill label="Departs" value={fmt(t.departure_time)} />}
-                    {t.arrival_time && <Pill label="Arrives" value={fmt(t.arrival_time)} />}
-                    {t.reference && <Pill label="Ref" value={t.reference} />}
-                  </div>
-                  {t.travellers && <div style={{ marginTop: 8, fontSize: 13, color: muted }}>👤 {t.travellers}</div>}
-                  {t.notes && <div style={{ marginTop: 6, fontSize: 12, color: muted, fontStyle: 'italic' }}>{t.notes}</div>}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* ── HOTEL ── */}
         {accommodation.length > 0 && (
