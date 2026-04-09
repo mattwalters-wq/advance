@@ -1,7 +1,5 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 interface InviteEmailOptions {
   toEmail: string
   toName?: string
@@ -14,6 +12,7 @@ interface InviteEmailOptions {
 }
 
 export async function sendInviteEmail(opts: InviteEmailOptions) {
+  const resend = new Resend(process.env.RESEND_API_KEY)
   const {
     toEmail,
     toName,
