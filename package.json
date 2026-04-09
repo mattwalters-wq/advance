@@ -12,10 +12,11 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.1",
+    "mammoth": "^1.8.0",
     "next": "14.2.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "mammoth": "^1.8.0",
+    "resend": "^6.10.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

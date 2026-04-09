@@ -54,7 +54,20 @@ export default function DaySheetPage() {
     }
 
     const showDate = showData.date
-    setTravel((travelRes.data || []).filter((t: any) => t.travel_date === showDate))
+
+    // Show travel within a window: 1 day before through 3 days after the show
+    // Covers arrival flights, show day, and all departure flights for multi-day festivals
+    const showDateObj = new Date(showDate + 'T00:00:00')
+    const windowStart = new Date(showDateObj)
+    windowStart.setDate(windowStart.getDate() - 1)
+    const windowEnd = new Date(showDateObj)
+    windowEnd.setDate(windowEnd.getDate() + 3)
+    const toStr = (d: Date) => d.toISOString().split('T')[0]
+
+    setTravel((travelRes.data || []).filter((t: any) => {
+      if (!t.travel_date) return false
+      return t.travel_date >= toStr(windowStart) && t.travel_date <= toStr(windowEnd)
+    }))
     setAccommodation((accomRes.data || []).filter((a: any) => {
       if (!a.check_in) return false
       return a.check_in <= showDate && (a.check_out || a.check_in) >= showDate
@@ -254,7 +267,11 @@ export default function DaySheetPage() {
             }
           })
 
-          grouped.sort((a: any, b: any) => (a.departure_time || '').localeCompare(b.departure_time || ''))
+          grouped.sort((a: any, b: any) => {
+            const dateCompare = (a.travel_date || '').localeCompare(b.travel_date || '')
+            if (dateCompare !== 0) return dateCompare
+            return (a.departure_time || '').localeCompare(b.departure_time || '')
+          })
 
           return (
             <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
@@ -262,9 +279,16 @@ export default function DaySheetPage() {
               <div style={{ padding: '4px 24px' }}>
                 {grouped.map((t: any, i: number) => (
                   <div key={i} style={{ padding: '14px 0', borderBottom: i < grouped.length - 1 ? `1px solid ${border}` : 'none' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                      <span style={{ fontSize: 16 }}>{t.travel_type === 'Drive' ? '🚗' : t.travel_type === 'Train' ? '🚂' : '✈️'}</span>
-                      <span style={{ fontSize: 16, fontWeight: 700 }}>{t.from_location} → {t.to_location}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 16 }}>{t.travel_type === 'Drive' ? '🚗' : t.travel_type === 'Train' ? '🚂' : '✈️'}</span>
+                        <span style={{ fontSize: 16, fontWeight: 700 }}>{t.from_location} → {t.to_location}</span>
+                      </div>
+                      {t.travel_date && (
+                        <span style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: '0.05em', color: muted, whiteSpace: 'nowrap' }}>
+                          {new Date(t.travel_date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase()}
+                        </span>
+                      )}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
                       {t.carrier && <Pill label="Flight" value={t.carrier} />}
