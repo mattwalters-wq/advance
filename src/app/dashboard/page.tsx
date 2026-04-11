@@ -11,11 +11,6 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [showInvite, setShowInvite] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteName, setInviteName] = useState('')
-  const [inviting, setInviting] = useState(false)
-  const [inviteMsg, setInviteMsg] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const router = useRouter()
 
@@ -52,26 +47,6 @@ export default function DashboardPage() {
   async function handleSignout() {
     await supabase.auth.signOut()
     router.push('/auth/signin')
-  }
-
-  async function handleInvite() {
-    if (!inviteEmail.trim()) return
-    setInviting(true)
-    setInviteMsg('')
-    const res = await fetch('/api/invite', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: inviteEmail, name: inviteName }),
-    })
-    const data = await res.json()
-    if (data.success) {
-      setInviteMsg(`Invite sent to ${inviteEmail}`)
-      setInviteEmail('')
-      setInviteName('')
-    } else {
-      setInviteMsg(data.error || 'Failed to send invite')
-    }
-    setInviting(false)
   }
 
   if (loading) return (
@@ -116,35 +91,6 @@ export default function DashboardPage() {
         .fade-in { animation: fadeIn 0.4s ease forwards; }
       `}</style>
 
-      {/* Invite modal */}
-      {showInvite && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
-          onClick={() => setShowInvite(false)}>
-          <div style={{ background: '#FAF7F2', borderRadius: 16, padding: 32, width: '100%', maxWidth: 400, boxShadow: '0 24px 80px rgba(0,0,0,0.2)' }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-              <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 20 }}>Invite someone</div>
-              <button onClick={() => setShowInvite(false)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#8A8580', lineHeight: 1 }}>×</button>
-            </div>
-            {[
-              { label: 'Name', value: inviteName, set: setInviteName, placeholder: 'Their name', type: 'text' },
-              { label: 'Email', value: inviteEmail, set: setInviteEmail, placeholder: 'colleague@email.com', type: 'email' },
-            ].map(f => (
-              <div key={f.label} style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 11, fontFamily: 'monospace', letterSpacing: '0.15em', color: '#8A8580', display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>{f.label}</label>
-                <input type={f.type} value={f.value} onChange={e => f.set(e.target.value)} placeholder={f.placeholder}
-                  style={{ width: '100%', padding: '11px 14px', border: '1px solid #E0D8CC', borderRadius: 8, fontSize: 14, fontFamily: '"Georgia", serif', color: '#1A1714', outline: 'none', background: '#F4EFE6' }} />
-              </div>
-            ))}
-            {inviteMsg && <div style={{ marginBottom: 14, fontSize: 12, color: inviteMsg.includes('sent') ? '#3D7A50' : '#C00', fontFamily: 'monospace' }}>{inviteMsg}</div>}
-            <button onClick={handleInvite} disabled={inviting || !inviteEmail.trim()}
-              style={{ width: '100%', padding: '13px', background: '#C4622D', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 11, letterSpacing: '0.2em', cursor: 'pointer', opacity: !inviteEmail.trim() ? 0.5 : 1 }}>
-              {inviting ? 'SENDING...' : 'SEND INVITE'}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <header style={{ background: '#0F0E0C', borderBottom: '1px solid #1E1C18' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -166,10 +112,6 @@ export default function DashboardPage() {
               </button>
             ))}
             <div style={{ width: 1, height: 20, background: '#2A2520', margin: '0 4px' }} />
-            <button onClick={() => setShowInvite(true)} className="nav-btn"
-              style={{ padding: '6px 12px', background: 'transparent', border: 'none', color: '#7A7570', cursor: 'pointer', borderRadius: 6, fontSize: 13, fontFamily: '"Georgia", serif', transition: 'background 0.15s' }}>
-              + Invite
-            </button>
             <div style={{ position: 'relative' }}>
               <button onClick={() => setMenuOpen(!menuOpen)} className="nav-btn"
                 style={{ width: 32, height: 32, borderRadius: '50%', background: '#C4622D', border: 'none', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
