@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
@@ -11,6 +11,18 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1)
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
+  const [sessionReady, setSessionReady] = useState(false)
+
+  useEffect(() => {
+    // Exchange the token from the invite link URL for a real session
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (session) setSessionReady(true)
+    })
+    // Also check if session already exists
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setSessionReady(true)
+    })
+  }, [])
 
   async function handleSaveName() {
     if (!name.trim()) return
@@ -82,7 +94,7 @@ export default function OnboardingPage() {
               ))}
             </div>
 
-            <button onClick={() => router.push('/dashboard')}
+            <button onClick={() => router.replace('/dashboard')}
               style={{ width: '100%', padding: 14, background: accent, color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: 'pointer' }}>
               GO TO MY ROSTER →
             </button>
