@@ -104,6 +104,76 @@ const CATEGORY_COLORS: Record<string, string> = {
   per_diem: '#A5875E', gear: '#A55E5E', marketing: '#5E8EA5', crew: '#8EA55E', other: '#8A8580'
 }
 
+function ExpenseRow({ expense: e, border, muted, text, red, green, accent, darkMode, card, bg, onUpdate, onDelete, isLast }: any) {
+  const [editing, setEditing] = useState(false)
+  const [desc, setDesc] = useState(e.description || '')
+  const [amount, setAmount] = useState(String(e.amount || ''))
+  const [currency, setCurrency] = useState(e.currency || 'AUD')
+  const [notes, setNotes] = useState(e.notes || '')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    await onUpdate({ description: desc, amount: parseFloat(amount) || 0, currency, notes: notes || null })
+    setSaving(false)
+    setEditing(false)
+  }
+
+  async function togglePaid() {
+    await onUpdate({ status: e.status === 'paid' ? 'pending' : 'paid' })
+  }
+
+  const isPaid = e.status === 'paid'
+
+  if (editing) {
+    return (
+      <div style={{ padding: '12px 0', borderBottom: isLast ? 'none' : `1px solid ${border}` }}>
+        <div style={{ display: 'grid', gap: 8 }}>
+          <input value={desc} onChange={ev => setDesc(ev.target.value)} placeholder="Description"
+            style={{ width: '100%', padding: '8px 10px', border: `1px solid ${border}`, borderRadius: 6, background: bg, color: text, fontSize: 13, fontFamily: 'Georgia, serif', outline: 'none', boxSizing: 'border-box' as const }} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input value={amount} onChange={ev => setAmount(ev.target.value)} placeholder="Amount" type="number"
+              style={{ flex: 1, padding: '8px 10px', border: `1px solid ${border}`, borderRadius: 6, background: bg, color: text, fontSize: 13, fontFamily: 'monospace', outline: 'none' }} />
+            <select value={currency} onChange={ev => setCurrency(ev.target.value)}
+              style={{ padding: '8px 10px', border: `1px solid ${border}`, borderRadius: 6, background: bg, color: text, fontSize: 13, outline: 'none' }}>
+              {['AUD', 'EUR', 'GBP', 'USD'].map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <input value={notes} onChange={ev => setNotes(ev.target.value)} placeholder="Notes (optional)"
+            style={{ width: '100%', padding: '8px 10px', border: `1px solid ${border}`, borderRadius: 6, background: bg, color: text, fontSize: 12, fontFamily: 'Georgia, serif', outline: 'none', boxSizing: 'border-box' as const }} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setEditing(false)} style={{ padding: '7px 14px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+            <button onClick={save} disabled={saving} style={{ flex: 1, padding: '7px 14px', background: accent, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2 }}>
+              {saving ? 'SAVING...' : 'SAVE'}
+            </button>
+            <button onClick={() => { if (confirm('Delete this expense?')) onDelete() }}
+              style={{ padding: '7px 10px', background: 'transparent', color: red, border: `1px solid ${red}`, borderRadius: 6, cursor: 'pointer', fontSize: 12 }}>✕</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: isLast ? 'none' : `1px solid ${border}`, gap: 12, opacity: isPaid ? 0.65 : 1 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, color: text, textDecoration: isPaid ? 'line-through' : 'none' }}>{e.description}</div>
+        {e.notes && <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>{e.notes}</div>}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <button onClick={togglePaid} title={isPaid ? 'Mark as pending' : 'Mark as paid'}
+          style={{ padding: '3px 8px', background: isPaid ? green : 'transparent', color: isPaid ? '#fff' : muted, border: `1px solid ${isPaid ? green : border}`, borderRadius: 20, cursor: 'pointer', fontFamily: 'monospace', fontSize: 8, letterSpacing: 1, whiteSpace: 'nowrap' }}>
+          {isPaid ? '✓ PAID' : 'PENDING'}
+        </button>
+        <div style={{ fontSize: 13, fontWeight: 600, color: isPaid ? muted : red, whiteSpace: 'nowrap' }}>
+          {e.currency} {parseFloat(e.amount || 0).toLocaleString()}
+        </div>
+        <button onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: muted, fontSize: 14, padding: '2px 4px', lineHeight: 1 }} title="Edit">✎</button>
+      </div>
+    </div>
+  )
+}
+
 export default function BudgetPage() {
   const params = useParams()
   const router = useRouter()
@@ -739,39 +809,64 @@ export default function BudgetPage() {
             ) : (
               <>
                 {Object.entries(expensesByCategory).map(([cat, items]: [string, any]) => {
+                  const paidItems = items.filter((e: any) => e.status === 'paid')
                   const catTotal = items.reduce((s: number, e: any) => s + (parseFloat(e.amount) || 0), 0)
+                  const catPaid = paidItems.reduce((s: number, e: any) => s + (parseFloat(e.amount) || 0), 0)
                   return (
                     <div key={cat} style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
                       <div style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${border}`, background: darkMode ? '#333' : '#F9F6F2' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 10, height: 10, borderRadius: 2, background: CATEGORY_COLORS[cat] || '#888' }} />
+                          <div style={{ width: 10, height: 10, borderRadius: 2, background: CATEGORY_COLORS[cat] || '#888', flexShrink: 0 }} />
                           <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: text, textTransform: 'uppercase' }}>{CATEGORY_LABELS[cat] || cat}</span>
                           <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>{items.length} items</span>
+                          {paidItems.length > 0 && (
+                            <span style={{ fontFamily: 'monospace', fontSize: 9, color: green }}>{paidItems.length} paid</span>
+                          )}
                         </div>
-                        <span style={{ fontWeight: 700, color: red }}>{fmtAmount(catTotal, items[0]?.currency || primaryCurrency)}</span>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontWeight: 700, color: red, fontSize: 14 }}>{fmtAmount(catTotal, items[0]?.currency || primaryCurrency)}</div>
+                          {catPaid > 0 && <div style={{ fontSize: 11, color: green }}>{fmtAmount(catPaid, items[0]?.currency || primaryCurrency)} paid</div>}
+                        </div>
                       </div>
-                      <div style={{ padding: '4px 20px' }}>
+                      <div style={{ padding: '0 20px' }}>
                         {items.map((e: any, i: number) => (
-                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '10px 0', borderBottom: i < items.length - 1 ? `1px solid ${border}` : 'none', gap: 12 }}>
-                            <div>
-                              <div style={{ fontSize: 13 }}>{e.description}</div>
-                              {e.notes && <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>{e.notes}</div>}
-                              {e.show_id && shows.find(s => s.id === e.show_id) && (
-                                <div style={{ fontSize: 11, color: accent, marginTop: 2, fontFamily: 'monospace', letterSpacing: 1 }}>
-                                  {shows.find(s => s.id === e.show_id)?.venue}
-                                </div>
-                              )}
-                            </div>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: red, whiteSpace: 'nowrap' }}>{fmtAmount(e.amount, e.currency)}</div>
-                          </div>
+                          <ExpenseRow key={e.id || i} expense={e} border={border} muted={muted} text={text} red={red} green={green} accent={accent} darkMode={darkMode} card={card} bg={bg}
+                            onUpdate={async (updates: any) => {
+                              const { error } = await supabase.from('expenses').update(updates).eq('id', e.id)
+                              if (!error) await loadBudget(selectedTourId)
+                            }}
+                            onDelete={async () => {
+                              const { error } = await supabase.from('expenses').delete().eq('id', e.id)
+                              if (!error) await loadBudget(selectedTourId)
+                            }}
+                            isLast={i === items.length - 1}
+                          />
                         ))}
                       </div>
                     </div>
                   )
                 })}
-                <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontFamily: 'monospace', fontSize: 11, letterSpacing: 2 }}>TOTAL</span>
-                  <span style={{ fontSize: 20, fontWeight: 700, color: red }}>{fmtAmount(totalExpenses, primaryCurrency)}</span>
+                <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: '16px 20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: expenses.some((e: any) => e.status === 'paid') ? 8 : 0 }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, letterSpacing: 2 }}>TOTAL</span>
+                    <span style={{ fontSize: 20, fontWeight: 700, color: red }}>{fmtAmount(totalExpenses, primaryCurrency)}</span>
+                  </div>
+                  {expenses.some((e: any) => e.status === 'paid') && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: green }}>PAID</span>
+                      <span style={{ fontSize: 15, fontWeight: 600, color: green }}>
+                        {fmtAmount(expenses.filter((e: any) => e.status === 'paid').reduce((s: number, e: any) => s + (parseFloat(e.amount) || 0), 0), primaryCurrency)}
+                      </span>
+                    </div>
+                  )}
+                  {expenses.some((e: any) => e.status !== 'paid') && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: muted }}>OUTSTANDING</span>
+                      <span style={{ fontSize: 15, fontWeight: 600, color: muted }}>
+                        {fmtAmount(expenses.filter((e: any) => e.status !== 'paid').reduce((s: number, e: any) => s + (parseFloat(e.amount) || 0), 0), primaryCurrency)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </>
             )}
