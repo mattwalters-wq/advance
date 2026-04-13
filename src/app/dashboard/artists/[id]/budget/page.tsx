@@ -391,6 +391,9 @@ export default function BudgetPage() {
   const [scenario, setScenario] = useState(100)
   const [showAddExpense, setShowAddExpense] = useState(false)
   const [showAddIncome, setShowAddIncome] = useState(false)
+  const [fxRates, setFxRates] = useState<Record<string, number>>({}) // rates TO AUD (e.g. EUR: 1.68 means 1 EUR = 1.68 AUD)
+  const [fxLoading, setFxLoading] = useState(false)
+  const [fxUpdated, setFxUpdated] = useState('')
   const [darkMode, setDarkMode] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [processing, setProcessing] = useState(false)
@@ -403,8 +406,36 @@ export default function BudgetPage() {
   const [showPaste, setShowPaste] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { loadArtist() }, [params.id])
+  useEffect(() => { loadArtist(); fetchFx() }, [params.id])
   useEffect(() => { if (selectedTourId) loadBudget(selectedTourId) }, [selectedTourId])
+
+  async function fetchFx() {
+    setFxLoading(true)
+    try {
+      // Frankfurter: get EUR, GBP, USD rates with AUD as base
+      const res = await fetch('https://api.frankfurter.dev/v2/latest?base=AUD&symbols=EUR,GBP,USD')
+      const data = await res.json()
+      if (data.rates) {
+        // Convert: we want "1 EUR = X AUD", but Frankfurter gives "1 AUD = X EUR"
+        // So invert each rate
+        const toAud: Record<string, number> = { AUD: 1 }
+        for (const [currency, rate] of Object.entries(data.rates as Record<string, number>)) {
+          toAud[currency] = 1 / rate
+        }
+        setFxRates(toAud)
+        setFxUpdated(new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }))
+      }
+    } catch {
+      // Silently fail - FX is a nice-to-have
+    }
+    setFxLoading(false)
+  }
+
+  function toAUD(amount: number, currency: string): number {
+    if (currency === 'AUD' || !currency) return amount
+    const rate = fxRates[currency]
+    return rate ? amount * rate : amount
+  }
 
   async function loadArtist() {
     const { data: artistData } = await supabase.from('artists').select('*').eq('id', params.id).single()
@@ -463,9 +494,19 @@ export default function BudgetPage() {
   const totalExpenses = expenses.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)
   const netPosition = totalFees - totalExpenses
 
-  // Best case for comparison
+  // AUD-converted totals (only meaningful if FX rates loaded and mixed currencies)
+  const hasMixedCurrencies = Object.keys(fxRates).length > 0 && (
+    settlements.some(s => s.currency && s.currency !== 'AUD') ||
+    expenses.some(e => e.currency && e.currency !== 'AUD')
+  )
+  const totalFeesAUD = settlements.reduce((s, x) => s + toAUD(calcIncome(x, scenario), x.currency), 0)
+  const totalExpensesAUD = expenses.reduce((s, x) => s + toAUD(parseFloat(x.amount) || 0, x.currency), 0)
+  const netPositionAUD = totalFeesAUD - totalExpensesAUD
+
   const totalFeesBest = settlements.reduce((s, x) => s + calcIncome(x, 100), 0)
   const totalFeesWorst = settlements.reduce((s, x) => s + calcIncome(x, 0), 0)
+  const totalFeesBestAUD = settlements.reduce((s, x) => s + toAUD(calcIncome(x, 100), x.currency), 0)
+  const totalFeesWorstAUD = settlements.reduce((s, x) => s + toAUD(calcIncome(x, 0), x.currency), 0)
 
   const expensesByCategory = expenses.reduce((acc: any, e: any) => {
     const cat = e.category || 'other'
@@ -799,7 +840,7 @@ export default function BudgetPage() {
                       <div style={{ fontFamily: 'monospace', fontSize: 10, color: accent }}>
                         {scenario === 0 ? 'Worst case' : scenario === 100 ? 'Best case' : `${scenario}% capacity`}
                         {' · '}
-                        <span style={{ color: green }}>{fmtAmount(totalFees, primaryCurrency)}</span>
+                        <span style={{ color: green }}>{hasMixedCurrencies ? `AUD ${Math.round(totalFeesAUD).toLocaleString()}` : fmtAmount(totalFees, primaryCurrency)}</span>
                         {' income'}
                       </div>
                     </div>
@@ -834,9 +875,33 @@ export default function BudgetPage() {
                         }} />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                        <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>{fmtAmount(totalFeesWorst, primaryCurrency)} floor</span>
-                        <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>{fmtAmount(totalFeesBest, primaryCurrency)} ceiling</span>
+                        <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>
+                          {hasMixedCurrencies ? `AUD ${Math.round(totalFeesWorstAUD).toLocaleString()}` : fmtAmount(totalFeesWorst, primaryCurrency)} floor
+                        </span>
+                        <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>
+                          {hasMixedCurrencies ? `AUD ${Math.round(totalFeesBestAUD).toLocaleString()}` : fmtAmount(totalFeesBest, primaryCurrency)} ceiling
+                        </span>
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* FX Rate strip */}
+                {hasMixedCurrencies && (
+                  <div style={{ background: card, borderRadius: 10, border: `1px solid ${border}`, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                      {Object.entries(fxRates).filter(([c]) => c !== 'AUD').map(([currency, rate]) => (
+                        <span key={currency} style={{ fontFamily: 'monospace', fontSize: 10, color: text }}>
+                          1 {currency} = <strong>AUD {rate.toFixed(4)}</strong>
+                        </span>
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {fxUpdated && <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>Updated {fxUpdated}</span>}
+                      <button onClick={fetchFx} disabled={fxLoading}
+                        style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, color: accent, background: 'none', border: `1px solid ${border}`, borderRadius: 4, padding: '3px 8px', cursor: 'pointer' }}>
+                        {fxLoading ? '...' : '↻'}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -844,14 +909,15 @@ export default function BudgetPage() {
                 {/* Summary cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                   {[
-                    { label: 'Total Income', value: fmtAmount(totalFees, primaryCurrency), color: green, sub: `${settlements.length} show${settlements.length !== 1 ? 's' : ''} · ${scenario}% capacity` },
-                    { label: 'Total Expenses', value: fmtAmount(totalExpenses, primaryCurrency), color: red, sub: `${expenses.length} item${expenses.length !== 1 ? 's' : ''}` },
-                    { label: netPosition >= 0 ? 'Net Profit' : 'Net Loss', value: fmtAmount(Math.abs(netPosition), primaryCurrency), color: netPosition >= 0 ? green : red, sub: 'before tax & commission' },
+                    { label: 'Total Income', value: fmtAmount(totalFees, primaryCurrency), audValue: hasMixedCurrencies ? `AUD ${Math.round(totalFeesAUD).toLocaleString()}` : null, color: green, sub: `${settlements.length} show${settlements.length !== 1 ? 's' : ''} · ${scenario}% capacity` },
+                    { label: 'Total Expenses', value: fmtAmount(totalExpenses, primaryCurrency), audValue: hasMixedCurrencies ? `AUD ${Math.round(totalExpensesAUD).toLocaleString()}` : null, color: red, sub: `${expenses.length} item${expenses.length !== 1 ? 's' : ''}` },
+                    { label: netPositionAUD >= 0 ? 'Net Profit' : 'Net Loss', value: hasMixedCurrencies ? `AUD ${Math.round(Math.abs(netPositionAUD)).toLocaleString()}` : fmtAmount(Math.abs(netPosition), primaryCurrency), audValue: null, color: netPositionAUD >= 0 ? green : red, sub: 'before tax & commission' },
                   ].map((c, i) => (
                     <div key={i} style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: '20px 20px' }}>
                       <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 8, textTransform: 'uppercase' }}>{c.label}</div>
                       <div style={{ fontSize: 22, fontWeight: 700, color: c.color, marginBottom: 4 }}>{c.value}</div>
-                      <div style={{ fontSize: 11, color: muted }}>{c.sub}</div>
+                      {c.audValue && <div style={{ fontSize: 12, color: muted, fontFamily: 'monospace' }}>≈ {c.audValue}</div>}
+                      <div style={{ fontSize: 11, color: muted, marginTop: c.audValue ? 2 : 0 }}>{c.sub}</div>
                     </div>
                   ))}
                 </div>
@@ -1032,6 +1098,7 @@ export default function BudgetPage() {
                 {Object.entries(expensesByCategory).map(([cat, items]: [string, any]) => {
                   const paidItems = items.filter((e: any) => e.status === 'paid')
                   const catTotal = items.reduce((s: number, e: any) => s + (parseFloat(e.amount) || 0), 0)
+                  const catTotalAUD = hasMixedCurrencies ? items.reduce((s: number, e: any) => s + toAUD(parseFloat(e.amount) || 0, e.currency), 0) : 0
                   const catPaid = paidItems.reduce((s: number, e: any) => s + (parseFloat(e.amount) || 0), 0)
                   return (
                     <div key={cat} style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
@@ -1046,6 +1113,7 @@ export default function BudgetPage() {
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <div style={{ fontWeight: 700, color: red, fontSize: 14 }}>{fmtAmount(catTotal, items[0]?.currency || primaryCurrency)}</div>
+                          {hasMixedCurrencies && items[0]?.currency !== 'AUD' && <div style={{ fontSize: 11, color: muted }}>≈ AUD {Math.round(catTotalAUD).toLocaleString()}</div>}
                           {catPaid > 0 && <div style={{ fontSize: 11, color: green }}>{fmtAmount(catPaid, items[0]?.currency || primaryCurrency)} paid</div>}
                         </div>
                       </div>
@@ -1068,9 +1136,12 @@ export default function BudgetPage() {
                   )
                 })}
                 <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: '16px 20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: expenses.some((e: any) => e.status === 'paid') ? 8 : 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                     <span style={{ fontFamily: 'monospace', fontSize: 11, letterSpacing: 2 }}>TOTAL</span>
-                    <span style={{ fontSize: 20, fontWeight: 700, color: red }}>{fmtAmount(totalExpenses, primaryCurrency)}</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: red }}>{fmtAmount(totalExpenses, primaryCurrency)}</div>
+                      {hasMixedCurrencies && <div style={{ fontSize: 12, color: muted, fontFamily: 'monospace' }}>≈ AUD {Math.round(totalExpensesAUD).toLocaleString()}</div>}
+                    </div>
                   </div>
                   {expenses.some((e: any) => e.status === 'paid') && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
