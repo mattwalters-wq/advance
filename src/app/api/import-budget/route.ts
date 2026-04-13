@@ -49,7 +49,13 @@ Rules:
 - Return raw JSON only, no markdown
 - Match show fees to show_ids using date and venue name
 - If you can't match a fee to a specific show, set show_id to null
-- All amounts as numbers, no currency symbols`
+- All amounts as numbers, no currency symbols or commas
+- If a row has LOW and HIGH estimates, use the midpoint as the amount and note the range in description
+- Skip any rows where the amount is TBC, TBD, or clearly unknown
+- Strip ~ prefix from amounts (e.g. ~AUD 12,500 becomes 12500)
+- Skip summary/total rows at the bottom of the document
+- For confirmed items, use the confirmed amount directly
+- Preserve the original currency (AUD, EUR, GBP) per line item - do not convert`
 
     let messageContent: any[]
     if (pdf_base64) {
@@ -58,7 +64,7 @@ Rules:
         { type: 'text', text: prompt },
       ]
     } else {
-      messageContent = [{ type: 'text', text: `${prompt}\n\nDocument:\n${(text || '').slice(0, 8000)}` }]
+      messageContent = [{ type: 'text', text: `${prompt}\n\nDocument:\n${(text || '').slice(0, 16000)}` }]
     }
 
     const response = await anthropic.messages.create({
