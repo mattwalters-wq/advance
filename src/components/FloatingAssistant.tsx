@@ -35,8 +35,10 @@ export default function FloatingAssistant() {
   const [tourName, setTourName] = useState<string | null>(null)
   const [tours, setTours] = useState<any[]>([])
   const [showTourPicker, setShowTourPicker] = useState(false)
+  const [attachments, setAttachments] = useState<{ name: string, base64: string, type: string }[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Don't show on public pages or auth pages
   const hidden = ['/', '/auth/signin', '/auth/signup', '/onboarding', '/privacy', '/terms'].includes(pathname)
@@ -88,13 +90,15 @@ export default function FloatingAssistant() {
 
   async function send(text?: string) {
     const content = text || input.trim()
-    if (!content || loading) return
+    if ((!content && attachments.length === 0) || loading) return
     if (!tourId) { setShowTourPicker(true); return }
 
-    const userMsg: Message = { role: 'user', content }
+    const displayContent = content + (attachments.length > 0 ? `\n📎 ${attachments.map(a => a.name).join(', ')}` : '')
+    const userMsg: Message = { role: 'user', content: displayContent }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
     setInput('')
+    setAttachments([])
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
     setLoading(true)
 
@@ -105,6 +109,7 @@ export default function FloatingAssistant() {
         body: JSON.stringify({
           tourId,
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          attachments,
         }),
       })
       const data = await res.json()
@@ -116,6 +121,58 @@ export default function FloatingAssistant() {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Connection error. Try again.' }])
     }
     setLoading(false)
+  }
+
+  async function handleFileAttach(files: FileList | null) {
+    if (!files) return
+    const newAtts = await Promise.all(Array.from(files).map(async file => {
+      const ext = file.name.split('.').pop()?.toLowerCase()
+
+      // Excel files - parse to text via SheetJS then send as plain text attachment
+      if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
+        let text = ''
+        if (ext === 'csv') {
+          text = await file.text()
+        } else {
+          // Load SheetJS
+          if (!(window as any).XLSX) {
+            await new Promise<void>((res, rej) => {
+              const s = document.createElement('script')
+              s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
+              s.onload = () => res(); s.onerror = rej
+              document.head.appendChild(s)
+            })
+          }
+          const XLSX = (window as any).XLSX
+          const buffer = await file.arrayBuffer()
+          const wb = XLSX.read(buffer, { type: 'array' })
+          const parts: string[] = []
+          for (const sheetName of wb.SheetNames) {
+            const ws = wb.Sheets[sheetName]
+            const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+            parts.push(`=== ${sheetName} ===`)
+            for (const row of data) {
+              const cells = row.map((c: any) => String(c ?? '').trim()).filter(Boolean)
+              if (cells.length >= 2) parts.push(cells.slice(0, 10).join(' | '))
+            }
+          }
+          text = parts.join('\n')
+        }
+        // Encode as base64 text so the API can read it as a document
+        const base64 = btoa(unescape(encodeURIComponent(text)))
+        return { name: file.name, base64, type: 'text/plain' }
+      }
+
+      // All other files (PDF, images, docx etc) - send as-is
+      const base64 = await new Promise<string>((res, rej) => {
+        const reader = new FileReader()
+        reader.onload = () => res((reader.result as string).split(',')[1])
+        reader.onerror = rej
+        reader.readAsDataURL(file)
+      })
+      return { name: file.name, base64, type: file.type || 'application/octet-stream' }
+    }))
+    setAttachments(prev => [...prev, ...newAtts])
   }
 
   function formatMessage(text: string) {
@@ -281,7 +338,29 @@ export default function FloatingAssistant() {
 
           {/* Input */}
           <div style={{ padding: '10px 12px 12px', borderTop: `1px solid ${border}`, flexShrink: 0 }}>
+            <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx,.xls" style={{ display: 'none' }}
+              onChange={e => handleFileAttach(e.target.files)} />
+
+            {/* Attachment chips */}
+            {attachments.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                {attachments.map((a, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', background: card, border: `1px solid ${border}`, borderRadius: 20, fontSize: 11, color: textCol }}>
+                    <span>{a.type.startsWith('image/') ? '🖼' : '📄'}</span>
+                    <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                    <button onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
+                      style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1, marginLeft: 2 }}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <button onClick={() => fileInputRef.current?.click()} disabled={!tourId}
+                style={{ width: 40, height: 40, background: 'transparent', border: `1px solid ${border}`, borderRadius: 10, cursor: tourId ? 'pointer' : 'default', color: muted, fontSize: 16, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: tourId ? 1 : 0.4 }}
+                title="Attach file">
+                📎
+              </button>
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -293,7 +372,7 @@ export default function FloatingAssistant() {
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
                 }}
-                placeholder={tourId ? 'Ask anything...' : 'Select a tour first...'}
+                placeholder={tourId ? 'Ask anything, or attach a doc...' : 'Select a tour first...'}
                 rows={1}
                 disabled={!tourId}
                 style={{
@@ -307,11 +386,11 @@ export default function FloatingAssistant() {
                   opacity: tourId ? 1 : 0.5,
                 }}
               />
-              <button onClick={() => send()} disabled={loading || !input.trim() || !tourId}
+              <button onClick={() => send()} disabled={loading || (!input.trim() && attachments.length === 0) || !tourId}
                 style={{
-                  width: 40, height: 40, background: input.trim() && tourId ? accent : border,
+                  width: 40, height: 40, background: (input.trim() || attachments.length > 0) && tourId ? accent : border,
                   color: '#fff', border: 'none', borderRadius: 10,
-                  cursor: input.trim() && tourId ? 'pointer' : 'default',
+                  cursor: (input.trim() || attachments.length > 0) && tourId ? 'pointer' : 'default',
                   fontSize: 16, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                 ↑
