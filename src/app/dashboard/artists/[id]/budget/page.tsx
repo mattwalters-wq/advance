@@ -104,6 +104,210 @@ const CATEGORY_COLORS: Record<string, string> = {
   per_diem: '#A5875E', gear: '#A55E5E', marketing: '#5E8EA5', crew: '#8EA55E', other: '#8A8580'
 }
 
+function Modal({ onClose, title, children, card, border, text, accent }: any) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,14,12,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
+      onClick={onClose}>
+      <div style={{ background: card, borderRadius: 16, padding: 28, width: '100%', maxWidth: 420, boxShadow: '0 24px 80px rgba(0,0,0,0.3)', border: `1px solid ${border}` }}
+        onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 18, color: text }}>{title}</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#8A8580', lineHeight: 1 }}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function AddExpenseModal({ shows, border, text, muted, accent, bg, card, onClose, onSave }: any) {
+  const [desc, setDesc] = useState('')
+  const [amount, setAmount] = useState('')
+  const [currency, setCurrency] = useState('AUD')
+  const [category, setCategory] = useState('other')
+  const [notes, setNotes] = useState('')
+  const [showId, setShowId] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const inputStyle = { width: '100%', padding: '9px 12px', border: `1px solid ${border}`, borderRadius: 8, background: bg, color: text, fontSize: 14, fontFamily: 'Georgia, serif', outline: 'none', boxSizing: 'border-box' as const }
+  const labelStyle = { fontSize: 11, fontFamily: 'monospace', letterSpacing: '0.15em', color: muted, display: 'block', marginBottom: 5, textTransform: 'uppercase' as const }
+
+  async function save() {
+    if (!desc.trim() || !amount) return
+    setSaving(true)
+    await onSave({ description: desc, amount: parseFloat(amount), currency, category, notes: notes || null, show_id: showId || null })
+    setSaving(false)
+  }
+
+  return (
+    <Modal onClose={onClose} title="Add Expense" card={card} border={border} text={text} accent={accent}>
+      <div style={{ display: 'grid', gap: 14 }}>
+        <div><label style={labelStyle}>Description</label><input style={inputStyle} value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. Frankfurt accommodation" /></div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+          <div><label style={labelStyle}>Amount</label><input style={inputStyle} type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" /></div>
+          <div><label style={labelStyle}>Currency</label>
+            <select style={{ ...inputStyle, width: 'auto' }} value={currency} onChange={e => setCurrency(e.target.value)}>
+              {['AUD','EUR','GBP','USD'].map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+        <div><label style={labelStyle}>Category</label>
+          <select style={inputStyle} value={category} onChange={e => setCategory(e.target.value)}>
+            {[['flights','Flights'],['accommodation','Accommodation'],['ground_transport','Ground Transport'],['per_diem','Per Diems'],['gear','Gear'],['marketing','Marketing'],['crew','Crew'],['other','Other']].map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+        <div><label style={labelStyle}>Linked Show (optional)</label>
+          <select style={inputStyle} value={showId} onChange={e => setShowId(e.target.value)}>
+            <option value="">No specific show</option>
+            {shows.map((s: any) => <option key={s.id} value={s.id}>{s.date} - {s.venue}</option>)}
+          </select>
+        </div>
+        <div><label style={labelStyle}>Notes (optional)</label><input style={inputStyle} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any additional context" /></div>
+        <button onClick={save} disabled={saving || !desc.trim() || !amount}
+          style={{ width: '100%', padding: 13, background: accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, opacity: !desc.trim() || !amount ? 0.5 : 1 }}>
+          {saving ? 'SAVING...' : 'ADD EXPENSE'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+function AddIncomeModal({ shows, border, text, muted, accent, bg, card, green, onClose, onSave }: any) {
+  const [venue, setVenue] = useState('')
+  const [amount, setAmount] = useState('')
+  const [currency, setCurrency] = useState('AUD')
+  const [dealType, setDealType] = useState('guarantee')
+  const [notes, setNotes] = useState('')
+  const [showId, setShowId] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const inputStyle = { width: '100%', padding: '9px 12px', border: `1px solid ${border}`, borderRadius: 8, background: bg, color: text, fontSize: 14, fontFamily: 'Georgia, serif', outline: 'none', boxSizing: 'border-box' as const }
+  const labelStyle = { fontSize: 11, fontFamily: 'monospace', letterSpacing: '0.15em', color: muted, display: 'block', marginBottom: 5, textTransform: 'uppercase' as const }
+
+  async function save() {
+    if (!amount) return
+    setSaving(true)
+    await onSave({ show_id: showId || null, venue: venue || null, agreed_amount: parseFloat(amount), currency, deal_type: dealType, notes: notes || null })
+    setSaving(false)
+  }
+
+  return (
+    <Modal onClose={onClose} title="Add Income" card={card} border={border} text={text} accent={accent}>
+      <div style={{ display: 'grid', gap: 14 }}>
+        <div><label style={labelStyle}>Link to Show</label>
+          <select style={inputStyle} value={showId} onChange={e => {
+            setShowId(e.target.value)
+            const show = shows.find((s: any) => s.id === e.target.value)
+            if (show) setVenue(show.venue)
+          }}>
+            <option value="">General / non-show income</option>
+            {shows.map((s: any) => <option key={s.id} value={s.id}>{s.date} - {s.venue}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+          <div><label style={labelStyle}>Amount</label><input style={inputStyle} type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" /></div>
+          <div><label style={labelStyle}>Currency</label>
+            <select style={{ ...inputStyle, width: 'auto' }} value={currency} onChange={e => setCurrency(e.target.value)}>
+              {['AUD','EUR','GBP','USD'].map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+        <div><label style={labelStyle}>Deal Type</label>
+          <select style={inputStyle} value={dealType} onChange={e => setDealType(e.target.value)}>
+            {[['guarantee','Guarantee'],['door','Door Deal'],['vs','Versus Deal'],['flat','Flat Fee'],['profit_share','Profit Share'],['other','Other']].map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+        <div><label style={labelStyle}>Notes (optional)</label><input style={inputStyle} value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. 60% of door after $500 break" /></div>
+        <button onClick={save} disabled={saving || !amount}
+          style={{ width: '100%', padding: 13, background: green, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, opacity: !amount ? 0.5 : 1 }}>
+          {saving ? 'SAVING...' : 'ADD INCOME'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+function MerchEstimator({ card, border, text, muted, accent, green, red, bg, darkMode }: any) {
+  const [capacity, setCapacity] = useState('200')
+  const [attendance, setAttendance] = useState('75')
+  const [conversionRate, setConversionRate] = useState('15')
+  const [avgSpend, setAvgSpend] = useState('35')
+  const [shows, setShows] = useState('15')
+  const [costPercent, setCostPercent] = useState('30')
+
+  const attendees = Math.round(parseFloat(capacity) * parseFloat(attendance) / 100) || 0
+  const buyersPerShow = Math.round(attendees * parseFloat(conversionRate) / 100) || 0
+  const revenuePerShow = buyersPerShow * (parseFloat(avgSpend) || 0)
+  const totalRevenue = revenuePerShow * (parseFloat(shows) || 0)
+  const totalCost = totalRevenue * (parseFloat(costPercent) / 100)
+  const totalProfit = totalRevenue - totalCost
+
+  const inputStyle = { width: '100%', padding: '8px 10px', border: `1px solid ${border}`, borderRadius: 6, background: bg, color: text, fontSize: 14, fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box' as const, textAlign: 'center' as const }
+
+  function Row({ label, value, sublabel }: { label: string, value: string, sublabel?: string }) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: `1px solid ${border}` }}>
+        <div>
+          <div style={{ fontSize: 13, color: text }}>{label}</div>
+          {sublabel && <div style={{ fontSize: 11, color: muted }}>{sublabel}</div>}
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: green }}>{value}</div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
+        <div style={{ background: '#1A1714', padding: '12px 20px' }}>
+          <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: '#F5F0E8' }}>MERCH ESTIMATOR</span>
+        </div>
+        <div style={{ padding: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+            {[
+              { label: 'Avg capacity', value: capacity, set: setCapacity, suffix: 'people' },
+              { label: 'Avg attendance', value: attendance, set: setAttendance, suffix: '%' },
+              { label: 'Conversion rate', value: conversionRate, set: setConversionRate, suffix: '% buy' },
+              { label: 'Avg spend per buyer', value: avgSpend, set: setAvgSpend, suffix: 'AUD' },
+              { label: 'Number of shows', value: shows, set: setShows, suffix: 'shows' },
+              { label: 'Cost of goods', value: costPercent, set: setCostPercent, suffix: '% of rev' },
+            ].map(({ label, value, set, suffix }) => (
+              <div key={label}>
+                <div style={{ fontSize: 10, fontFamily: 'monospace', letterSpacing: 1, color: muted, marginBottom: 4 }}>{label.toUpperCase()}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input type="number" value={value} onChange={e => set(e.target.value)} style={inputStyle} />
+                  <span style={{ fontSize: 11, color: muted, whiteSpace: 'nowrap' }}>{suffix}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background: darkMode ? '#1a1a1a' : '#F9F6F2', borderRadius: 10, padding: '4px 16px' }}>
+            <Row label="Buyers per show" value={`${buyersPerShow} people`} sublabel={`${attendees} attendees × ${conversionRate}% conversion`} />
+            <Row label="Revenue per show" value={`AUD ${revenuePerShow.toLocaleString()}`} sublabel={`${buyersPerShow} × AUD ${avgSpend}`} />
+            <Row label="Tour total revenue" value={`AUD ${totalRevenue.toLocaleString()}`} sublabel={`${shows} shows`} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: `1px solid ${border}` }}>
+              <div>
+                <div style={{ fontSize: 13, color: text }}>Cost of goods</div>
+                <div style={{ fontSize: 11, color: muted }}>{costPercent}% of revenue</div>
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: red }}>- AUD {Math.round(totalCost).toLocaleString()}</div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0' }}>
+              <div style={{ fontFamily: 'monospace', fontSize: 11, letterSpacing: 2 }}>NET MERCH PROFIT</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: totalProfit >= 0 ? green : red }}>AUD {Math.round(totalProfit).toLocaleString()}</div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12, fontSize: 12, color: muted, lineHeight: 1.6 }}>
+            Typical conversion rates: 10-20% for indie acts. Avg spend varies by merch mix - T-shirts push higher, vinyl higher still. Adjust cost of goods based on your supplier margins.
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ExpenseRow({ expense: e, border, muted, text, red, green, accent, darkMode, card, bg, onUpdate, onDelete, isLast }: any) {
   const [editing, setEditing] = useState(false)
   const [desc, setDesc] = useState(e.description || '')
@@ -183,8 +387,10 @@ export default function BudgetPage() {
   const [shows, setShows] = useState<any[]>([])
   const [settlements, setSettlements] = useState<any[]>([])
   const [expenses, setExpenses] = useState<any[]>([])
-  const [view, setView] = useState<'overview' | 'shows' | 'expenses' | 'import'>('overview')
-  const [scenario, setScenario] = useState(100) // 0, 25, 50, 75, 100
+  const [view, setView] = useState<'overview' | 'shows' | 'expenses' | 'merch' | 'import'>('overview')
+  const [scenario, setScenario] = useState(100)
+  const [showAddExpense, setShowAddExpense] = useState(false)
+  const [showAddIncome, setShowAddIncome] = useState(false)
   const [darkMode, setDarkMode] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [processing, setProcessing] = useState(false)
@@ -553,8 +759,8 @@ export default function BudgetPage() {
             style={{ padding: '8px 12px', border: `1px solid ${border}`, borderRadius: 8, background: card, color: text, fontSize: 14, fontFamily: 'Georgia, serif', outline: 'none', minWidth: 200 }}>
             {tours.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
-          <div style={{ display: 'flex', gap: 4, flex: 1 }}>
-            {(['overview', 'shows', 'expenses', 'import'] as const).map(v => (
+          <div style={{ display: 'flex', gap: 4, flex: 1, flexWrap: 'wrap' }}>
+            {(['overview', 'shows', 'expenses', 'merch', 'import'] as const).map(v => (
               <button key={v} onClick={() => setView(v)}
                 style={{ padding: '8px 14px', background: view === v ? accent : card, color: view === v ? '#fff' : muted, border: `1px solid ${view === v ? accent : border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' }}>
                 {v === 'import' ? '+ Import' : v}
@@ -714,9 +920,18 @@ export default function BudgetPage() {
                   </div>
                 )}
 
-                <div style={{ textAlign: 'right' }}>
-                  <button onClick={() => setView('import')} style={{ padding: '8px 16px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontSize: 12 }}>
-                    + Update budget data
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button onClick={() => setShowAddIncome(true)}
+                    style={{ padding: '8px 16px', background: green, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2 }}>
+                    + INCOME
+                  </button>
+                  <button onClick={() => setShowAddExpense(true)}
+                    style={{ padding: '8px 16px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2 }}>
+                    + EXPENSE
+                  </button>
+                  <button onClick={() => setView('import')}
+                    style={{ padding: '8px 16px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontSize: 12 }}>
+                    Update budget data
                   </button>
                 </div>
               </>
@@ -804,6 +1019,12 @@ export default function BudgetPage() {
         {/* ── EXPENSES VIEW ── */}
         {view === 'expenses' && (
           <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowAddExpense(true)}
+                style={{ padding: '8px 16px', background: accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2 }}>
+                + ADD EXPENSE
+              </button>
+            </div>
             {expenses.length === 0 ? (
               <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: 32, textAlign: 'center', color: muted }}>No expenses imported yet</div>
             ) : (
@@ -871,6 +1092,43 @@ export default function BudgetPage() {
               </>
             )}
           </div>
+        )}
+
+        {/* ── MERCH VIEW ── */}
+        {view === 'merch' && <MerchEstimator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} />}
+
+        {/* ── MODALS ── */}
+        {showAddExpense && (
+          <AddExpenseModal
+            shows={shows} border={border} text={text} muted={muted} accent={accent} bg={bg} card={card}
+            onClose={() => setShowAddExpense(false)}
+            onSave={async (data: any) => {
+              const { data: { user } } = await supabase.auth.getUser()
+              const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', user!.id).single()
+              await supabase.from('expenses').insert({ ...data, tour_id: selectedTourId, org_id: profile?.org_id, status: 'pending' })
+              await loadBudget(selectedTourId)
+              setShowAddExpense(false)
+            }}
+          />
+        )}
+
+        {showAddIncome && (
+          <AddIncomeModal
+            shows={shows} border={border} text={text} muted={muted} accent={accent} bg={bg} card={card} green={green}
+            onClose={() => setShowAddIncome(false)}
+            onSave={async (data: any) => {
+              const { data: { user } } = await supabase.auth.getUser()
+              const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', user!.id).single()
+              const existing = data.show_id ? await supabase.from('settlements').select('id').eq('show_id', data.show_id).single() : { data: null }
+              if (existing.data) {
+                await supabase.from('settlements').update({ agreed_amount: data.agreed_amount, currency: data.currency, deal_type: data.deal_type, notes: data.notes }).eq('id', existing.data.id)
+              } else {
+                await supabase.from('settlements').insert({ ...data, tour_id: selectedTourId, org_id: profile?.org_id, status: 'pending' })
+              }
+              await loadBudget(selectedTourId)
+              setShowAddIncome(false)
+            }}
+          />
         )}
 
         {/* ── IMPORT VIEW ── */}
