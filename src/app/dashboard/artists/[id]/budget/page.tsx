@@ -221,31 +221,45 @@ export default function BudgetPage() {
   async function handleImport() {
     if (!importResult || !selectedTourId) return
     setImporting(true)
+    setError('')
     try {
       const { data: { user } } = await supabase.auth.getUser()
       const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', user!.id).single()
       const org_id = profile?.org_id
+
       if (importResult.settlements?.length) {
         for (const s of importResult.settlements) {
           if (!s.show_id) continue
           const existing = await supabase.from('settlements').select('id').eq('show_id', s.show_id).single()
           if (existing.data) {
-            await supabase.from('settlements').update({ deal_type: s.deal_type, agreed_amount: s.agreed_amount, currency: s.currency, notes: s.notes }).eq('id', existing.data.id)
+            const { error } = await supabase.from('settlements').update({ deal_type: s.deal_type, agreed_amount: s.agreed_amount, currency: s.currency, notes: s.notes }).eq('id', existing.data.id)
+            if (error) throw new Error(`Settlement update failed: ${error.message}`)
           } else {
-            await supabase.from('settlements').insert({ ...s, tour_id: selectedTourId, org_id, status: 'pending' })
+            const { error } = await supabase.from('settlements').insert({ ...s, tour_id: selectedTourId, org_id, status: 'pending' })
+            if (error) throw new Error(`Settlement insert failed: ${error.message}`)
           }
         }
       }
-      await supabase.from('expenses').delete().eq('tour_id', selectedTourId)
+
+      const { error: delError } = await supabase.from('expenses').delete().eq('tour_id', selectedTourId)
+      if (delError) throw new Error(`Expenses delete failed: ${delError.message}`)
+
       if (importResult.expenses?.length) {
-        await supabase.from('expenses').insert(importResult.expenses.map((e: any) => ({ ...e, tour_id: selectedTourId, org_id })))
+        const { error: insError } = await supabase.from('expenses').insert(
+          importResult.expenses.map((e: any) => ({ ...e, tour_id: selectedTourId, org_id }))
+        )
+        if (insError) throw new Error(`Expenses insert failed: ${insError.message}`)
       }
+
       setImported(true)
       setImportResult(null)
       setPasteText('')
       await loadBudget(selectedTourId)
-      setTimeout(() => setView('overview'), 1000)
-    } catch (err: any) { setError(err.message) }
+      setView('overview')
+    } catch (err: any) {
+      setError(err.message)
+      console.error('Budget import error:', err)
+    }
     setImporting(false)
   }
 
@@ -311,6 +325,12 @@ export default function BudgetPage() {
         {/* ── OVERVIEW ── */}
         {view === 'overview' && (
           <div style={{ display: 'grid', gap: 16 }}>
+            {imported && (
+              <div style={{ background: '#f0fff4', border: '1px solid #9be9c0', borderRadius: 10, padding: '12px 20px', color: green, fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>✓ Budget imported successfully</span>
+                <button onClick={() => setImported(false)} style={{ background: 'none', border: 'none', color: green, cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
+              </div>
+            )}
             {!hasBudget ? (
               <div style={{ background: card, borderRadius: 16, border: `1px solid ${border}`, padding: '48px 24px', textAlign: 'center' }}>
                 <div style={{ fontSize: 36, marginBottom: 12 }}>💰</div>
