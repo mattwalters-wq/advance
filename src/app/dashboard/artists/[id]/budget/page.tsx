@@ -232,10 +232,24 @@ export default function BudgetPage() {
           if (!s.show_id) continue
           const existing = await supabase.from('settlements').select('id').eq('show_id', s.show_id).single()
           if (existing.data) {
-            const { error } = await supabase.from('settlements').update({ deal_type: s.deal_type, agreed_amount: s.agreed_amount, currency: s.currency, notes: s.notes }).eq('id', existing.data.id)
+            const { error } = await supabase.from('settlements').update({
+              deal_type: s.deal_type,
+              agreed_amount: parseFloat(s.agreed_amount) || 0,
+              currency: s.currency || 'AUD',
+              notes: s.notes || null,
+            }).eq('id', existing.data.id)
             if (error) throw new Error(`Settlement update failed: ${error.message}`)
           } else {
-            const { error } = await supabase.from('settlements').insert({ ...s, tour_id: selectedTourId, org_id, status: 'pending' })
+            const { error } = await supabase.from('settlements').insert({
+              tour_id: selectedTourId,
+              org_id,
+              show_id: s.show_id,
+              deal_type: s.deal_type || 'guarantee',
+              agreed_amount: parseFloat(s.agreed_amount) || 0,
+              currency: s.currency || 'AUD',
+              notes: s.notes || null,
+              status: 'pending',
+            })
             if (error) throw new Error(`Settlement insert failed: ${error.message}`)
           }
         }
@@ -246,7 +260,16 @@ export default function BudgetPage() {
 
       if (importResult.expenses?.length) {
         const { error: insError } = await supabase.from('expenses').insert(
-          importResult.expenses.map((e: any) => ({ ...e, tour_id: selectedTourId, org_id }))
+          importResult.expenses.map((e: any) => ({
+            tour_id: selectedTourId,
+            org_id,
+            show_id: e.show_id || null,
+            category: e.category || 'other',
+            description: e.description || '',
+            amount: parseFloat(e.amount) || 0,
+            currency: e.currency || 'AUD',
+            notes: e.notes || null,
+          }))
         )
         if (insError) throw new Error(`Expenses insert failed: ${insError.message}`)
       }
@@ -622,6 +645,11 @@ export default function BudgetPage() {
                     {importing ? 'IMPORTING...' : '✦ IMPORT TO TOUR'}
                   </button>
                 </div>
+                {error && (
+                  <div style={{ background: '#FEE', border: '1px solid #FCC', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#C00', fontFamily: 'monospace' }}>
+                    {error}
+                  </div>
+                )}
               </div>
             )}
           </div>
