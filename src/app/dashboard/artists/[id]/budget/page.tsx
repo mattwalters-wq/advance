@@ -391,9 +391,10 @@ export default function BudgetPage() {
   const [scenario, setScenario] = useState(100)
   const [showAddExpense, setShowAddExpense] = useState(false)
   const [showAddIncome, setShowAddIncome] = useState(false)
-  const [fxRates, setFxRates] = useState<Record<string, number>>({}) // rates TO AUD (e.g. EUR: 1.68 means 1 EUR = 1.68 AUD)
+  const [fxRates, setFxRates] = useState<Record<string, number>>({})
   const [fxLoading, setFxLoading] = useState(false)
   const [fxUpdated, setFxUpdated] = useState('')
+  const [viewCurrency, setViewCurrency] = useState<'native' | 'AUD'>('native')
   const [darkMode, setDarkMode] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [processing, setProcessing] = useState(false)
@@ -435,6 +436,30 @@ export default function BudgetPage() {
     if (currency === 'AUD' || !currency) return amount
     const rate = fxRates[currency]
     return rate ? amount * rate : amount
+  }
+
+  // Format amount respecting the viewCurrency toggle
+  function fmtDisplay(amount: number, currency: string): string {
+    if (viewCurrency === 'AUD' && Object.keys(fxRates).length > 0) {
+      return `AUD ${Math.round(toAUD(amount, currency)).toLocaleString()}`
+    }
+    return fmtAmount(amount, currency)
+  }
+
+  // Convert a collection of mixed-currency amounts to display value
+  function totalDisplay(items: { amount: number, currency: string }[]): string {
+    if (viewCurrency === 'AUD' && Object.keys(fxRates).length > 0) {
+      const total = items.reduce((s, x) => s + toAUD(x.amount, x.currency), 0)
+      return `AUD ${Math.round(total).toLocaleString()}`
+    }
+    // Native: group by currency and show primary
+    const byCurrency: Record<string, number> = {}
+    items.forEach(({ amount, currency }) => {
+      byCurrency[currency || 'AUD'] = (byCurrency[currency || 'AUD'] || 0) + amount
+    })
+    const entries = Object.entries(byCurrency)
+    if (entries.length === 1) return `${entries[0][0]} ${Math.round(entries[0][1]).toLocaleString()}`
+    return entries.map(([c, a]) => `${c} ${Math.round(a).toLocaleString()}`).join(' + ')
   }
 
   async function loadArtist() {
@@ -840,7 +865,9 @@ export default function BudgetPage() {
                       <div style={{ fontFamily: 'monospace', fontSize: 10, color: accent }}>
                         {scenario === 0 ? 'Worst case' : scenario === 100 ? 'Best case' : `${scenario}% capacity`}
                         {' · '}
-                        <span style={{ color: green }}>{hasMixedCurrencies ? `AUD ${Math.round(totalFeesAUD).toLocaleString()}` : fmtAmount(totalFees, primaryCurrency)}</span>
+                        <span style={{ color: green }}>
+                          {totalDisplay(settlements.map(s => ({ amount: calcIncome(s, scenario), currency: s.currency || 'AUD' })))}
+                        </span>
                         {' income'}
                       </div>
                     </div>
@@ -876,30 +903,36 @@ export default function BudgetPage() {
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
                         <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>
-                          {hasMixedCurrencies ? `AUD ${Math.round(totalFeesWorstAUD).toLocaleString()}` : fmtAmount(totalFeesWorst, primaryCurrency)} floor
+                          {totalDisplay(settlements.map(s => ({ amount: calcIncome(s, 0), currency: s.currency || 'AUD' })))} floor
                         </span>
                         <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>
-                          {hasMixedCurrencies ? `AUD ${Math.round(totalFeesBestAUD).toLocaleString()}` : fmtAmount(totalFeesBest, primaryCurrency)} ceiling
+                          {totalDisplay(settlements.map(s => ({ amount: calcIncome(s, 100), currency: s.currency || 'AUD' })))} ceiling
                         </span>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* FX Rate strip */}
+                {/* Currency toggle + FX rates */}
                 {hasMixedCurrencies && (
                   <div style={{ background: card, borderRadius: 10, border: `1px solid ${border}`, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                      {Object.entries(fxRates).filter(([c]) => c !== 'AUD').map(([currency, rate]) => (
-                        <span key={currency} style={{ fontFamily: 'monospace', fontSize: 10, color: text }}>
-                          1 {currency} = <strong>AUD {rate.toFixed(4)}</strong>
-                        </span>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {(['native', 'AUD'] as const).map(c => (
+                        <button key={c} onClick={() => setViewCurrency(c)}
+                          style={{ padding: '5px 14px', background: viewCurrency === c ? accent : 'transparent', color: viewCurrency === c ? '#fff' : muted, border: `1px solid ${viewCurrency === c ? accent : border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
+                          {c === 'native' ? 'EUR / GBP' : 'AUD'}
+                        </button>
                       ))}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {fxUpdated && <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>Updated {fxUpdated}</span>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      {Object.entries(fxRates).filter(([c]) => c !== 'AUD').map(([currency, rate]) => (
+                        <span key={currency} style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>
+                          1 {currency} = AUD {rate.toFixed(4)}
+                        </span>
+                      ))}
+                      {fxUpdated && <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>{fxUpdated}</span>}
                       <button onClick={fetchFx} disabled={fxLoading}
-                        style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, color: accent, background: 'none', border: `1px solid ${border}`, borderRadius: 4, padding: '3px 8px', cursor: 'pointer' }}>
+                        style={{ fontFamily: 'monospace', fontSize: 9, color: accent, background: 'none', border: `1px solid ${border}`, borderRadius: 4, padding: '3px 8px', cursor: 'pointer' }}>
                         {fxLoading ? '...' : '↻'}
                       </button>
                     </div>
@@ -909,15 +942,31 @@ export default function BudgetPage() {
                 {/* Summary cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                   {[
-                    { label: 'Total Income', value: fmtAmount(totalFees, primaryCurrency), audValue: hasMixedCurrencies ? `AUD ${Math.round(totalFeesAUD).toLocaleString()}` : null, color: green, sub: `${settlements.length} show${settlements.length !== 1 ? 's' : ''} · ${scenario}% capacity` },
-                    { label: 'Total Expenses', value: fmtAmount(totalExpenses, primaryCurrency), audValue: hasMixedCurrencies ? `AUD ${Math.round(totalExpensesAUD).toLocaleString()}` : null, color: red, sub: `${expenses.length} item${expenses.length !== 1 ? 's' : ''}` },
-                    { label: netPositionAUD >= 0 ? 'Net Profit' : 'Net Loss', value: hasMixedCurrencies ? `AUD ${Math.round(Math.abs(netPositionAUD)).toLocaleString()}` : fmtAmount(Math.abs(netPosition), primaryCurrency), audValue: null, color: netPositionAUD >= 0 ? green : red, sub: 'before tax & commission' },
+                    {
+                      label: 'Total Income',
+                      value: totalDisplay(settlements.map(s => ({ amount: calcIncome(s, scenario), currency: s.currency || 'AUD' }))),
+                      color: green,
+                      sub: `${settlements.length} show${settlements.length !== 1 ? 's' : ''} · ${scenario}% capacity`
+                    },
+                    {
+                      label: 'Total Expenses',
+                      value: totalDisplay(expenses.map((e: any) => ({ amount: parseFloat(e.amount) || 0, currency: e.currency || 'AUD' }))),
+                      color: red,
+                      sub: `${expenses.length} item${expenses.length !== 1 ? 's' : ''}`
+                    },
+                    {
+                      label: netPositionAUD >= 0 ? 'Net Profit' : 'Net Loss',
+                      value: viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
+                        ? `AUD ${Math.round(Math.abs(netPositionAUD)).toLocaleString()}`
+                        : fmtAmount(Math.abs(netPosition), primaryCurrency),
+                      color: netPositionAUD >= 0 ? green : red,
+                      sub: 'before tax & commission'
+                    },
                   ].map((c, i) => (
-                    <div key={i} style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: '20px 20px' }}>
+                    <div key={i} style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: '20px' }}>
                       <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 8, textTransform: 'uppercase' }}>{c.label}</div>
                       <div style={{ fontSize: 22, fontWeight: 700, color: c.color, marginBottom: 4 }}>{c.value}</div>
-                      {c.audValue && <div style={{ fontSize: 12, color: muted, fontFamily: 'monospace' }}>≈ {c.audValue}</div>}
-                      <div style={{ fontSize: 11, color: muted, marginTop: c.audValue ? 2 : 0 }}>{c.sub}</div>
+                      <div style={{ fontSize: 11, color: muted }}>{c.sub}</div>
                     </div>
                   ))}
                 </div>
@@ -1112,8 +1161,11 @@ export default function BudgetPage() {
                           )}
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontWeight: 700, color: red, fontSize: 14 }}>{fmtAmount(catTotal, items[0]?.currency || primaryCurrency)}</div>
-                          {hasMixedCurrencies && items[0]?.currency !== 'AUD' && <div style={{ fontSize: 11, color: muted }}>≈ AUD {Math.round(catTotalAUD).toLocaleString()}</div>}
+                          <div style={{ fontWeight: 700, color: red, fontSize: 14 }}>
+                            {viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
+                              ? `AUD ${Math.round(catTotalAUD).toLocaleString()}`
+                              : fmtAmount(catTotal, items[0]?.currency || primaryCurrency)}
+                          </div>
                           {catPaid > 0 && <div style={{ fontSize: 11, color: green }}>{fmtAmount(catPaid, items[0]?.currency || primaryCurrency)} paid</div>}
                         </div>
                       </div>
@@ -1138,9 +1190,8 @@ export default function BudgetPage() {
                 <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: '16px 20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                     <span style={{ fontFamily: 'monospace', fontSize: 11, letterSpacing: 2 }}>TOTAL</span>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 20, fontWeight: 700, color: red }}>{fmtAmount(totalExpenses, primaryCurrency)}</div>
-                      {hasMixedCurrencies && <div style={{ fontSize: 12, color: muted, fontFamily: 'monospace' }}>≈ AUD {Math.round(totalExpensesAUD).toLocaleString()}</div>}
+                    <div style={{ fontSize: 20, fontWeight: 700, color: red }}>
+                      {totalDisplay(expenses.map((e: any) => ({ amount: parseFloat(e.amount) || 0, currency: e.currency || 'AUD' })))}
                     </div>
                   </div>
                   {expenses.some((e: any) => e.status === 'paid') && (
