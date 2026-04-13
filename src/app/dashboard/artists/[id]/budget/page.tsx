@@ -174,7 +174,7 @@ export default function BudgetImportPage() {
         body.filename = file.name
       }
 
-      setProcessingMsg('Extracting with AI...')
+      setProcessingMsg('Processing...')
       const response = await fetch('/api/import-budget', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

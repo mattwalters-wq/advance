@@ -29,12 +29,12 @@ export default function PrivacyPage() {
             body: 'We use your data to run the product and make it work. We do not sell your data. We do not use it for advertising. We do not share it with third parties except for the services listed below that are needed to run the product.',
           },
           {
-            title: '4. Document and AI processing',
-            body: 'Documents and text you submit for import are sent to Anthropic\'s Claude to extract tour information. This processing happens in good faith. We do not use your content to train any AI models. Submitted content is not retained beyond what is needed to process your request.',
+            title: '4. Document processing',
+            body: 'Documents and text you submit for import are sent to Anthropic\'s Claude to extract tour information. This processing happens in good faith. We do not use your content for any purpose beyond processing your request. Submitted content is not retained beyond what is needed to process your request.',
           },
           {
             title: '5. Third-party services',
-            body: 'Advance uses Supabase to store your data and Anthropic to process documents. These services have their own privacy policies. We have chosen them carefully and use them only for what is needed to run the product. If we add Stripe for payments in future, that will be noted here.',
+            body: 'Advance uses Supabase to store your data and third-party services to process documents. These services have their own privacy policies. We have chosen them carefully and use them only for what is needed to run the product. If we add Stripe for payments in future, that will be noted here.',
           },
           {
             title: '6. Data security',

@@ -97,7 +97,7 @@ export default function DashboardPage() {
           {/* Logo */}
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
             <span style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 22, fontStyle: 'italic', color: '#F4EFE6', letterSpacing: '-0.02em' }}>Advance</span>
-            <span style={{ fontFamily: 'monospace', fontSize: 8, letterSpacing: '0.25em', color: '#C4622D' }}>AI ✦</span>
+            <span style={{ fontFamily: 'monospace', fontSize: 8, letterSpacing: '0.25em', color: '#C4622D' }}>✦</span>
           </div>
 
           {/* Nav */}

@@ -247,7 +247,7 @@ export default function ImportPage() {
   function statusLabel(job: FileJob) {
     if (job.status === 'queued') return 'Queued'
     if (job.status === 'reading') return 'Reading...'
-    if (job.status === 'parsing') return 'Parsing with AI...'
+    if (job.status === 'parsing') return 'Processing...'
     if (job.status === 'done') {
       const r = job.result || {}
       const parts = []
@@ -275,7 +275,7 @@ export default function ImportPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <button onClick={() => router.push('/dashboard')} style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#8A8580', background: 'transparent', border: '1px solid #2A2520', borderRadius: 4, padding: '6px 12px', cursor: 'pointer' }}>← ROSTER</button>
           <span style={{ fontSize: 20, fontStyle: 'italic', color: '#F5F0E8' }}>Import Documents</span>
-          <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: accent }}>AI ✦</span>
+          <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: accent }}>✦</span>
         </div>
         <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'none', border: '1px solid #333', borderRadius: 6, padding: '6px 12px', color: '#F5F0E8', cursor: 'pointer', fontSize: 12 }}>
           {darkMode ? '☀️ Light' : '🌙 Dark'}

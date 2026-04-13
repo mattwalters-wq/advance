@@ -88,7 +88,7 @@ export default function PastePage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <button onClick={() => router.push('/dashboard/import')} style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#8A8580', background: 'transparent', border: '1px solid #2A2520', borderRadius: 4, padding: '6px 12px', cursor: 'pointer' }}>← IMPORT</button>
           <span style={{ fontSize: 20, fontStyle: 'italic', color: '#F5F0E8' }}>Paste Text</span>
-          <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: accent }}>AI ✦</span>
+          <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: accent }}>✦</span>
         </div>
         <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'none', border: '1px solid #333', borderRadius: 6, padding: '6px 12px', color: '#F5F0E8', cursor: 'pointer', fontSize: 12 }}>
           {darkMode ? '☀️ Light' : '🌙 Dark'}
@@ -116,7 +116,7 @@ export default function PastePage() {
 
             <button onClick={handleParse} disabled={parsing || !text.trim()}
               style={{ width: '100%', padding: 14, background: parsing || !text.trim() ? muted : '#1A1714', color: '#F5F0E8', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: parsing || !text.trim() ? 'not-allowed' : 'pointer' }}>
-              {parsing ? '✦ READING...' : '✦ EXTRACT WITH AI'}
+              {parsing ? '✦ READING...' : '✦ EXTRACT'}
             </button>
           </>
         )}

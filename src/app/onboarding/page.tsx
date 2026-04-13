@@ -47,7 +47,7 @@ export default function OnboardingPage() {
       {/* Logo */}
       <div style={{ marginBottom: 48, textAlign: 'center' }}>
         <div style={{ fontSize: 28, fontStyle: 'italic', marginBottom: 4 }}>Advance</div>
-        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: accent }}>AI ✦</div>
+        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: accent }}>✦</div>
       </div>
 
       <div style={{ width: '100%', maxWidth: 480 }}>
@@ -81,7 +81,7 @@ export default function OnboardingPage() {
             <div style={{ display: 'grid', gap: 12, marginBottom: 40, textAlign: 'left' }}>
               {[
                 { num: '01', title: 'Add your artists', desc: 'Start with your roster — each artist gets their own space for tours, shows, and contacts.' },
-                { num: '02', title: 'Import a tour document', desc: 'Drop in any PDF, email, or spreadsheet. AI pulls out the shows, flights and hotels automatically.' },
+                { num: '02', title: 'Import a tour document', desc: 'Drop in any PDF, email, or spreadsheet. Advance reads and builds the tour automatically.' },
                 { num: '03', title: 'Share with your team', desc: 'Invite co-managers or send a read-only crew link to the band — no login needed.' },
               ].map(item => (
                 <div key={item.num} style={{ background: '#2A2520', borderRadius: 10, padding: '18px 20px', display: 'flex', gap: 16, alignItems: 'flex-start' }}>

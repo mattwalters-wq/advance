@@ -48,12 +48,12 @@ export default function SignupPage() {
 
       <div style={{ marginBottom: 48, textAlign: 'center', cursor: 'pointer' }} onClick={() => router.push('/')}>
         <div style={{ fontSize: 28, fontStyle: 'italic', color: '#F5F0E8', marginBottom: 4 }}>Advance</div>
-        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: '#C4622D' }}>AI ✦</div>
+        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: '#C4622D' }}>✦</div>
       </div>
 
       <div style={{ width: '100%', maxWidth: 380 }}>
         <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: '#8A8580', textAlign: 'center', marginBottom: 8 }}>CREATE ACCOUNT</div>
-        <div style={{ textAlign: 'center', fontSize: 14, color: '#8A8580', marginBottom: 28 }}>Tour management, powered by AI.</div>
+        <div style={{ textAlign: 'center', fontSize: 14, color: '#8A8580', marginBottom: 28 }}>Tour management, built for the road.</div>
 
         {error && (
           <div style={{ background: 'rgba(200,0,0,0.15)', border: '1px solid rgba(200,0,0,0.3)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#ff8080', fontFamily: 'monospace' }}>

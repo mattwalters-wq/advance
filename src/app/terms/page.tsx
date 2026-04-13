@@ -33,7 +33,7 @@ export default function TermsPage() {
           },
           {
             title: '4. Document processing',
-            body: 'When you upload or paste documents, they are sent to an AI service to extract tour information. We do not use your documents to train any models. Processing is done in good faith but the results may not always be accurate. Always review what has been extracted before relying on it.',
+            body: 'When you upload or paste documents, they are processed to extract tour information. We do not use your documents for any purpose beyond processing your request. Processing is done in good faith but the results may not always be accurate. Always review what has been extracted before relying on it.',
           },
           {
             title: '5. Fair use',

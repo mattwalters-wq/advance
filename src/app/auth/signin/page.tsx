@@ -39,7 +39,7 @@ export default function SigninPage() {
       {/* Logo */}
       <div style={{ marginBottom: 48, textAlign: 'center', cursor: 'pointer' }} onClick={() => router.push('/')}>
         <div style={{ fontSize: 28, fontStyle: 'italic', color: '#F5F0E8', marginBottom: 4 }}>Advance</div>
-        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: '#C4622D' }}>AI ✦</div>
+        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: '#C4622D' }}>✦</div>
       </div>
 
       <div style={{ width: '100%', maxWidth: 380 }}>

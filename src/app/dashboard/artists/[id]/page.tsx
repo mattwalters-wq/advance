@@ -812,7 +812,7 @@ export default function ArtistPage() {
                       <>
                         <div style={{ fontSize: 24, marginBottom: 10 }}>✦</div>
                         <div style={{ fontSize: 14, color: text, marginBottom: 4 }}>Reading travel details...</div>
-                        <div style={{ fontSize: 12, color: muted }}>AI is extracting flight info</div>
+                        <div style={{ fontSize: 12, color: muted }}>Reading flight info...</div>
                       </>
                     ) : travelScanResult !== null && travelScanResult.length === 0 ? (
                       <>
@@ -851,7 +851,7 @@ export default function ArtistPage() {
                   <>
                     {travelScanResult && travelScanResult.length > 0 && (
                       <div style={{ padding: '8px 12px', background: darkMode ? '#0a2a1a' : '#F0FFF4', border: '1px solid #2d7a4f', borderRadius: 8, marginBottom: 14, fontSize: 12, color: '#2d7a4f', fontFamily: 'monospace' }}>
-                        ✓ AI pre-filled from your file — check and save
+                        ✓ Pre-filled from your file — check and save
                       </div>
                     )}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
@@ -1782,7 +1782,7 @@ export default function ArtistPage() {
                       <textarea
                         value={pasteText}
                         onChange={e => setPasteText(e.target.value)}
-                        placeholder="Paste email threads, booking confirmations, WhatsApp messages, promoter emails. AI will extract shows, flights, hotels and contacts."
+                        placeholder="Paste email threads, booking confirmations, WhatsApp messages, promoter emails. Advance will extract shows, flights, hotels and contacts."
                         style={{ width: '100%', padding: '12px', border: `1px solid ${border}`, borderRadius: 8, background: darkMode ? '#1a1a1a' : '#F9F6F1', color: text, fontSize: 13, fontFamily: '"Georgia", serif', outline: 'none', resize: 'vertical' as const, minHeight: 200, lineHeight: 1.6, boxSizing: 'border-box' as const }}
                       />
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
@@ -1841,7 +1841,7 @@ export default function ArtistPage() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{job.name}</div>
                           {job.status === 'queued' && <div style={{ fontSize: 11, color: muted, fontFamily: 'monospace', letterSpacing: 1, marginTop: 2 }}>Waiting...</div>}
-                          {job.status === 'parsing' && <div style={{ fontSize: 11, color: accent, fontFamily: 'monospace', letterSpacing: 1, marginTop: 2 }}>Reading with AI...</div>}
+                          {job.status === 'parsing' && <div style={{ fontSize: 11, color: accent, fontFamily: 'monospace', letterSpacing: 1, marginTop: 2 }}>Processing...</div>}
                           {job.status === 'done' && job.result && (
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginTop: 6 }}>
                               {[['shows','🎵'],['travel','✈️'],['accommodation','🏨'],['contacts','👤']].map(([key, icon]) => {
@@ -1873,10 +1873,10 @@ export default function ArtistPage() {
                           }
                         }}
                           style={{ width: '100%', padding: '12px', background: '#1A1714', color: '#F5F0E8', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 3 }}>
-                          ✦ PROCESS {importJobs.filter(j => j.status === 'queued').length} DOCUMENT{importJobs.filter(j => j.status === 'queued').length !== 1 ? 'S' : ''} WITH AI
+                          ✦ PROCESS {importJobs.filter(j => j.status === 'queued').length} DOCUMENT{importJobs.filter(j => j.status === 'queued').length !== 1 ? 'S' : ''}
                         </button>
                         <div style={{ textAlign: 'center', marginTop: 8, fontSize: 11, color: muted }}>
-                          AI will merge with existing tour data — no duplicates
+                          Merges with existing tour data — no duplicates
                         </div>
                       </div>
                     )}
@@ -2079,7 +2079,7 @@ function TourStarter({ artistId, darkMode, onCreated }: { artistId: string, dark
         </div>
         {error && <div style={{ marginTop: 8, fontSize: 12, color: '#C00', fontFamily: 'monospace' }}>{error}</div>}
         <div style={{ marginTop: 10, fontSize: 12, color: muted, lineHeight: 1.6 }}>
-          Once created, drop in any docs your agent sends — itinerary, contracts, hotel bookings. AI builds the tour as you go.
+          Once created, drop in any docs your agent sends — itinerary, contracts, hotel bookings. Advance builds the tour as you go.
         </div>
       </div>
 

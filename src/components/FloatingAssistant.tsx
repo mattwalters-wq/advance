@@ -154,7 +154,7 @@ export default function FloatingAssistant() {
             color: '#fff', fontSize: 20, boxShadow: '0 4px 20px rgba(196,98,45,0.45)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
-          title="Open AI Assistant"
+          title="Open Assistant"
         >
           ✦
         </button>
