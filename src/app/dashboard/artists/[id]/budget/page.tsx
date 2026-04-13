@@ -446,20 +446,23 @@ export default function BudgetPage() {
     return fmtAmount(amount, currency)
   }
 
-  // Convert a collection of mixed-currency amounts to display value
+  // Convert a collection of mixed-currency amounts to a single display value
   function totalDisplay(items: { amount: number, currency: string }[]): string {
     if (viewCurrency === 'AUD' && Object.keys(fxRates).length > 0) {
       const total = items.reduce((s, x) => s + toAUD(x.amount, x.currency), 0)
       return `AUD ${Math.round(total).toLocaleString()}`
     }
-    // Native: group by currency and show primary
+    // Native: just sum everything (mixed currencies shown as-is in primary)
+    // Find dominant currency by total value
     const byCurrency: Record<string, number> = {}
     items.forEach(({ amount, currency }) => {
-      byCurrency[currency || 'AUD'] = (byCurrency[currency || 'AUD'] || 0) + amount
+      const c = currency || 'AUD'
+      byCurrency[c] = (byCurrency[c] || 0) + amount
     })
-    const entries = Object.entries(byCurrency)
-    if (entries.length === 1) return `${entries[0][0]} ${Math.round(entries[0][1]).toLocaleString()}`
-    return entries.map(([c, a]) => `${c} ${Math.round(a).toLocaleString()}`).join(' + ')
+    // Pick the currency with the highest total
+    const dominant = Object.entries(byCurrency).sort((a, b) => b[1] - a[1])[0]
+    if (!dominant) return 'AUD 0'
+    return `${dominant[0]} ${Math.round(dominant[1]).toLocaleString()}`
   }
 
   async function loadArtist() {
@@ -866,7 +869,9 @@ export default function BudgetPage() {
                         {scenario === 0 ? 'Worst case' : scenario === 100 ? 'Best case' : `${scenario}% capacity`}
                         {' · '}
                         <span style={{ color: green }}>
-                          {totalDisplay(settlements.map(s => ({ amount: calcIncome(s, scenario), currency: s.currency || 'AUD' })))}
+                          {viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
+                            ? `AUD ${Math.round(totalFeesAUD).toLocaleString()}`
+                            : fmtAmount(totalFees, primaryCurrency)}
                         </span>
                         {' income'}
                       </div>
@@ -903,10 +908,14 @@ export default function BudgetPage() {
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
                         <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>
-                          {totalDisplay(settlements.map(s => ({ amount: calcIncome(s, 0), currency: s.currency || 'AUD' })))} floor
+                          {viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
+                            ? `AUD ${Math.round(totalFeesWorstAUD).toLocaleString()}`
+                            : fmtAmount(totalFeesWorst, primaryCurrency)} floor
                         </span>
                         <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>
-                          {totalDisplay(settlements.map(s => ({ amount: calcIncome(s, 100), currency: s.currency || 'AUD' })))} ceiling
+                          {viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
+                            ? `AUD ${Math.round(totalFeesBestAUD).toLocaleString()}`
+                            : fmtAmount(totalFeesBest, primaryCurrency)} ceiling
                         </span>
                       </div>
                     </div>
@@ -944,19 +953,23 @@ export default function BudgetPage() {
                   {[
                     {
                       label: 'Total Income',
-                      value: totalDisplay(settlements.map(s => ({ amount: calcIncome(s, scenario), currency: s.currency || 'AUD' }))),
+                      value: viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
+                        ? `AUD ${Math.round(totalFeesAUD).toLocaleString()}`
+                        : fmtAmount(totalFees, primaryCurrency),
                       color: green,
                       sub: `${settlements.length} show${settlements.length !== 1 ? 's' : ''} · ${scenario}% capacity`
                     },
                     {
                       label: 'Total Expenses',
-                      value: totalDisplay(expenses.map((e: any) => ({ amount: parseFloat(e.amount) || 0, currency: e.currency || 'AUD' }))),
+                      value: Object.keys(fxRates).length > 0
+                        ? `AUD ${Math.round(totalExpensesAUD).toLocaleString()}`
+                        : fmtAmount(totalExpenses, primaryCurrency),
                       color: red,
                       sub: `${expenses.length} item${expenses.length !== 1 ? 's' : ''}`
                     },
                     {
                       label: netPositionAUD >= 0 ? 'Net Profit' : 'Net Loss',
-                      value: viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
+                      value: Object.keys(fxRates).length > 0
                         ? `AUD ${Math.round(Math.abs(netPositionAUD)).toLocaleString()}`
                         : fmtAmount(Math.abs(netPosition), primaryCurrency),
                       color: netPositionAUD >= 0 ? green : red,
