@@ -407,8 +407,7 @@ export default function BudgetPage() {
   const [showPaste, setShowPaste] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { loadArtist(); fetchFx() }, [params.id])
-  useEffect(() => { if (selectedTourId) loadBudget(selectedTourId) }, [selectedTourId])
+  useEffect(() => { loadArtist(); fetchFx() }, [params.id])  useEffect(() => { if (selectedTourId) loadBudget(selectedTourId) }, [selectedTourId])
 
   async function fetchFx() {
     setFxLoading(true)
@@ -838,7 +837,7 @@ export default function BudgetPage() {
             {hasBudget && (
               <div style={{ display: 'flex', gap: 2, marginLeft: 8, borderLeft: `1px solid ${border}`, paddingLeft: 8 }}>
                 {(['native', 'AUD'] as const).map(c => (
-                  <button key={c} onClick={() => { setViewCurrency(c); if (c === 'AUD' && Object.keys(fxRates).length === 0) fetchFx() }}
+                  <button key={c} onClick={() => setViewCurrency(c)}
                     style={{ padding: '6px 10px', background: viewCurrency === c ? '#1A1714' : 'transparent', color: viewCurrency === c ? '#F4EFE6' : muted, border: `1px solid ${viewCurrency === c ? '#1A1714' : border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
                     {c === 'native' ? 'EUR' : 'AUD'}
                   </button>
@@ -945,7 +944,7 @@ export default function BudgetPage() {
                     },
                     {
                       label: 'Total Expenses',
-                      value: Object.keys(fxRates).length > 0
+                      value: viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
                         ? `AUD ${Math.round(totalExpensesAUD).toLocaleString()}`
                         : fmtAmount(totalExpenses, primaryCurrency),
                       color: red,
@@ -953,7 +952,7 @@ export default function BudgetPage() {
                     },
                     {
                       label: netPositionAUD >= 0 ? 'Net Profit' : 'Net Loss',
-                      value: Object.keys(fxRates).length > 0
+                      value: viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
                         ? `AUD ${Math.round(Math.abs(netPositionAUD)).toLocaleString()}`
                         : fmtAmount(Math.abs(netPosition), primaryCurrency),
                       color: netPositionAUD >= 0 ? green : red,
@@ -1188,7 +1187,9 @@ export default function BudgetPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                     <span style={{ fontFamily: 'monospace', fontSize: 11, letterSpacing: 2 }}>TOTAL</span>
                     <div style={{ fontSize: 20, fontWeight: 700, color: red }}>
-                      {totalDisplay(expenses.map((e: any) => ({ amount: parseFloat(e.amount) || 0, currency: e.currency || 'AUD' })))}
+                      {viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
+                        ? `AUD ${Math.round(totalExpensesAUD).toLocaleString()}`
+                        : fmtAmount(totalExpenses, primaryCurrency)}
                     </div>
                   </div>
                   {expenses.some((e: any) => e.status === 'paid') && (
