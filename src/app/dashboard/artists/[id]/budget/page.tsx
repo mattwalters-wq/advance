@@ -413,12 +413,9 @@ export default function BudgetPage() {
   async function fetchFx() {
     setFxLoading(true)
     try {
-      // Frankfurter: get EUR, GBP, USD rates with AUD as base
-      const res = await fetch('https://api.frankfurter.dev/v2/latest?base=AUD&symbols=EUR,GBP,USD')
+      const res = await fetch('https://api.frankfurter.app/latest?base=AUD&symbols=EUR,GBP,USD')
       const data = await res.json()
       if (data.rates) {
-        // Convert: we want "1 EUR = X AUD", but Frankfurter gives "1 AUD = X EUR"
-        // So invert each rate
         const toAud: Record<string, number> = { AUD: 1 }
         for (const [currency, rate] of Object.entries(data.rates as Record<string, number>)) {
           toAud[currency] = 1 / rate
@@ -426,8 +423,8 @@ export default function BudgetPage() {
         setFxRates(toAud)
         setFxUpdated(new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }))
       }
-    } catch {
-      // Silently fail - FX is a nice-to-have
+    } catch (e) {
+      console.error('FX fetch failed:', e)
     }
     setFxLoading(false)
   }
@@ -836,13 +833,22 @@ export default function BudgetPage() {
               </button>
             ))}
             {hasBudget && (
-              <div style={{ display: 'flex', gap: 2, marginLeft: 8, borderLeft: `1px solid ${border}`, paddingLeft: 8 }}>
+              <div style={{ display: 'flex', gap: 2, marginLeft: 8, borderLeft: `1px solid ${border}`, paddingLeft: 8, alignItems: 'center' }}>
                 {(['native', 'AUD'] as const).map(c => (
                   <button key={c} onClick={() => setViewCurrency(c)}
                     style={{ padding: '6px 10px', background: viewCurrency === c ? '#1A1714' : 'transparent', color: viewCurrency === c ? '#F4EFE6' : muted, border: `1px solid ${viewCurrency === c ? '#1A1714' : border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
-                    {c === 'native' ? 'EUR' : 'AUD'}
+                    {c === 'native' ? 'EUR' : fxLoading ? '...' : 'AUD'}
                   </button>
                 ))}
+                {fxUpdated && Object.keys(fxRates).length > 0 && (
+                  <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted, marginLeft: 4 }}>
+                    {Object.entries(fxRates).filter(([c]) => c !== 'AUD').map(([c, r]) => `1 ${c} = ${r.toFixed(2)}`).join(' · ')}
+                  </span>
+                )}
+                <button onClick={fetchFx} disabled={fxLoading}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: muted, fontSize: 11, padding: '2px 4px' }} title="Refresh rates">
+                  ↻
+                </button>
               </div>
             )}
           </div>
