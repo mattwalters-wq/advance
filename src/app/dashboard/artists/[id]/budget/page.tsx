@@ -828,13 +828,23 @@ export default function BudgetPage() {
             style={{ padding: '8px 12px', border: `1px solid ${border}`, borderRadius: 8, background: card, color: text, fontSize: 14, fontFamily: 'Georgia, serif', outline: 'none', minWidth: 200 }}>
             {tours.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
-          <div style={{ display: 'flex', gap: 4, flex: 1, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
             {(['overview', 'shows', 'expenses', 'merch', 'import'] as const).map(v => (
               <button key={v} onClick={() => setView(v)}
                 style={{ padding: '8px 14px', background: view === v ? accent : card, color: view === v ? '#fff' : muted, border: `1px solid ${view === v ? accent : border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' }}>
                 {v === 'import' ? '+ Import' : v}
               </button>
             ))}
+            {hasBudget && (
+              <div style={{ display: 'flex', gap: 2, marginLeft: 8, borderLeft: `1px solid ${border}`, paddingLeft: 8 }}>
+                {(['native', 'AUD'] as const).map(c => (
+                  <button key={c} onClick={() => { setViewCurrency(c); if (c === 'AUD' && Object.keys(fxRates).length === 0) fetchFx() }}
+                    style={{ padding: '6px 10px', background: viewCurrency === c ? '#1A1714' : 'transparent', color: viewCurrency === c ? '#F4EFE6' : muted, border: `1px solid ${viewCurrency === c ? '#1A1714' : border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
+                    {c === 'native' ? 'EUR' : 'AUD'}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -918,32 +928,6 @@ export default function BudgetPage() {
                             : fmtAmount(totalFeesBest, primaryCurrency)} ceiling
                         </span>
                       </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Currency toggle + FX rates */}
-                {hasMixedCurrencies && (
-                  <div style={{ background: card, borderRadius: 10, border: `1px solid ${border}`, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      {(['native', 'AUD'] as const).map(c => (
-                        <button key={c} onClick={() => setViewCurrency(c)}
-                          style={{ padding: '5px 14px', background: viewCurrency === c ? accent : 'transparent', color: viewCurrency === c ? '#fff' : muted, border: `1px solid ${viewCurrency === c ? accent : border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
-                          {c === 'native' ? 'EUR / GBP' : 'AUD'}
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                      {Object.entries(fxRates).filter(([c]) => c !== 'AUD').map(([currency, rate]) => (
-                        <span key={currency} style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>
-                          1 {currency} = AUD {rate.toFixed(4)}
-                        </span>
-                      ))}
-                      {fxUpdated && <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>{fxUpdated}</span>}
-                      <button onClick={fetchFx} disabled={fxLoading}
-                        style={{ fontFamily: 'monospace', fontSize: 9, color: accent, background: 'none', border: `1px solid ${border}`, borderRadius: 4, padding: '3px 8px', cursor: 'pointer' }}>
-                        {fxLoading ? '...' : '↻'}
-                      </button>
                     </div>
                   </div>
                 )}
