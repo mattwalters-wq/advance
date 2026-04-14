@@ -412,6 +412,10 @@ export default function BudgetPage() {
 
   async function fetchFx() {
     setFxLoading(true)
+    // Set fallback rates immediately so toggle works even if API fails
+    const fallback: Record<string, number> = { AUD: 1, EUR: 1.71, GBP: 2.04, USD: 1.59 }
+    setFxRates(fallback)
+
     try {
       const res = await fetch('https://api.frankfurter.app/latest?base=AUD&symbols=EUR,GBP,USD')
       const data = await res.json()
@@ -424,6 +428,7 @@ export default function BudgetPage() {
         setFxUpdated(new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }))
       }
     } catch (e) {
+      setFxUpdated('est.')
       console.error('FX fetch failed:', e)
     }
     setFxLoading(false)
