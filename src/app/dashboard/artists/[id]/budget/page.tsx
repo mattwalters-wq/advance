@@ -407,7 +407,8 @@ export default function BudgetPage() {
   const [showPaste, setShowPaste] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { loadArtist(); fetchFx() }, [params.id])  useEffect(() => { if (selectedTourId) loadBudget(selectedTourId) }, [selectedTourId])
+  useEffect(() => { loadArtist(); fetchFx() }, [params.id])
+  useEffect(() => { if (selectedTourId) loadBudget(selectedTourId) }, [selectedTourId])
 
   async function fetchFx() {
     setFxLoading(true)
