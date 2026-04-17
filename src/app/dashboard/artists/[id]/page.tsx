@@ -1424,9 +1424,20 @@ export default function ArtistPage() {
                           {show.notes && <div style={{ fontSize: 11, color: muted, marginTop: 4, fontStyle: 'italic', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any }}>{show.notes}</div>}
                         </div>
                         <div className="show-actions" style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                          <button onClick={() => window.open(`/daysheet/${show.id}`, '_blank')}
-                            style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 10, padding: '3px 8px', fontFamily: 'monospace', letterSpacing: 1 }}
-                            title="Day Sheet">DAY SHEET ↗</button>
+                          {(() => {
+                            // Is this show part of a festival? (2+ shows at same venue)
+                            const sameVenue = shows.filter(s => s.venue === show.venue)
+                            const isFestival = sameVenue.length >= 2
+                            return isFestival ? (
+                              <button onClick={() => window.open(`/festival/${selectedTour?.id}`, '_blank')}
+                                style={{ background: '#FDF5EF', border: `1px solid ${accent}`, borderRadius: 6, color: accent, cursor: 'pointer', fontSize: 10, padding: '3px 8px', fontFamily: 'monospace', letterSpacing: 1 }}
+                                title="Festival Sheet">FESTIVAL ↗</button>
+                            ) : (
+                              <button onClick={() => window.open(`/daysheet/${show.id}`, '_blank')}
+                                style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 10, padding: '3px 8px', fontFamily: 'monospace', letterSpacing: 1 }}
+                                title="Day Sheet">DAY SHEET ↗</button>
+                            )
+                          })()}
                           {(() => {
                             const s = settlements.find(s => s.show_id === show.id)
                             const statusColor: Record<string,string> = { paid: '#2d7a4f', partial: '#B8860B', pending: muted, disputed: '#C00' }

@@ -47,6 +47,27 @@ export default function DaySheetPage() {
   async function loadData() {
     const { data: showData } = await supabase.from('shows').select('*').eq('id', params.show_id).single()
     if (!showData) { setNotFound(true); setLoading(false); return }
+
+    // Check if this is a festival: 2+ shows at same venue on consecutive days
+    const { data: allTourShows } = await supabase.from('shows')
+      .select('id, date, venue, tour_id')
+      .eq('tour_id', showData.tour_id)
+      .eq('venue', showData.venue)
+      .order('date')
+
+    if (allTourShows && allTourShows.length >= 2) {
+      // Check if dates are consecutive (all within a 14 day window, at same venue)
+      const dates = allTourShows.map(s => s.date).sort()
+      const first = new Date(dates[0] + 'T00:00:00')
+      const last = new Date(dates[dates.length - 1] + 'T00:00:00')
+      const spanDays = (last.getTime() - first.getTime()) / (1000 * 60 * 60 * 24)
+      if (spanDays <= 14) {
+        // It's a festival - redirect to festival view
+        window.location.replace(`/festival/${showData.tour_id}`)
+        return
+      }
+    }
+
     setShow(showData)
 
     const [tourRes, travelRes, accomRes, contactsRes, riderRes, pressRes] = await Promise.all([
