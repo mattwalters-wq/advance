@@ -159,6 +159,57 @@ const TOOLS: any[] = [
       required: ['name'],
     },
   },
+  {
+    name: 'add_press',
+    description: 'Add a press commitment (interview, radio, TV, photo shoot, podcast, etc)',
+    input_schema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'YYYY-MM-DD' },
+        time: { type: 'string', description: 'HH:MM 24hr' },
+        end_time: { type: 'string', description: 'HH:MM 24hr' },
+        type: { type: 'string', description: 'interview|radio|tv|podcast|photo_shoot|press_conference|other' },
+        outlet: { type: 'string', description: 'Publication, station or outlet name' },
+        contact_name: { type: 'string' },
+        contact_phone: { type: 'string' },
+        contact_email: { type: 'string' },
+        location: { type: 'string' },
+        notes: { type: 'string' },
+      },
+      required: ['date'],
+    },
+  },
+  {
+    name: 'update_press',
+    description: 'Update an existing press commitment',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        date: { type: 'string' },
+        time: { type: 'string' },
+        end_time: { type: 'string' },
+        type: { type: 'string' },
+        outlet: { type: 'string' },
+        contact_name: { type: 'string' },
+        contact_phone: { type: 'string' },
+        contact_email: { type: 'string' },
+        location: { type: 'string' },
+        notes: { type: 'string' },
+        status: { type: 'string' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'delete_press',
+    description: 'Delete a press commitment',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+  },
 ]
 
 async function executeTool(
@@ -227,6 +278,23 @@ async function executeTool(
         if (error) throw error
         return { success: true, message: `Added contact: ${toolInput.name}`, data }
       }
+      case 'add_press': {
+        const { data, error } = await supabase.from('press')
+          .insert({ ...toolInput, tour_id: tourId, org_id: orgId }).select().single()
+        if (error) throw error
+        return { success: true, message: `Added press commitment: ${toolInput.outlet || toolInput.type} on ${toolInput.date}`, data }
+      }
+      case 'update_press': {
+        const { id, ...updates } = toolInput
+        const { error } = await supabase.from('press').update(updates).eq('id', id)
+        if (error) throw error
+        return { success: true, message: `Updated press commitment` }
+      }
+      case 'delete_press': {
+        const { error } = await supabase.from('press').delete().eq('id', toolInput.id)
+        if (error) throw error
+        return { success: true, message: `Deleted press commitment` }
+      }
       default:
         return { success: false, message: `Unknown tool: ${toolName}` }
     }
@@ -246,12 +314,13 @@ export async function POST(request: NextRequest) {
     )
 
     // Load full tour context
-    const [tourRes, showsRes, travelRes, accomRes, contactsRes] = await Promise.all([
+    const [tourRes, showsRes, travelRes, accomRes, contactsRes, pressRes] = await Promise.all([
       supabase.from('tours').select('*, artists(name, project)').eq('id', tourId).single(),
       supabase.from('shows').select('*').eq('tour_id', tourId).order('date'),
       supabase.from('travel').select('*').eq('tour_id', tourId).order('travel_date'),
       supabase.from('accommodation').select('*').eq('tour_id', tourId).order('check_in'),
       supabase.from('contacts').select('*').eq('tour_id', tourId),
+      supabase.from('press').select('*').eq('tour_id', tourId).order('date'),
     ])
 
     const tour = tourRes.data
@@ -259,6 +328,7 @@ export async function POST(request: NextRequest) {
     const travel = travelRes.data || []
     const accommodation = accomRes.data || []
     const contacts = contactsRes.data || []
+    const press = pressRes.data || []
     const orgId = tour?.org_id
 
     const context = `
@@ -275,7 +345,10 @@ ACCOMMODATION (${accommodation.length}):
 ${accommodation.length ? accommodation.map(a => `- id:${a.id} | ${a.check_in}${a.check_out ? ' to '+a.check_out : ''} | ${a.name}${a.address ? ', '+a.address : ''}${a.confirmation ? ' | Ref: '+a.confirmation : ''}`).join('\n') : 'None'}
 
 CONTACTS (${contacts.length}):
-${contacts.length ? contacts.map(c => `- id:${c.id} | ${c.name}${c.role ? ' ('+c.role+')' : ''}${c.phone ? ' | '+c.phone : ''}${c.email ? ' | '+c.email : ''}`).join('\n') : 'None'}`.trim()
+${contacts.length ? contacts.map(c => `- id:${c.id} | ${c.name}${c.role ? ' ('+c.role+')' : ''}${c.phone ? ' | '+c.phone : ''}${c.email ? ' | '+c.email : ''}`).join('\n') : 'None'}
+
+PRESS (${press.length}):
+${press.length ? press.map(p => `- id:${p.id} | ${p.date}${p.time ? ' '+p.time : ''} | ${p.type || 'interview'}${p.outlet ? ' - '+p.outlet : ''}${p.location ? ' | '+p.location : ''}${p.contact_name ? ' | Contact: '+p.contact_name : ''}${p.notes ? ' | '+p.notes : ''}`).join('\n') : 'None'}`.trim()
 
     const systemPrompt = `You are an agentic tour management assistant. You have full access to this tour's data and can make changes directly.
 
@@ -284,7 +357,7 @@ ${context}
 
 You can:
 - Answer questions about the tour
-- Make changes: add/update/delete shows, travel, hotels, contacts
+- Make changes: add/update/delete shows, travel, hotels, contacts, press commitments
 - Draft emails and documents
 - Spot problems and fix them
 
@@ -292,9 +365,10 @@ When the user asks you to change something, DO IT using the available tools. Don
 
 Examples:
 - "Change the VA703 departure to 21:00" → find the VA703 travel record by id, call update_travel
-- "Add a hotel in Perth, Westin, check in 22nd March" → call add_accommodation  
+- "Add a hotel in Perth, Westin, check in 22nd March" → call add_accommodation
+- "Add a triple j interview on the 15th at 10am" → call add_press with type: radio, outlet: triple j
+- "Emma has a photo shoot with Rolling Stone on the 3rd at 2pm in Sydney" → call add_press
 - "Delete the soundcheck on the 15th" → find the show, call update_show with soundcheck_time: ""
-- "The flight on the 22nd has been changed to depart 21:15" → update_travel
 
 Be direct. Act first, explain briefly after. If you're unsure which record to update (e.g. multiple flights on same day), ask which one.`
 

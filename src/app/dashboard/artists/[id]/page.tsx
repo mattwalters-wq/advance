@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase'
 
 const supabase = createClient()
 
-type ModalType = 'show' | 'travel' | 'accommodation' | 'contact' | 'tour' | 'rider' | 'settlement' | null
+type ModalType = 'show' | 'travel' | 'accommodation' | 'contact' | 'tour' | 'rider' | 'settlement' | 'press' | null
 
 export default function ArtistPage() {
   const params = useParams()
@@ -18,6 +18,7 @@ export default function ArtistPage() {
   const [travel, setTravel] = useState<any[]>([])
   const [accommodation, setAccommodation] = useState<any[]>([])
   const [contacts, setContacts] = useState<any[]>([])
+  const [press, setPress] = useState<any[]>([])
   const [darkMode, setDarkMode] = useState(false)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -81,11 +82,12 @@ export default function ArtistPage() {
   }
 
   async function loadTourData(tourId: string) {
-    const [s, t, a, c] = await Promise.all([
+    const [s, t, a, c, p] = await Promise.all([
       supabase.from('shows').select('*').eq('tour_id', tourId).order('date'),
       supabase.from('travel').select('*').eq('tour_id', tourId).order('travel_date'),
       supabase.from('accommodation').select('*').eq('tour_id', tourId).order('check_in'),
       supabase.from('contacts').select('*').eq('tour_id', tourId),
+      supabase.from('press').select('*').eq('tour_id', tourId).order('date'),
     ])
     const showsData = s.data || []
     const travelData = t.data || []
@@ -94,6 +96,7 @@ export default function ArtistPage() {
     setTravel(travelData)
     setAccommodation(accomData)
     setContacts(c.data || [])
+    setPress(p.data || [])
     setWarnings(computeWarnings(showsData, travelData, accomData))
     // Auto-switch to import tab if tour is empty
     if (showsData.length === 0 && travelData.length === 0 && accomData.length === 0) {
@@ -444,7 +447,7 @@ export default function ArtistPage() {
     }
 
     const tableMap: Record<string, string> = {
-      show: 'shows', travel: 'travel', accommodation: 'accommodation', contact: 'contacts'
+      show: 'shows', travel: 'travel', accommodation: 'accommodation', contact: 'contacts', press: 'press'
     }
     const table = tableMap[modal as string]
     if (!table) { setSaving(false); return }
@@ -969,6 +972,65 @@ export default function ArtistPage() {
               </>
             )}
 
+            {modal === 'press' && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Date *</label>
+                    <input style={inputStyle} type="date" value={form.date || ''} onChange={e => setForm({ ...form, date: e.target.value })} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Type</label>
+                    <select style={inputStyle} value={form.type || 'interview'} onChange={e => setForm({ ...form, type: e.target.value })}>
+                      <option value="interview">Interview</option>
+                      <option value="radio">Radio</option>
+                      <option value="tv">TV</option>
+                      <option value="podcast">Podcast</option>
+                      <option value="photo_shoot">Photo shoot</option>
+                      <option value="press_conference">Press conference</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Start time</label>
+                    <input style={inputStyle} type="time" value={form.time || ''} onChange={e => setForm({ ...form, time: e.target.value })} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>End time</label>
+                    <input style={inputStyle} type="time" value={form.end_time || ''} onChange={e => setForm({ ...form, end_time: e.target.value })} />
+                  </div>
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Outlet</label>
+                  <input style={inputStyle} value={form.outlet || ''} onChange={e => setForm({ ...form, outlet: e.target.value })} placeholder="e.g. triple j, Rolling Stone, The Age" />
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Location</label>
+                  <input style={inputStyle} value={form.location || ''} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="Studio address or 'Phone' or 'Zoom'" />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Contact name</label>
+                    <input style={inputStyle} value={form.contact_name || ''} onChange={e => setForm({ ...form, contact_name: e.target.value })} placeholder="Journalist or producer" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Contact phone</label>
+                    <input style={inputStyle} value={form.contact_phone || ''} onChange={e => setForm({ ...form, contact_phone: e.target.value })} />
+                  </div>
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Contact email</label>
+                  <input style={inputStyle} value={form.contact_email || ''} onChange={e => setForm({ ...form, contact_email: e.target.value })} />
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Notes</label>
+                  <textarea style={{ ...inputStyle, minHeight: 60, fontFamily: 'Georgia, serif' }} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Talking points, duration, preferred angles..." />
+                </div>
+              </>
+            )}
+
             {modal === 'settlement' && (
               <>
                 <div style={{ marginBottom: 8, fontSize: 13, color: muted, fontStyle: 'italic' }}>
@@ -1299,7 +1361,7 @@ export default function ArtistPage() {
               <div style={{ display: 'grid', gap: 20 }}>
                 {/* Manual add row */}
                 <div className="add-row" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {([['show', '+ Show'], ['travel', '+ Travel'], ['accommodation', '+ Hotel'], ['contact', '+ Contact']] as const).map(([type, label]) => (
+                  {([['show', '+ Show'], ['travel', '+ Travel'], ['accommodation', '+ Hotel'], ['contact', '+ Contact'], ['press', '+ Press']] as const).map(([type, label]) => (
                     <button key={type} onClick={() => openModal(type)}
                       style={{ padding: '6px 12px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
                       {label}
@@ -1455,6 +1517,59 @@ export default function ArtistPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+                {press.length > 0 && (
+                  <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
+                    <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 14 }}>📣</span>
+                      Press — {press.length}
+                    </div>
+                    {press.map((p, i) => {
+                      const typeLabels: Record<string, string> = {
+                        interview: 'Interview', radio: 'Radio', tv: 'TV', podcast: 'Podcast',
+                        photo_shoot: 'Photo shoot', press_conference: 'Press conf.', other: 'Press'
+                      }
+                      const typeIcons: Record<string, string> = {
+                        interview: '🎙', radio: '📻', tv: '📺', podcast: '🎧',
+                        photo_shoot: '📷', press_conference: '🗞', other: '📣'
+                      }
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: i < press.length - 1 ? `1px solid ${border}` : 'none', gap: 12 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                            <div style={{ background: '#FDF5EF', border: '1px solid #F5D9C4', borderRadius: 8, padding: '6px 10px', textAlign: 'center', minWidth: 60, flexShrink: 0 }}>
+                              <div style={{ fontSize: 10, fontFamily: 'monospace', color: '#C4622D', letterSpacing: 1 }}>
+                                {p.date && new Date(p.date + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }).toUpperCase()}
+                              </div>
+                              {p.time && <div style={{ fontSize: 12, fontWeight: 700, color: '#C4622D', marginTop: 2 }}>{p.time.substring(0, 5)}</div>}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 14 }}>{typeIcons[p.type] || '📣'}</span>
+                                <span style={{ fontSize: 13, fontWeight: 600 }}>{p.outlet || typeLabels[p.type] || 'Press'}</span>
+                                <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#C4622D', background: '#FDF5EF', padding: '1px 6px', borderRadius: 3, letterSpacing: 1 }}>
+                                  {(typeLabels[p.type] || 'PRESS').toUpperCase()}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>
+                                {p.location && <>📍 {p.location}</>}
+                                {p.location && p.contact_name && ' · '}
+                                {p.contact_name && <>👤 {p.contact_name}</>}
+                              </div>
+                              {p.notes && <div style={{ fontSize: 11, color: muted, marginTop: 4, fontStyle: 'italic' }}>{p.notes}</div>}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                            <button onClick={() => openModal('press', p)}
+                              style={{ background: 'transparent', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 12, padding: '3px 9px' }}
+                              title="Edit">✎</button>
+                            <button onClick={() => setConfirmDelete({ table: 'press', id: p.id, label: `${p.outlet || p.type} on ${p.date}` })}
+                              style={{ background: '#fff0f0', border: '1px solid #ffcccc', borderRadius: 6, color: '#cc0000', cursor: 'pointer', fontSize: 12, padding: '3px 9px', fontWeight: 700 }}
+                              title="Delete">✕</button>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
                 {settlements.length > 0 && (

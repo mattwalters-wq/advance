@@ -36,6 +36,7 @@ export default function DaySheetPage() {
   const [accommodation, setAccommodation] = useState<any[]>([])
   const [contacts, setContacts] = useState<any[]>([])
   const [rider, setRider] = useState<any>(null)
+  const [press, setPress] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [mode, setMode] = useState<'day' | 'trip'>('day')
@@ -48,12 +49,13 @@ export default function DaySheetPage() {
     if (!showData) { setNotFound(true); setLoading(false); return }
     setShow(showData)
 
-    const [tourRes, travelRes, accomRes, contactsRes, riderRes] = await Promise.all([
+    const [tourRes, travelRes, accomRes, contactsRes, riderRes, pressRes] = await Promise.all([
       supabase.from('tours').select('*, artists(*)').eq('id', showData.tour_id).single(),
       supabase.from('travel').select('*').eq('tour_id', showData.tour_id).order('travel_date'),
       supabase.from('accommodation').select('*').eq('tour_id', showData.tour_id).order('check_in'),
       supabase.from('contacts').select('*').eq('tour_id', showData.tour_id),
       supabase.from('riders').select('*').eq('tour_id', showData.tour_id).single(),
+      supabase.from('press').select('*').eq('tour_id', showData.tour_id).order('date'),
     ])
 
     const tourData = tourRes.data
@@ -79,6 +81,7 @@ export default function DaySheetPage() {
     }))
     setContacts(contactsRes.data || [])
     setRider(riderRes.data || null)
+    setPress(pressRes.data || [])
     setLoading(false)
   }
 
@@ -361,6 +364,65 @@ export default function DaySheetPage() {
             </div>
           )
         )}
+
+        {/* ── PRESS ── */}
+        {(() => {
+          const pressToShow = mode === 'day'
+            ? press.filter(p => p.date === showDate)
+            : press
+          if (pressToShow.length === 0) return null
+
+          const typeLabels: Record<string, string> = {
+            interview: 'Interview', radio: 'Radio', tv: 'TV', podcast: 'Podcast',
+            photo_shoot: 'Photo shoot', press_conference: 'Press conf.', other: 'Press'
+          }
+          const typeIcons: Record<string, string> = {
+            interview: '🎙', radio: '📻', tv: '📺', podcast: '🎧',
+            photo_shoot: '📷', press_conference: '🗞', other: '📣'
+          }
+
+          return (
+            <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
+              <div style={{ background: '#FDF5EF', padding: '10px 20px', borderBottom: `1px solid ${border}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 14 }}>📣</span>
+                  <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: accent, textTransform: 'uppercase' }}>Press Commitments</span>
+                </div>
+              </div>
+              <div style={{ padding: '4px 24px' }}>
+                {pressToShow.map((p: any, i: number) => (
+                  <div key={i} style={{ padding: '14px 0', borderBottom: i < pressToShow.length - 1 ? `1px solid ${border}` : 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 16 }}>{typeIcons[p.type] || '📣'}</span>
+                      <span style={{ fontSize: 16, fontWeight: 700 }}>{p.outlet || typeLabels[p.type] || 'Press'}</span>
+                      <span style={{ fontFamily: 'monospace', fontSize: 9, color: accent, background: '#FDF5EF', border: `1px solid ${accent}`, padding: '2px 8px', borderRadius: 3, letterSpacing: 1 }}>
+                        {(typeLabels[p.type] || 'PRESS').toUpperCase()}
+                      </span>
+                      {mode === 'trip' && p.date && (
+                        <span style={{ fontSize: 11, fontFamily: 'monospace', color: muted, marginLeft: 'auto' }}>
+                          {new Date(p.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
+                      {p.time && <Pill label="Start" value={fmt(p.time)} />}
+                      {p.end_time && <Pill label="End" value={fmt(p.end_time)} />}
+                      {p.location && <Pill label="Location" value={p.location} />}
+                    </div>
+                    {p.contact_name && (
+                      <div style={{ marginTop: 8, fontSize: 13, color: muted, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <span>👤 {p.contact_name}</span>
+                        {p.contact_phone && <a href={`tel:${p.contact_phone}`} style={{ color: accent, textDecoration: 'none' }}>📞 {p.contact_phone}</a>}
+                        {p.contact_email && <a href={`mailto:${p.contact_email}`} style={{ color: accent, textDecoration: 'none' }}>✉ {p.contact_email}</a>}
+                      </div>
+                    )}
+                    {p.notes && <div style={{ marginTop: 6, fontSize: 12, color: muted, fontStyle: 'italic' }}>{p.notes}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ── ACCOMMODATION ── */}
         {accommodation.length > 0 && (
