@@ -58,7 +58,16 @@ export default function ArtistPage() {
   const [userName, setUserName] = useState('Manager')
 
   useEffect(() => { loadArtist() }, [params.id])
-  useEffect(() => { if (selectedTour) loadTourData(selectedTour.id) }, [selectedTour])
+  useEffect(() => {
+    if (selectedTour) {
+      loadTourData(selectedTour.id)
+      // Broadcast to FloatingAssistant so it uses the same tour
+      try {
+        sessionStorage.setItem('advance_active_tour_id', selectedTour.id)
+        window.dispatchEvent(new CustomEvent('advance:tour-change', { detail: { tourId: selectedTour.id } }))
+      } catch {}
+    }
+  }, [selectedTour])
 
   async function loadArtist() {
     // Parallelise all initial queries

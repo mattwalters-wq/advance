@@ -47,22 +47,39 @@ export default function FloatingAssistant() {
 
   // Extract tour_id from URL if on a tour-related page
   useEffect(() => {
-    const match = pathname.match(/\/dashboard\/artists\/([^/]+)/) 
+    const match = pathname.match(/\/dashboard\/artists\/([^/]+)/)
     const tourMatch = pathname.match(/\/tour-ai\/([^/]+)/)
-    
+
     if (tourMatch) {
       setTourId(tourMatch[1])
     } else if (match) {
-      // On artist page - try to get active tour
       const artistId = match[1]
       if (artistId && artistId !== 'new') {
-        supabase.from('tours').select('id, name').eq('artist_id', artistId).order('start_date', { ascending: false }).limit(1).single()
+        // Check sessionStorage first for the tour user actively selected
+        try {
+          const stored = sessionStorage.getItem('advance_active_tour_id')
+          if (stored) {
+            setTourId(stored)
+            return
+          }
+        } catch {}
+        // Fall back to first tour for that artist
+        supabase.from('tours').select('id, name').eq('artist_id', artistId).order('start_date', { ascending: true }).limit(1).single()
           .then(({ data }) => {
             if (data) { setTourId(data.id); setTourName(data.name) }
           })
       }
     }
   }, [pathname])
+
+  // Listen for active tour changes from the artist page
+  useEffect(() => {
+    function handler(e: any) {
+      if (e.detail?.tourId) setTourId(e.detail.tourId)
+    }
+    window.addEventListener('advance:tour-change', handler)
+    return () => window.removeEventListener('advance:tour-change', handler)
+  }, [])
 
   // Load tour name when tourId changes
   useEffect(() => {
