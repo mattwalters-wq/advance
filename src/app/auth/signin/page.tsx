@@ -56,10 +56,16 @@ export default function SigninPage() {
             placeholder="Email address" onKeyDown={e => e.key === 'Enter' && handleSignin()}
             style={inputStyle} />
         </div>
-        <div style={{ marginBottom: 24 }}>
+        <div style={{ marginBottom: 8 }}>
           <input type="password" value={password} onChange={e => setPassword(e.target.value)}
             placeholder="Password" onKeyDown={e => e.key === 'Enter' && handleSignin()}
             style={inputStyle} />
+        </div>
+        <div style={{ textAlign: 'right', marginBottom: 20 }}>
+          <span onClick={() => router.push('/auth/forgot-password')}
+            style={{ fontSize: 12, color: '#8A8580', cursor: 'pointer', fontFamily: 'monospace', letterSpacing: 1 }}>
+            Forgot password?
+          </span>
         </div>
 
         <button onClick={handleSignin} disabled={loading}
