@@ -82,12 +82,9 @@ export default function ArtistPage() {
     const toursData = toursRes.data || []
     setTours(toursData)
     if (toursData.length > 0) {
-      // Prefer most recent active tour (not archived)
+      // Prefer non-archived tours (no end_date OR end_date in future)
       const today = new Date().toISOString().split('T')[0]
-      const active = toursData.filter((t: any) => {
-        const cutoff = t.end_date || t.start_date
-        return !cutoff || cutoff >= today
-      })
+      const active = toursData.filter((t: any) => !t.end_date || t.end_date >= today)
       // Active sorted earliest first (nearest upcoming), else most recent archived
       const picked = active.length > 0 ? active[0] : toursData[toursData.length - 1]
       setSelectedTour(picked)
@@ -1214,14 +1211,11 @@ export default function ArtistPage() {
         {tours.length > 0 && (() => {
           const today = new Date().toISOString().split('T')[0]
 
-          // A tour is archived if its end date (or latest show) is in the past
+          // Archive a tour only if end_date is set AND past
+          // (we can't reliably check show dates because shows state only holds current tour)
           function isArchived(tour: any): boolean {
-            const tourShows = shows.filter(s => s.tour_id === tour.id)
-            const latestShow = tourShows.length > 0
-              ? tourShows.map(s => s.date).sort().reverse()[0]
-              : null
-            const cutoff = tour.end_date || latestShow || tour.start_date
-            return cutoff ? cutoff < today : false
+            if (!tour.end_date) return false
+            return tour.end_date < today
           }
 
           const activeTours = tours.filter(t => !isArchived(t))
