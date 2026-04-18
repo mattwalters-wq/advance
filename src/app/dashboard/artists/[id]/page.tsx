@@ -14,6 +14,7 @@ export default function ArtistPage() {
   const [artist, setArtist] = useState<any>(null)
   const [tours, setTours] = useState<any[]>([])
   const [selectedTour, setSelectedTour] = useState<any>(null)
+  const [showArchive, setShowArchive] = useState(false)
   const [shows, setShows] = useState<any[]>([])
   const [travel, setTravel] = useState<any[]>([])
   const [accommodation, setAccommodation] = useState<any[]>([])
@@ -80,7 +81,17 @@ export default function ArtistPage() {
     setArtist(artistRes.data)
     const toursData = toursRes.data || []
     setTours(toursData)
-    if (toursData.length > 0) setSelectedTour(toursData[0])
+    if (toursData.length > 0) {
+      // Prefer most recent active tour (not archived)
+      const today = new Date().toISOString().split('T')[0]
+      const active = toursData.filter((t: any) => {
+        const cutoff = t.end_date || t.start_date
+        return !cutoff || cutoff >= today
+      })
+      // Active sorted earliest first (nearest upcoming), else most recent archived
+      const picked = active.length > 0 ? active[0] : toursData[toursData.length - 1]
+      setSelectedTour(picked)
+    }
     // Get user name (non-blocking)
     const user = authRes.data?.user
     if (user) {
@@ -1199,22 +1210,70 @@ export default function ArtistPage() {
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
 
-        {/* Tour tabs */}
-        {tours.length > 1 && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-            {tours.map(tour => {
-              const statusColor: Record<string, string> = { confirmed: '#2d7a4f', routing: '#B8860B', completed: '#8A8580' }
-              const statusLabel: Record<string, string> = { confirmed: '✓', routing: '~', completed: '—' }
-              return (
-                <button key={tour.id} onClick={() => setSelectedTour(tour)}
-                  style={{ padding: '8px 16px', borderRadius: 20, border: `1px solid ${border}`, background: selectedTour?.id === tour.id ? accent : card, color: selectedTour?.id === tour.id ? '#fff' : text, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {tour.status && <span style={{ fontSize: 10, color: selectedTour?.id === tour.id ? 'rgba(255,255,255,0.8)' : statusColor[tour.status] || muted }}>{statusLabel[tour.status] || ''}</span>}
-                  {tour.name}
-                </button>
-              )
-            })}
-          </div>
-        )}
+        {/* Tour tabs - split active vs archived */}
+        {tours.length > 0 && (() => {
+          const today = new Date().toISOString().split('T')[0]
+
+          // A tour is archived if its end date (or latest show) is in the past
+          function isArchived(tour: any): boolean {
+            const tourShows = shows.filter(s => s.tour_id === tour.id)
+            const latestShow = tourShows.length > 0
+              ? tourShows.map(s => s.date).sort().reverse()[0]
+              : null
+            const cutoff = tour.end_date || latestShow || tour.start_date
+            return cutoff ? cutoff < today : false
+          }
+
+          const activeTours = tours.filter(t => !isArchived(t))
+          const archivedTours = tours.filter(t => isArchived(t))
+
+          const renderTourButton = (tour: any, archived: boolean) => {
+            const statusColor: Record<string, string> = { confirmed: '#2d7a4f', routing: '#B8860B', completed: '#8A8580' }
+            const statusLabel: Record<string, string> = { confirmed: '✓', routing: '~', completed: '—' }
+            const isSelected = selectedTour?.id === tour.id
+            return (
+              <button key={tour.id} onClick={() => setSelectedTour(tour)}
+                style={{
+                  padding: '8px 16px', borderRadius: 20,
+                  border: `1px solid ${archived && !isSelected ? '#D8D0C4' : border}`,
+                  background: isSelected ? accent : card,
+                  color: isSelected ? '#fff' : (archived ? muted : text),
+                  opacity: archived && !isSelected ? 0.7 : 1,
+                  cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6,
+                  fontStyle: archived ? 'italic' : 'normal',
+                }}>
+                {tour.status && <span style={{ fontSize: 10, color: isSelected ? 'rgba(255,255,255,0.8)' : statusColor[tour.status] || muted }}>{statusLabel[tour.status] || ''}</span>}
+                {tour.name}
+                {archived && <span style={{ fontFamily: 'monospace', fontSize: 8, letterSpacing: 1, color: isSelected ? 'rgba(255,255,255,0.7)' : muted, marginLeft: 2 }}>ARCHIVED</span>}
+              </button>
+            )
+          }
+
+          return (
+            <div style={{ marginBottom: 24 }}>
+              {activeTours.length > 0 && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {activeTours.map(t => renderTourButton(t, false))}
+                </div>
+              )}
+
+              {archivedTours.length > 0 && (
+                <div style={{ marginTop: activeTours.length > 0 ? 14 : 0 }}>
+                  <div onClick={() => setShowArchive(!showArchive)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: muted, marginBottom: showArchive ? 10 : 0 }}>
+                    <span style={{ transform: showArchive ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', display: 'inline-block' }}>›</span>
+                    PAST TOURS · {archivedTours.length}
+                  </div>
+                  {showArchive && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {archivedTours.map(t => renderTourButton(t, true))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* New tour button always visible */}
         <div style={{ marginBottom: tours.length > 0 ? 0 : 24 }}>
