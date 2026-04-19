@@ -472,7 +472,22 @@ export default function BudgetPage() {
     setArtist(artistData)
     const { data: toursData } = await supabase.from('tours').select('*').eq('artist_id', params.id).order('start_date')
     setTours(toursData || [])
-    if (toursData?.length) setSelectedTourId(toursData[0].id)
+    if (toursData?.length) {
+      // Use the tour the user was viewing on the artist page
+      let tourId: string | null = null
+      try {
+        tourId = sessionStorage.getItem('advance_active_tour_id')
+      } catch {}
+      const match = tourId ? toursData.find((t: any) => t.id === tourId) : null
+      if (match) {
+        setSelectedTourId(match.id)
+      } else {
+        // Fall back to first non-archived tour (no end_date or end_date >= today)
+        const today = new Date().toISOString().split('T')[0]
+        const active = toursData.find((t: any) => !t.end_date || t.end_date >= today)
+        setSelectedTourId((active || toursData[0]).id)
+      }
+    }
   }
 
   async function loadBudget(tourId: string) {
@@ -826,7 +841,13 @@ export default function BudgetPage() {
 
         {/* Tour selector + tabs */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 24, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select value={selectedTourId} onChange={e => setSelectedTourId(e.target.value)}
+          <select value={selectedTourId} onChange={e => {
+            setSelectedTourId(e.target.value)
+            try {
+              sessionStorage.setItem('advance_active_tour_id', e.target.value)
+              window.dispatchEvent(new CustomEvent('advance:tour-change', { detail: { tourId: e.target.value } }))
+            } catch {}
+          }}
             style={{ padding: '8px 12px', border: `1px solid ${border}`, borderRadius: 8, background: card, color: text, fontSize: 14, fontFamily: 'Georgia, serif', outline: 'none', minWidth: 200 }}>
             {tours.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
