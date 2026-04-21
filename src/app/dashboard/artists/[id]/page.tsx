@@ -1620,6 +1620,7 @@ export default function ArtistPage() {
                             )
                           })()}
                           {(() => {
+                            const s = settlements.find(s => s.show_id === show.id)
                             const statusColor: Record<string,string> = { paid: '#2d7a4f', partial: '#B8860B', pending: muted, disputed: '#C00' }
                             return (
                               <button onClick={() => { setSettlementShow(show); openModal('settlement', s || {}) }}
