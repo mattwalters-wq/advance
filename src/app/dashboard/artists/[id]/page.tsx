@@ -1284,11 +1284,13 @@ export default function ArtistPage() {
           .toolbar-tabs button { padding: 7px 8px !important; font-size: 8px !important; letter-spacing: 0 !important; }
           .toolbar-tabs button span { display: none; }
           .toolbar-right { flex-wrap: nowrap !important; }
-          .add-row { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; }
+          .add-row { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
+          .add-row button { font-size: 10px !important; padding: 8px 10px !important; text-align: center; }
           .show-actions { flex-direction: column !important; align-items: flex-end !important; gap: 4px !important; }
           .show-actions button { font-size: 9px !important; padding: 4px 6px !important; }
           .warnings-dropdown { right: -60px !important; width: 300px !important; }
           .tour-tabs { flex-wrap: wrap !important; }
+          .content-container { padding: 16px !important; }
         }
       `}</style>
 
@@ -1322,7 +1324,7 @@ export default function ArtistPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
+      <div className="content-container" style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
 
         {/* Tour tabs - split active vs archived */}
         {tours.length > 0 && (() => {
