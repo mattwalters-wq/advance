@@ -1576,53 +1576,44 @@ export default function ArtistPage() {
 
                       return (
                       <div key={i} style={{ borderBottom: i < shows.length - 1 ? `1px solid ${border}` : 'none', position: 'relative' as const }}>
-                        {/* Compact row - tap opens Day Sheet / Festival, ⋯ for other actions */}
-                        <div style={{ padding: '12px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
-                          {/* Main tap area → opens day sheet */}
-                          <div
-                            onClick={() => window.open(isFestival ? `/festival/${selectedTour?.id}` : `/daysheet/${show.id}`, '_blank')}
-                            style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', userSelect: 'none' as const }}>
-                            {/* Date block */}
-                            <div style={{ flexShrink: 0, width: 44, textAlign: 'center' }}>
-                              <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: muted, textTransform: 'uppercase' }}>
-                                {show.date ? new Date(show.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' }) : ''}
-                              </div>
-                              <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: text, fontVariantNumeric: 'tabular-nums' }}>
-                                {show.date ? new Date(show.date + 'T00:00:00').getDate() : ''}
-                              </div>
-                              <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.05em', color: muted }}>
-                                {show.date ? new Date(show.date + 'T00:00:00').toLocaleDateString('en-AU', { month: 'short' }) : ''}
-                              </div>
+                        {/* Compact row - tap anywhere expands; DAY SHEET is its own button */}
+                        <div
+                          onClick={() => setExpandedShowId(isExpanded ? null : show.id)}
+                          style={{ padding: '12px 0', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', userSelect: 'none' as const }}>
+                          {/* Date block */}
+                          <div style={{ flexShrink: 0, width: 44, textAlign: 'center' }}>
+                            <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: muted, textTransform: 'uppercase' }}>
+                              {show.date ? new Date(show.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' }) : ''}
                             </div>
-                            <div style={{ width: 1, background: border, alignSelf: 'stretch', flexShrink: 0 }} />
-                            {/* Venue + city */}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{venueName}</div>
-                              <div style={{ fontSize: 12, color: muted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {[show.city, show.country && show.country !== 'AU' ? show.country : null].filter(Boolean).join(', ')}
-                                {show.set_time && <span style={{ marginLeft: 8, fontFamily: 'monospace', color: accent, fontWeight: 700 }}>· {formatTime(show.set_time)}</span>}
-                              </div>
+                            <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: text, fontVariantNumeric: 'tabular-nums' }}>
+                              {show.date ? new Date(show.date + 'T00:00:00').getDate() : ''}
                             </div>
-                            {/* Status indicators */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                              {isFestival && (
-                                <span style={{ fontFamily: 'monospace', fontSize: 9, color: accent, background: '#FDF5EF', border: `1px solid ${accent}`, padding: '2px 6px', borderRadius: 3, letterSpacing: 1 }}>FEST</span>
-                              )}
-                              {settlement && (
-                                <span title={`Settlement: ${settlement.status}`} style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor[settlement.status] || muted, flexShrink: 0 }} />
-                              )}
-                              {songCount > 0 && (
-                                <span title={`${songCount} songs`} style={{ fontFamily: 'monospace', fontSize: 10, color: '#5B4B8A' }}>♪{songCount}</span>
-                              )}
+                            <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.05em', color: muted }}>
+                              {show.date ? new Date(show.date + 'T00:00:00').toLocaleDateString('en-AU', { month: 'short' }) : ''}
                             </div>
                           </div>
-                          {/* ⋯ actions menu trigger */}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setExpandedShowId(isExpanded ? null : show.id) }}
-                            style={{ flexShrink: 0, background: isExpanded ? '#F0E8DC' : 'transparent', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 18, padding: '4px 10px', lineHeight: 1, fontWeight: 700, minHeight: 32 }}
-                            title="More actions">
-                            ⋯
-                          </button>
+                          <div style={{ width: 1, background: border, alignSelf: 'stretch', flexShrink: 0 }} />
+                          {/* Venue + city */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{venueName}</div>
+                            <div style={{ fontSize: 12, color: muted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {[show.city, show.country && show.country !== 'AU' ? show.country : null].filter(Boolean).join(', ')}
+                              {show.set_time && <span style={{ marginLeft: 8, fontFamily: 'monospace', color: accent, fontWeight: 700 }}>· {formatTime(show.set_time)}</span>}
+                            </div>
+                          </div>
+                          {/* Status indicators */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                            {isFestival && (
+                              <span style={{ fontFamily: 'monospace', fontSize: 9, color: accent, background: '#FDF5EF', border: `1px solid ${accent}`, padding: '2px 6px', borderRadius: 3, letterSpacing: 1 }}>FEST</span>
+                            )}
+                            {settlement && (
+                              <span title={`Settlement: ${settlement.status}`} style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor[settlement.status] || muted, flexShrink: 0 }} />
+                            )}
+                            {songCount > 0 && (
+                              <span title={`${songCount} songs`} style={{ fontFamily: 'monospace', fontSize: 10, color: '#5B4B8A' }}>♪{songCount}</span>
+                            )}
+                            <span style={{ fontSize: 14, color: muted, transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0, marginLeft: 4 }}>›</span>
+                          </div>
                         </div>
 
                         {/* Actions panel (toggled by ⋯) */}
