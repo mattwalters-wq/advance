@@ -34,17 +34,19 @@ export default function FestivalSheetPage() {
   const [shows, setShows] = useState<any[]>([])
   const [press, setPress] = useState<any[]>([])
   const [setlists, setSetlists] = useState<any[]>([])
+  const [showPeople, setShowPeople] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set())
 
   useEffect(() => { loadData() }, [params.tour_id])
 
   async function loadData() {
-    const [tourRes, showsRes, pressRes, setlistsRes] = await Promise.all([
+    const [tourRes, showsRes, pressRes, setlistsRes, peopleRes] = await Promise.all([
       supabase.from('tours').select('*, artists(*)').eq('id', params.tour_id).single(),
       supabase.from('shows').select('*').eq('tour_id', params.tour_id).order('date'),
       supabase.from('press').select('*').eq('tour_id', params.tour_id).order('date'),
       supabase.from('setlists').select('*').eq('tour_id', params.tour_id),
+      supabase.from('show_people').select('*').eq('tour_id', params.tour_id),
     ])
     if (tourRes.data) {
       setTour(tourRes.data)
@@ -53,6 +55,7 @@ export default function FestivalSheetPage() {
     setShows(showsRes.data || [])
     setPress(pressRes.data || [])
     setSetlists(setlistsRes.data || [])
+    setShowPeople(peopleRes.data || [])
 
     // Auto-expand today's day if it's in the festival, else expand all
     const today = new Date().toISOString().split('T')[0]
@@ -234,6 +237,9 @@ export default function FestivalSheetPage() {
                   {/* Show details */}
                   {dayShows.map((show: any, i: number) => {
                     const showSetlist = setlists.find((sl: any) => sl.show_id === show.id)
+                    const showSupports = showPeople.filter((p: any) => p.show_id === show.id)
+                    const roleLabels: Record<string, string> = { support: 'Support', photographer: 'Photographer', videographer: 'Video', dj: 'DJ', mc: 'MC', other: 'Other' }
+                    const roleIcons: Record<string, string> = { support: '🎤', photographer: '📷', videographer: '🎥', dj: '🎧', mc: '🎙', other: '•' }
                     return (
                     <div key={i} style={{ marginBottom: 16, padding: '14px 16px', background: sectionBg, borderRadius: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
@@ -262,6 +268,25 @@ export default function FestivalSheetPage() {
                         <div style={{ marginTop: 10, padding: '10px 12px', background: '#F5F0FF', borderLeft: '3px solid #5B4B8A', borderRadius: 4, fontSize: 13 }}>
                           <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: '#5B4B8A', marginBottom: 4 }}>BACKLINE</div>
                           {show.backline}
+                        </div>
+                      )}
+                      {showSupports.length > 0 && (
+                        <div style={{ marginTop: 10, padding: '10px 12px', background: '#fff', borderLeft: `3px solid ${accent}`, borderRadius: 4 }}>
+                          <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: accent, marginBottom: 8 }}>
+                            SUPPORTS & CREW · {showSupports.length}
+                          </div>
+                          <div style={{ display: 'grid', gap: 6 }}>
+                            {showSupports.map((p: any, pi: number) => (
+                              <div key={pi} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 13, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 14 }}>{roleIcons[p.role] || '•'}</span>
+                                <span style={{ fontWeight: 600 }}>{p.name}</span>
+                                <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, color: muted }}>{(roleLabels[p.role] || 'OTHER').toUpperCase()}</span>
+                                {p.set_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: accent, fontWeight: 700 }}>{fmt(p.set_time)}{p.duration_minutes ? ` · ${p.duration_minutes}min` : ''}</span>}
+                                {p.phone && <a href={`tel:${p.phone}`} style={{ fontSize: 11, color: accent, textDecoration: 'none' }}>📞 {p.phone}</a>}
+                                {p.email && <a href={`mailto:${p.email}`} style={{ fontSize: 11, color: accent, textDecoration: 'none' }}>✉ {p.email}</a>}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                       {showSetlist && Array.isArray(showSetlist.songs) && showSetlist.songs.length > 0 && (

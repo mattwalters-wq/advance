@@ -257,6 +257,57 @@ const TOOLS: any[] = [
       required: ['id'],
     },
   },
+  {
+    name: 'add_show_person',
+    description: 'Add a support act, photographer, or other show-specific person. Use for supports (opening acts), photographers, videographers, DJs, MCs.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        show_id: { type: 'string', description: 'The show they are attached to' },
+        role: { type: 'string', description: 'support|photographer|videographer|dj|mc|other' },
+        name: { type: 'string' },
+        set_time: { type: 'string', description: 'HH:MM (useful for supports)' },
+        duration_minutes: { type: 'number' },
+        phone: { type: 'string' },
+        email: { type: 'string' },
+        instagram: { type: 'string' },
+        fee: { type: 'number' },
+        currency: { type: 'string' },
+        notes: { type: 'string' },
+      },
+      required: ['show_id', 'name'],
+    },
+  },
+  {
+    name: 'update_show_person',
+    description: 'Update a support/photographer/etc on a show',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        role: { type: 'string' },
+        name: { type: 'string' },
+        set_time: { type: 'string' },
+        duration_minutes: { type: 'number' },
+        phone: { type: 'string' },
+        email: { type: 'string' },
+        instagram: { type: 'string' },
+        fee: { type: 'number' },
+        currency: { type: 'string' },
+        notes: { type: 'string' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'delete_show_person',
+    description: 'Remove a support/photographer/etc from a show',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+  },
 ]
 
 async function executeTool(
@@ -370,6 +421,23 @@ async function executeTool(
         if (error) throw error
         return { success: true, message: `Deleted document` }
       }
+      case 'add_show_person': {
+        const { data, error } = await supabase.from('show_people')
+          .insert({ ...toolInput, tour_id: tourId, org_id: orgId }).select().single()
+        if (error) throw error
+        return { success: true, message: `Added ${toolInput.role || 'person'}: ${toolInput.name}`, data }
+      }
+      case 'update_show_person': {
+        const { id, ...updates } = toolInput
+        const { error } = await supabase.from('show_people').update(updates).eq('id', id)
+        if (error) throw error
+        return { success: true, message: `Updated show person` }
+      }
+      case 'delete_show_person': {
+        const { error } = await supabase.from('show_people').delete().eq('id', toolInput.id)
+        if (error) throw error
+        return { success: true, message: `Removed show person` }
+      }
       default:
         return { success: false, message: `Unknown tool: ${toolName}` }
     }
@@ -389,7 +457,7 @@ export async function POST(request: NextRequest) {
     )
 
     // Load full tour context
-    const [tourRes, showsRes, travelRes, accomRes, contactsRes, pressRes, setlistsRes, docsRes] = await Promise.all([
+    const [tourRes, showsRes, travelRes, accomRes, contactsRes, pressRes, setlistsRes, docsRes, peopleRes] = await Promise.all([
       supabase.from('tours').select('*, artists(name, project)').eq('id', tourId).single(),
       supabase.from('shows').select('*').eq('tour_id', tourId).order('date'),
       supabase.from('travel').select('*').eq('tour_id', tourId).order('travel_date'),
@@ -398,6 +466,7 @@ export async function POST(request: NextRequest) {
       supabase.from('press').select('*').eq('tour_id', tourId).order('date'),
       supabase.from('setlists').select('*').eq('tour_id', tourId),
       supabase.from('tour_documents').select('*').eq('tour_id', tourId),
+      supabase.from('show_people').select('*').eq('tour_id', tourId),
     ])
 
     const tour = tourRes.data
@@ -408,6 +477,7 @@ export async function POST(request: NextRequest) {
     const press = pressRes.data || []
     const setlists = setlistsRes.data || []
     const documents = docsRes.data || []
+    const showPeople = peopleRes.data || []
     const orgId = tour?.org_id
 
     const context = `
@@ -438,7 +508,14 @@ ${setlists.length ? setlists.map(sl => {
 }).join('\n') : 'None'}
 
 DOCUMENTS (${documents.length}):
-${documents.length ? documents.map(d => `- id:${d.id} | [${d.category || 'other'}] ${d.label} | ${d.url}${d.notes ? ' | '+d.notes : ''}`).join('\n') : 'None'}`.trim()
+${documents.length ? documents.map(d => `- id:${d.id} | [${d.category || 'other'}] ${d.label} | ${d.url}${d.notes ? ' | '+d.notes : ''}`).join('\n') : 'None'}
+
+SHOW PEOPLE - supports/photographers/etc (${showPeople.length}):
+${showPeople.length ? showPeople.map(p => {
+  const show = shows.find((s: any) => s.id === p.show_id)
+  const showLabel = show ? `${show.date} ${show.venue}` : 'Unknown show'
+  return `- id:${p.id} | show:${showLabel} | [${p.role || 'other'}] ${p.name}${p.set_time ? ' @ '+p.set_time : ''}${p.fee ? ' | '+(p.currency || 'AUD')+' '+p.fee : ''}${p.notes ? ' | '+p.notes : ''}`
+}).join('\n') : 'None'}`.trim()
 
     const systemPrompt = `You are an agentic tour management assistant. You have full access to this tour's data and can make changes directly.
 
@@ -459,6 +536,8 @@ Examples:
 - "Add a triple j interview on the 15th at 10am" → call add_press with type: radio, outlet: triple j
 - "Set the setlist for the Alice Springs show: Song A 3:20, Song B 4:15, Song C 5:02" → find show by venue/date, call set_setlist
 - "Add a dropbox link for the UK visa docs: https://..." → call add_document with category: visa
+- "Add Hatchie as support for the Bochum show at 8pm, fee $500" → call add_show_person with role: support, name: Hatchie, set_time: 20:00, fee: 500
+- "Add Sarah Smith as photographer for the Kaffee Kultus show" → call add_show_person with role: photographer
 - "Delete the soundcheck on the 15th" → find the show, call update_show with soundcheck_time: ""
 
 Be direct. Act first, explain briefly after. If you're unsure which record to update (e.g. multiple flights on same day), ask which one.`

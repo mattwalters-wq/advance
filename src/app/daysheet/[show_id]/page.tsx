@@ -38,6 +38,7 @@ export default function DaySheetPage() {
   const [rider, setRider] = useState<any>(null)
   const [press, setPress] = useState<any[]>([])
   const [setlist, setSetlist] = useState<any>(null)
+  const [showPeople, setShowPeople] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [mode, setMode] = useState<'day' | 'trip'>('day')
@@ -71,7 +72,7 @@ export default function DaySheetPage() {
 
     setShow(showData)
 
-    const [tourRes, travelRes, accomRes, contactsRes, riderRes, pressRes, setlistRes] = await Promise.all([
+    const [tourRes, travelRes, accomRes, contactsRes, riderRes, pressRes, setlistRes, peopleRes] = await Promise.all([
       supabase.from('tours').select('*, artists(*)').eq('id', showData.tour_id).single(),
       supabase.from('travel').select('*').eq('tour_id', showData.tour_id).order('travel_date'),
       supabase.from('accommodation').select('*').eq('tour_id', showData.tour_id).order('check_in'),
@@ -79,6 +80,7 @@ export default function DaySheetPage() {
       supabase.from('riders').select('*').eq('tour_id', showData.tour_id).single(),
       supabase.from('press').select('*').eq('tour_id', showData.tour_id).order('date'),
       supabase.from('setlists').select('*').eq('show_id', showData.id).single(),
+      supabase.from('show_people').select('*').eq('show_id', showData.id),
     ])
 
     const tourData = tourRes.data
@@ -106,6 +108,7 @@ export default function DaySheetPage() {
     setRider(riderRes.data || null)
     setPress(pressRes.data || [])
     setSetlist(setlistRes.data || null)
+    setShowPeople(peopleRes.data || [])
     setLoading(false)
   }
 
@@ -521,6 +524,57 @@ export default function DaySheetPage() {
             </div>
           </div>
         )}
+
+        {/* ── SUPPORT ACTS & PHOTOGRAPHERS (day mode only) ── */}
+        {mode === 'day' && showPeople.length > 0 && (() => {
+          const roleLabels: Record<string, string> = { support: 'Support', photographer: 'Photographer', videographer: 'Videographer', dj: 'DJ', mc: 'MC', other: 'Other' }
+          const roleIcons: Record<string, string> = { support: '🎤', photographer: '📷', videographer: '🎥', dj: '🎧', mc: '🎙', other: '•' }
+          // Group by role category for better readability
+          const sorted = [...showPeople].sort((a, b) => {
+            const order = ['support', 'dj', 'mc', 'photographer', 'videographer', 'other']
+            const aIdx = order.indexOf(a.role || 'other')
+            const bIdx = order.indexOf(b.role || 'other')
+            if (aIdx !== bIdx) return aIdx - bIdx
+            if (a.set_time && b.set_time) return a.set_time.localeCompare(b.set_time)
+            return (a.name || '').localeCompare(b.name || '')
+          })
+          return (
+            <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
+              <div style={{ padding: '11px 24px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 14 }}>🎤</span>
+                <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: muted, textTransform: 'uppercase' }}>Supports & Crew</span>
+              </div>
+              <div>
+                {sorted.map((p: any, i: number) => (
+                  <div key={i} style={{ padding: '12px 24px', borderBottom: i < sorted.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: 'center' }}>{roleIcons[p.role] || '•'}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 15, fontWeight: 700 }}>{p.name}</span>
+                        <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.5, color: accent, background: '#FDF5EF', border: `1px solid ${accent}`, padding: '1px 7px', borderRadius: 3 }}>
+                          {(roleLabels[p.role] || 'OTHER').toUpperCase()}
+                        </span>
+                        {p.set_time && (
+                          <span style={{ fontFamily: 'monospace', fontSize: 12, color: accent, fontWeight: 700 }}>
+                            {fmt(p.set_time)}{p.duration_minutes ? ` · ${p.duration_minutes}min` : ''}
+                          </span>
+                        )}
+                      </div>
+                      {(p.phone || p.email || p.instagram) && (
+                        <div style={{ fontSize: 12, color: muted, marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                          {p.phone && <a href={`tel:${p.phone}`} style={{ color: accent, textDecoration: 'none' }}>📞 {p.phone}</a>}
+                          {p.email && <a href={`mailto:${p.email}`} style={{ color: accent, textDecoration: 'none' }}>✉ {p.email}</a>}
+                          {p.instagram && <span>📷 {p.instagram}</span>}
+                        </div>
+                      )}
+                      {p.notes && <div style={{ fontSize: 12, color: muted, fontStyle: 'italic', marginTop: 4, whiteSpace: 'pre-wrap' as const }}>{p.notes}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ── SETLIST (day mode only) ── */}
         {mode === 'day' && setlist && Array.isArray(setlist.songs) && setlist.songs.length > 0 && (() => {

@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase'
 
 const supabase = createClient()
 
-type ModalType = 'show' | 'travel' | 'accommodation' | 'contact' | 'tour' | 'rider' | 'settlement' | 'press' | 'setlist' | 'document' | null
+type ModalType = 'show' | 'travel' | 'accommodation' | 'contact' | 'tour' | 'rider' | 'settlement' | 'press' | 'setlist' | 'document' | 'person' | null
 
 export default function ArtistPage() {
   const params = useParams()
@@ -22,6 +22,7 @@ export default function ArtistPage() {
   const [press, setPress] = useState<any[]>([])
   const [setlists, setSetlists] = useState<any[]>([])
   const [documents, setDocuments] = useState<any[]>([])
+  const [showPeople, setShowPeople] = useState<any[]>([])
   const [darkMode, setDarkMode] = useState(false)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -45,6 +46,7 @@ export default function ArtistPage() {
   const [settlements, setSettlements] = useState<any[]>([])
   const [settlementShow, setSettlementShow] = useState<any>(null)
   const [setlistShow, setSetlistShow] = useState<any>(null)
+  const [personShow, setPersonShow] = useState<any>(null)
   const [expandedShowId, setExpandedShowId] = useState<string | null>(null)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set(['travel', 'accommodation', 'contacts', 'press', 'documents']))
   const [importJobs, setImportJobs] = useState<any[]>([])
@@ -104,7 +106,7 @@ export default function ArtistPage() {
   }
 
   async function loadTourData(tourId: string) {
-    const [s, t, a, c, p, sl, d] = await Promise.all([
+    const [s, t, a, c, p, sl, d, sp] = await Promise.all([
       supabase.from('shows').select('*').eq('tour_id', tourId).order('date'),
       supabase.from('travel').select('*').eq('tour_id', tourId).order('travel_date'),
       supabase.from('accommodation').select('*').eq('tour_id', tourId).order('check_in'),
@@ -112,6 +114,7 @@ export default function ArtistPage() {
       supabase.from('press').select('*').eq('tour_id', tourId).order('date'),
       supabase.from('setlists').select('*').eq('tour_id', tourId),
       supabase.from('tour_documents').select('*').eq('tour_id', tourId).order('category'),
+      supabase.from('show_people').select('*').eq('tour_id', tourId),
     ])
     const showsData = s.data || []
     const travelData = t.data || []
@@ -123,6 +126,7 @@ export default function ArtistPage() {
     setPress(p.data || [])
     setSetlists(sl.data || [])
     setDocuments(d.data || [])
+    setShowPeople(sp.data || [])
     setWarnings(computeWarnings(showsData, travelData, accomData))
     // Auto-switch to import tab if tour is empty
     if (showsData.length === 0 && travelData.length === 0 && accomData.length === 0) {
@@ -480,6 +484,20 @@ export default function ArtistPage() {
         await supabase.from('setlists').update({ songs, notes: notes || null, updated_at: new Date().toISOString() }).eq('id', existing.id)
       } else {
         await supabase.from('setlists').insert({ ...base, songs, notes: notes || null })
+      }
+      await loadTourData(selectedTour.id)
+      setSaving(false)
+      closeModal()
+      return
+    }
+
+    if (modal === 'person') {
+      const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id, show_id: personShow?.id || form.show_id }
+      if (editingId) {
+        const { id, tour_id, org_id, created_at, show_id, ...updates } = form
+        await supabase.from('show_people').update(updates).eq('id', editingId)
+      } else {
+        await supabase.from('show_people').insert({ ...base, ...form })
       }
       await loadTourData(selectedTour.id)
       setSaving(false)
@@ -1167,6 +1185,75 @@ export default function ArtistPage() {
               </>
             )}
 
+            {modal === 'person' && (
+              <>
+                <div style={{ marginBottom: 12, fontSize: 13, color: muted, fontStyle: 'italic' }}>
+                  {personShow?.venue} — {personShow?.date}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Role *</label>
+                    <select style={inputStyle} value={form.role || 'support'} onChange={e => setForm({ ...form, role: e.target.value })}>
+                      <option value="support">Support act</option>
+                      <option value="photographer">Photographer</option>
+                      <option value="videographer">Videographer</option>
+                      <option value="dj">DJ</option>
+                      <option value="mc">MC / Host</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Name *</label>
+                    <input style={inputStyle} value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Act or person name" />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Set time</label>
+                    <input type="time" style={inputStyle} value={form.set_time || ''} onChange={e => setForm({ ...form, set_time: e.target.value })} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Duration (min)</label>
+                    <input type="number" style={inputStyle} value={form.duration_minutes || ''} onChange={e => setForm({ ...form, duration_minutes: e.target.value ? parseInt(e.target.value) : null })} placeholder="30" />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Phone</label>
+                    <input style={inputStyle} value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Email</label>
+                    <input style={inputStyle} value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Instagram</label>
+                    <input style={inputStyle} value={form.instagram || ''} onChange={e => setForm({ ...form, instagram: e.target.value })} placeholder="@handle" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Fee</label>
+                    <input type="number" style={inputStyle} value={form.fee || ''} onChange={e => setForm({ ...form, fee: e.target.value ? parseFloat(e.target.value) : null })} placeholder="0" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Currency</label>
+                    <select style={inputStyle} value={form.currency || 'AUD'} onChange={e => setForm({ ...form, currency: e.target.value })}>
+                      <option>AUD</option>
+                      <option>EUR</option>
+                      <option>GBP</option>
+                      <option>USD</option>
+                      <option>NZD</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Notes</label>
+                  <textarea style={{ ...inputStyle, minHeight: 60, fontFamily: 'Georgia, serif' }} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Deal details, tech needs, socials to tag..." />
+                </div>
+              </>
+            )}
+
             {modal === 'settlement' && (
               <>
                 <div style={{ marginBottom: 8, fontSize: 13, color: muted, fontStyle: 'italic' }}>
@@ -1570,6 +1657,7 @@ export default function ArtistPage() {
                       const settlement = settlements.find(s => s.show_id === show.id)
                       const sl = setlists.find(s => s.show_id === show.id)
                       const songCount = sl && Array.isArray(sl.songs) ? sl.songs.length : 0
+                      const peopleCount = showPeople.filter(p => p.show_id === show.id).length
                       const sameVenue = shows.filter(s => s.venue === show.venue)
                       const isFestival = sameVenue.length >= 2
                       const statusColor: Record<string,string> = { paid: '#2d7a4f', partial: '#B8860B', pending: muted, disputed: '#C00' }
@@ -1612,6 +1700,9 @@ export default function ArtistPage() {
                             {songCount > 0 && (
                               <span title={`${songCount} songs`} style={{ fontFamily: 'monospace', fontSize: 10, color: '#5B4B8A' }}>♪{songCount}</span>
                             )}
+                            {peopleCount > 0 && (
+                              <span title={`${peopleCount} support/photog`} style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>👥{peopleCount}</span>
+                            )}
                             <span style={{ fontSize: 14, color: muted, transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0, marginLeft: 4 }}>›</span>
                           </div>
                         </div>
@@ -1638,6 +1729,49 @@ export default function ArtistPage() {
                             {show.notes && (
                               <div style={{ fontSize: 12, color: muted, marginBottom: 12, fontStyle: 'italic', lineHeight: 1.5, whiteSpace: 'pre-wrap' as const }}>{show.notes}</div>
                             )}
+                            {/* Show people (supports, photographers, etc) */}
+                            {(() => {
+                              const people = showPeople.filter(p => p.show_id === show.id)
+                              const roleLabels: Record<string, string> = { support: 'Support', photographer: 'Photographer', videographer: 'Video', dj: 'DJ', mc: 'MC', other: 'Other' }
+                              const roleIcons: Record<string, string> = { support: '🎤', photographer: '📷', videographer: '🎥', dj: '🎧', mc: '🎙', other: '•' }
+                              return (
+                                <div style={{ marginBottom: 12 }}>
+                                  {people.length > 0 && (
+                                    <div style={{ display: 'grid', gap: 6, marginBottom: 8 }}>
+                                      {people.map((p: any) => (
+                                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#F9F6F2', borderRadius: 6, fontSize: 12 }}>
+                                          <span style={{ fontSize: 14 }}>{roleIcons[p.role] || '•'}</span>
+                                          <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontWeight: 600, color: text }}>
+                                              {p.name}
+                                              <span style={{ fontFamily: 'monospace', fontSize: 10, color: muted, marginLeft: 8, letterSpacing: 1 }}>{(roleLabels[p.role] || 'OTHER').toUpperCase()}</span>
+                                            </div>
+                                            <div style={{ color: muted, fontSize: 11, display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
+                                              {p.set_time && <span style={{ fontFamily: 'monospace', color: accent }}>{formatTime(p.set_time)}{p.duration_minutes ? ` · ${p.duration_minutes}min` : ''}</span>}
+                                              {p.fee > 0 && <span>{p.currency || 'AUD'} {p.fee}</span>}
+                                              {p.phone && <span>📞 {p.phone}</span>}
+                                              {p.email && <span>✉ {p.email}</span>}
+                                              {p.instagram && <span>📷 {p.instagram}</span>}
+                                            </div>
+                                            {p.notes && <div style={{ color: muted, fontSize: 11, fontStyle: 'italic', marginTop: 3 }}>{p.notes}</div>}
+                                          </div>
+                                          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                                            <button onClick={(e) => { e.stopPropagation(); setPersonShow(show); openModal('person', p) }}
+                                              style={{ background: 'transparent', border: `1px solid ${border}`, borderRadius: 5, color: muted, cursor: 'pointer', fontSize: 11, padding: '2px 7px' }}>✎</button>
+                                            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ table: 'show_people', id: p.id, label: `${p.name} from ${show.venue}` }) }}
+                                              style={{ background: '#fff0f0', border: '1px solid #ffcccc', borderRadius: 5, color: '#cc0000', cursor: 'pointer', fontSize: 11, padding: '2px 7px' }}>✕</button>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <button onClick={(e) => { e.stopPropagation(); setPersonShow(show); openModal('person', { role: 'support' }) }}
+                                    style={{ background: 'transparent', border: `1px dashed ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
+                                    + SUPPORT / PHOTOG / ETC
+                                  </button>
+                                </div>
+                              )
+                            })()}
                             {/* Actions */}
                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                               {isFestival ? (
