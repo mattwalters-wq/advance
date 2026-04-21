@@ -45,6 +45,8 @@ export default function ArtistPage() {
   const [settlements, setSettlements] = useState<any[]>([])
   const [settlementShow, setSettlementShow] = useState<any>(null)
   const [setlistShow, setSetlistShow] = useState<any>(null)
+  const [expandedShowId, setExpandedShowId] = useState<string | null>(null)
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set(['travel', 'accommodation', 'contacts', 'press', 'documents']))
   const [importJobs, setImportJobs] = useState<any[]>([])
   const [importDragging, setImportDragging] = useState(false)
   const [importTab, setImportTab] = useState<'drop' | 'paste'>('drop')
@@ -1564,89 +1566,135 @@ export default function ArtistPage() {
                       const v = show.venue || ''
                       const venueName = v.length > 55 ? v.split(/\s*[-–]\s*(?:Access|Park in|Contact|via\s|Turn|From\s)/i)[0].trim() : v
                       const hasDetail = v.length > venueName.length
+                      const isExpanded = expandedShowId === show.id
+                      const settlement = settlements.find(s => s.show_id === show.id)
+                      const sl = setlists.find(s => s.show_id === show.id)
+                      const songCount = sl && Array.isArray(sl.songs) ? sl.songs.length : 0
+                      const sameVenue = shows.filter(s => s.venue === show.venue)
+                      const isFestival = sameVenue.length >= 2
+                      const statusColor: Record<string,string> = { paid: '#2d7a4f', partial: '#B8860B', pending: muted, disputed: '#C00' }
+
                       return (
-                      <div key={i} style={{ padding: '12px 0', borderBottom: i < shows.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                        {/* Date block */}
-                        <div style={{ flexShrink: 0, width: 44, textAlign: 'center', paddingTop: 2 }}>
-                          <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: muted, textTransform: 'uppercase' }}>
-                            {show.date ? new Date(show.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' }) : ''}
+                      <div key={i} style={{ borderBottom: i < shows.length - 1 ? `1px solid ${border}` : 'none', position: 'relative' as const }}>
+                        {/* Compact row - tap opens Day Sheet / Festival, ⋯ for other actions */}
+                        <div style={{ padding: '12px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
+                          {/* Main tap area → opens day sheet */}
+                          <div
+                            onClick={() => window.open(isFestival ? `/festival/${selectedTour?.id}` : `/daysheet/${show.id}`, '_blank')}
+                            style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', userSelect: 'none' as const }}>
+                            {/* Date block */}
+                            <div style={{ flexShrink: 0, width: 44, textAlign: 'center' }}>
+                              <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: muted, textTransform: 'uppercase' }}>
+                                {show.date ? new Date(show.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' }) : ''}
+                              </div>
+                              <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: text, fontVariantNumeric: 'tabular-nums' }}>
+                                {show.date ? new Date(show.date + 'T00:00:00').getDate() : ''}
+                              </div>
+                              <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.05em', color: muted }}>
+                                {show.date ? new Date(show.date + 'T00:00:00').toLocaleDateString('en-AU', { month: 'short' }) : ''}
+                              </div>
+                            </div>
+                            <div style={{ width: 1, background: border, alignSelf: 'stretch', flexShrink: 0 }} />
+                            {/* Venue + city */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{venueName}</div>
+                              <div style={{ fontSize: 12, color: muted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {[show.city, show.country && show.country !== 'AU' ? show.country : null].filter(Boolean).join(', ')}
+                                {show.set_time && <span style={{ marginLeft: 8, fontFamily: 'monospace', color: accent, fontWeight: 700 }}>· {formatTime(show.set_time)}</span>}
+                              </div>
+                            </div>
+                            {/* Status indicators */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                              {isFestival && (
+                                <span style={{ fontFamily: 'monospace', fontSize: 9, color: accent, background: '#FDF5EF', border: `1px solid ${accent}`, padding: '2px 6px', borderRadius: 3, letterSpacing: 1 }}>FEST</span>
+                              )}
+                              {settlement && (
+                                <span title={`Settlement: ${settlement.status}`} style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor[settlement.status] || muted, flexShrink: 0 }} />
+                              )}
+                              {songCount > 0 && (
+                                <span title={`${songCount} songs`} style={{ fontFamily: 'monospace', fontSize: 10, color: '#5B4B8A' }}>♪{songCount}</span>
+                              )}
+                            </div>
                           </div>
-                          <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: text, fontVariantNumeric: 'tabular-nums' }}>
-                            {show.date ? new Date(show.date + 'T00:00:00').getDate() : ''}
-                          </div>
-                          <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.05em', color: muted }}>
-                            {show.date ? new Date(show.date + 'T00:00:00').toLocaleDateString('en-AU', { month: 'short' }) : ''}
-                          </div>
+                          {/* ⋯ actions menu trigger */}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setExpandedShowId(isExpanded ? null : show.id) }}
+                            style={{ flexShrink: 0, background: isExpanded ? '#F0E8DC' : 'transparent', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 18, padding: '4px 10px', lineHeight: 1, fontWeight: 700, minHeight: 32 }}
+                            title="More actions">
+                            ⋯
+                          </button>
                         </div>
-                        <div style={{ width: 1, background: border, alignSelf: 'stretch', flexShrink: 0 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 1, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{venueName}</div>
-                          <div style={{ fontSize: 12, color: muted, marginBottom: 5 }}>
-                            {[show.city, show.country && show.country !== 'AU' ? show.country : null].filter(Boolean).join(', ')}
-                            {hasDetail && <span style={{ marginLeft: 6, color: muted, fontSize: 11 }}>· access info on day sheet</span>}
-                          </div>
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                            {show.doors_time && <span style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>Doors {formatTime(show.doors_time)}</span>}
-                            {show.soundcheck_time && <span style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>SC {formatTime(show.soundcheck_time)}</span>}
-                            {show.set_time && <span style={{ fontFamily: 'monospace', fontSize: 10, color: accent, fontWeight: 700 }}>Stage {formatTime(show.set_time)}</span>}
-                            {show.stage && <span style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>{show.stage}</span>}
-                            {show.catering && <span style={{ fontSize: 10, color: muted }}>🍽 {show.catering}</span>}
-                            {show.backline && <span style={{ fontSize: 10, color: muted }}>🎸 {show.backline}</span>}
-                          </div>
-                          {show.notes && <div style={{ fontSize: 11, color: muted, marginTop: 4, fontStyle: 'italic', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any }}>{show.notes}</div>}
-                        </div>
-                        <div className="show-actions" style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                          {(() => {
-                            // Is this show part of a festival? (2+ shows at same venue)
-                            const sameVenue = shows.filter(s => s.venue === show.venue)
-                            const isFestival = sameVenue.length >= 2
-                            return isFestival ? (
-                              <button onClick={() => window.open(`/festival/${selectedTour?.id}`, '_blank')}
-                                style={{ background: '#FDF5EF', border: `1px solid ${accent}`, borderRadius: 6, color: accent, cursor: 'pointer', fontSize: 10, padding: '3px 8px', fontFamily: 'monospace', letterSpacing: 1 }}
-                                title="Festival Sheet">FESTIVAL ↗</button>
-                            ) : (
-                              <button onClick={() => window.open(`/daysheet/${show.id}`, '_blank')}
-                                style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 10, padding: '3px 8px', fontFamily: 'monospace', letterSpacing: 1 }}
-                                title="Day Sheet">DAY SHEET ↗</button>
-                            )
-                          })()}
-                          {(() => {
-                            const sl = setlists.find(s => s.show_id === show.id)
-                            const songCount = sl && Array.isArray(sl.songs) ? sl.songs.length : 0
-                            return (
-                              <button onClick={() => { setSetlistShow(show); openModal('setlist', sl || { songs: [], show_id: show.id }) }}
-                                style={{ background: songCount > 0 ? '#F5F0FF' : 'transparent', border: `1px solid ${songCount > 0 ? '#8B7EC6' : border}`, borderRadius: 6, color: songCount > 0 ? '#5B4B8A' : muted, cursor: 'pointer', fontSize: 10, padding: '3px 8px', fontFamily: 'monospace', letterSpacing: 1 }}
-                                title="Setlist">
-                                {songCount > 0 ? `♪ ${songCount}` : '♪ SET'}
+
+                        {/* Actions panel (toggled by ⋯) */}
+                        {isExpanded && (
+                          <div style={{ padding: '4px 0 16px 56px' }}>
+                            {/* Full venue name if truncated */}
+                            {(v.length > venueName.length) && (
+                              <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>📍 {v}</div>
+                            )}
+                            {/* Times row */}
+                            {(show.doors_time || show.soundcheck_time || show.set_time || show.stage || show.catering || show.backline) && (
+                              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+                                {show.doors_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>Doors {formatTime(show.doors_time)}</span>}
+                                {show.soundcheck_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>SC {formatTime(show.soundcheck_time)}</span>}
+                                {show.set_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: accent, fontWeight: 700 }}>Stage {formatTime(show.set_time)}</span>}
+                                {show.stage && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>{show.stage}</span>}
+                                {show.catering && <span style={{ fontSize: 11, color: muted }}>🍽 {show.catering}</span>}
+                                {show.backline && <span style={{ fontSize: 11, color: muted }}>🎸 {show.backline}</span>}
+                              </div>
+                            )}
+                            {/* Notes */}
+                            {show.notes && (
+                              <div style={{ fontSize: 12, color: muted, marginBottom: 12, fontStyle: 'italic', lineHeight: 1.5, whiteSpace: 'pre-wrap' as const }}>{show.notes}</div>
+                            )}
+                            {/* Actions */}
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              {isFestival ? (
+                                <button onClick={(e) => { e.stopPropagation(); window.open(`/festival/${selectedTour?.id}`, '_blank') }}
+                                  style={{ background: '#FDF5EF', border: `1px solid ${accent}`, borderRadius: 6, color: accent, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
+                                  FESTIVAL ↗
+                                </button>
+                              ) : (
+                                <button onClick={(e) => { e.stopPropagation(); window.open(`/daysheet/${show.id}`, '_blank') }}
+                                  style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
+                                  DAY SHEET ↗
+                                </button>
+                              )}
+                              <button onClick={(e) => { e.stopPropagation(); setSetlistShow(show); openModal('setlist', sl || { songs: [], show_id: show.id }) }}
+                                style={{ background: songCount > 0 ? '#F5F0FF' : 'transparent', border: `1px solid ${songCount > 0 ? '#8B7EC6' : border}`, borderRadius: 6, color: songCount > 0 ? '#5B4B8A' : muted, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
+                                {songCount > 0 ? `♪ ${songCount} songs` : '♪ SET LIST'}
                               </button>
-                            )
-                          })()}
-                          {(() => {
-                            const s = settlements.find(s => s.show_id === show.id)
-                            const statusColor: Record<string,string> = { paid: '#2d7a4f', partial: '#B8860B', pending: muted, disputed: '#C00' }
-                            return (
-                              <button onClick={() => { setSettlementShow(show); openModal('settlement', s || {}) }}
-                                style={{ background: s ? (s.status === 'paid' ? '#f0fff4' : s.status === 'disputed' ? '#fff0f0' : '#FFF8E6') : 'transparent', border: `1px solid ${s ? statusColor[s.status] || border : border}`, borderRadius: 6, color: s ? statusColor[s.status] || muted : muted, cursor: 'pointer', fontSize: 10, padding: '3px 8px', fontFamily: 'monospace', letterSpacing: 1 }}
-                                title="Settlement">
-                                {s ? `$${s.status}` : '$ settle'}
+                              <button onClick={(e) => { e.stopPropagation(); setSettlementShow(show); openModal('settlement', settlement || {}) }}
+                                style={{ background: settlement ? (settlement.status === 'paid' ? '#f0fff4' : settlement.status === 'disputed' ? '#fff0f0' : '#FFF8E6') : 'transparent', border: `1px solid ${settlement ? statusColor[settlement.status] || border : border}`, borderRadius: 6, color: settlement ? statusColor[settlement.status] || muted : muted, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
+                                {settlement ? `$ ${settlement.status}` : '$ SETTLE'}
                               </button>
-                            )
-                          })()}
-                          <button onClick={() => openModal('show', show)}
-                            style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 11, padding: '3px 8px' }}
-                            title="Edit">✎</button>
-                          <button onClick={() => setConfirmDelete({ table: 'shows', id: show.id, label: `${show.venue} — ${show.date}` })}
-                            style={{ background: '#fff0f0', border: '1px solid #ffcccc', borderRadius: 6, color: '#cc0000', cursor: 'pointer', fontSize: 12, padding: '3px 9px', fontWeight: 700 }}
-                            title="Delete">✕</button>
-                        </div>
+                              <button onClick={(e) => { e.stopPropagation(); openModal('show', show) }}
+                                style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 12, padding: '6px 12px' }}>
+                                ✎ Edit
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ table: 'shows', id: show.id, label: `${show.venue} — ${show.date}` }) }}
+                                style={{ background: '#fff0f0', border: '1px solid #ffcccc', borderRadius: 6, color: '#cc0000', cursor: 'pointer', fontSize: 12, padding: '6px 12px', fontWeight: 700 }}>
+                                ✕ Delete
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )})}
                   </div>
                 )}
-                {travel.length > 0 && (
+                {travel.length > 0 && (() => {
+                  const key = 'travel'
+                  const collapsed = collapsedSections.has(key)
+                  return (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
-                    <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Travel — {travel.length}</div>
-                    {travel.map((t, i) => (
+                    <div
+                      onClick={() => setCollapsedSections(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })}
+                      style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: collapsed ? 0 : 16, textTransform: 'uppercase', fontFamily: 'monospace', cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>Travel — {travel.length}</span>
+                      <span style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s', fontSize: 14 }}>›</span>
+                    </div>
+                    {!collapsed && travel.map((t, i) => (
                       <div key={i} style={{ padding: '10px 0', borderBottom: i < travel.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -1673,11 +1721,19 @@ export default function ArtistPage() {
                       </div>
                     ))}
                   </div>
-                )}
-                {accommodation.length > 0 && (
+                )})()}
+                {accommodation.length > 0 && (() => {
+                  const key = 'accommodation'
+                  const collapsed = collapsedSections.has(key)
+                  return (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
-                    <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Hotels — {accommodation.length}</div>
-                    {accommodation.map((a, i) => (
+                    <div
+                      onClick={() => setCollapsedSections(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })}
+                      style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: collapsed ? 0 : 16, textTransform: 'uppercase', fontFamily: 'monospace', cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>Hotels — {accommodation.length}</span>
+                      <span style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s', fontSize: 14 }}>›</span>
+                    </div>
+                    {!collapsed && accommodation.map((a, i) => (
                       <div key={i} style={{ padding: '12px 0', borderBottom: i < accommodation.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, color: accent, marginBottom: 4 }}>{formatDate(a.check_in)}{a.check_out ? ` — ${formatDate(a.check_out)}` : ''}</div>
@@ -1698,11 +1754,19 @@ export default function ArtistPage() {
                       </div>
                     ))}
                   </div>
-                )}
-                {contacts.length > 0 && (
+                )})()}
+                {contacts.length > 0 && (() => {
+                  const key = 'contacts'
+                  const collapsed = collapsedSections.has(key)
+                  return (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
-                    <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Contacts — {contacts.length}</div>
-                    {contacts.map((c, i) => (
+                    <div
+                      onClick={() => setCollapsedSections(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })}
+                      style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: collapsed ? 0 : 16, textTransform: 'uppercase', fontFamily: 'monospace', cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>Contacts — {contacts.length}</span>
+                      <span style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s', fontSize: 14 }}>›</span>
+                    </div>
+                    {!collapsed && contacts.map((c, i) => (
                       <div key={i} style={{ padding: '12px 0', borderBottom: i < contacts.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 600, marginBottom: 4 }}>{c.name}</div>
@@ -1721,14 +1785,19 @@ export default function ArtistPage() {
                       </div>
                     ))}
                   </div>
-                )}
-                {press.length > 0 && (
+                )})()}
+                {press.length > 0 && (() => {
+                  const key = 'press'
+                  const collapsed = collapsedSections.has(key)
+                  return (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
-                    <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 14 }}>📣</span>
-                      Press — {press.length}
+                    <div
+                      onClick={() => setCollapsedSections(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })}
+                      style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: collapsed ? 0 : 16, textTransform: 'uppercase', fontFamily: 'monospace', cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 14 }}>📣</span>Press — {press.length}</span>
+                      <span style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s', fontSize: 14 }}>›</span>
                     </div>
-                    {press.map((p, i) => {
+                    {!collapsed && press.map((p, i) => {
                       const typeLabels: Record<string, string> = {
                         interview: 'Interview', radio: 'Radio', tv: 'TV', podcast: 'Podcast',
                         photo_shoot: 'Photo shoot', press_conference: 'Press conf.', other: 'Press'
@@ -1774,14 +1843,19 @@ export default function ArtistPage() {
                       )
                     })}
                   </div>
-                )}
-                {documents.length > 0 && (
+                )})()}
+                {documents.length > 0 && (() => {
+                  const key = 'documents'
+                  const collapsed = collapsedSections.has(key)
+                  return (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
-                    <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 14 }}>📎</span>
-                      Documents — {documents.length}
+                    <div
+                      onClick={() => setCollapsedSections(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })}
+                      style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: collapsed ? 0 : 16, textTransform: 'uppercase', fontFamily: 'monospace', cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 14 }}>📎</span>Documents — {documents.length}</span>
+                      <span style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s', fontSize: 14 }}>›</span>
                     </div>
-                    {(() => {
+                    {!collapsed && (() => {
                       const byCategory = documents.reduce((acc: any, d: any) => {
                         const cat = d.category || 'other'
                         if (!acc[cat]) acc[cat] = []
@@ -1819,7 +1893,7 @@ export default function ArtistPage() {
                       ))
                     })()}
                   </div>
-                )}
+                )})()}
                 {settlements.length > 0 && (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
                     <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Settlements — {settlements.length} show{settlements.length !== 1 ? 's' : ''}</div>
