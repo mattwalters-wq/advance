@@ -34,14 +34,20 @@ export default function LandingPage() {
         .feature-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08) !important; transform: translateY(-1px); }
         .feature-card { transition: all 0.2s; }
         .nav-link:hover { color: #1A1714 !important; }
+        @media (max-width: 600px) {
+          .main-nav { padding: 0 16px !important; gap: 8px !important; }
+          .main-nav .nav-link { display: none !important; }
+          .main-nav button { padding: 7px 14px !important; font-size: 12px !important; white-space: nowrap !important; }
+          .main-nav .nav-actions { gap: 8px !important; }
+        }
       `}</style>
 
       {/* Nav */}
-      <nav style={{ padding: '0 40px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E8E0D4', background: '#F7F3EE', position: 'sticky', top: 0, zIndex: 10 }}>
+      <nav className="main-nav" style={{ padding: '0 40px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E8E0D4', background: '#F7F3EE', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 22, fontStyle: 'italic', letterSpacing: '-0.02em', color: '#1A1714' }}>Advance</span>
         </div>
-        <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+        <div className="nav-actions" style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
           <a href="/terms" className="nav-link" style={{ fontSize: 13, color: '#8A8580', textDecoration: 'none', transition: 'color 0.15s' }}>Terms</a>
           <a href="/privacy" className="nav-link" style={{ fontSize: 13, color: '#8A8580', textDecoration: 'none', transition: 'color 0.15s' }}>Privacy</a>
           <button onClick={() => router.push('/auth/signin')}
