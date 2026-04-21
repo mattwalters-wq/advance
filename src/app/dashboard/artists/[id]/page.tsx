@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase'
 
 const supabase = createClient()
 
-type ModalType = 'show' | 'travel' | 'accommodation' | 'contact' | 'tour' | 'rider' | 'settlement' | 'press' | null
+type ModalType = 'show' | 'travel' | 'accommodation' | 'contact' | 'tour' | 'rider' | 'settlement' | 'press' | 'setlist' | 'document' | null
 
 export default function ArtistPage() {
   const params = useParams()
@@ -20,6 +20,8 @@ export default function ArtistPage() {
   const [accommodation, setAccommodation] = useState<any[]>([])
   const [contacts, setContacts] = useState<any[]>([])
   const [press, setPress] = useState<any[]>([])
+  const [setlists, setSetlists] = useState<any[]>([])
+  const [documents, setDocuments] = useState<any[]>([])
   const [darkMode, setDarkMode] = useState(false)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -42,6 +44,7 @@ export default function ArtistPage() {
   const [rider, setRider] = useState<any>(null)
   const [settlements, setSettlements] = useState<any[]>([])
   const [settlementShow, setSettlementShow] = useState<any>(null)
+  const [setlistShow, setSetlistShow] = useState<any>(null)
   const [importJobs, setImportJobs] = useState<any[]>([])
   const [importDragging, setImportDragging] = useState(false)
   const [importTab, setImportTab] = useState<'drop' | 'paste'>('drop')
@@ -99,12 +102,14 @@ export default function ArtistPage() {
   }
 
   async function loadTourData(tourId: string) {
-    const [s, t, a, c, p] = await Promise.all([
+    const [s, t, a, c, p, sl, d] = await Promise.all([
       supabase.from('shows').select('*').eq('tour_id', tourId).order('date'),
       supabase.from('travel').select('*').eq('tour_id', tourId).order('travel_date'),
       supabase.from('accommodation').select('*').eq('tour_id', tourId).order('check_in'),
       supabase.from('contacts').select('*').eq('tour_id', tourId),
       supabase.from('press').select('*').eq('tour_id', tourId).order('date'),
+      supabase.from('setlists').select('*').eq('tour_id', tourId),
+      supabase.from('tour_documents').select('*').eq('tour_id', tourId).order('category'),
     ])
     const showsData = s.data || []
     const travelData = t.data || []
@@ -114,6 +119,8 @@ export default function ArtistPage() {
     setAccommodation(accomData)
     setContacts(c.data || [])
     setPress(p.data || [])
+    setSetlists(sl.data || [])
+    setDocuments(d.data || [])
     setWarnings(computeWarnings(showsData, travelData, accomData))
     // Auto-switch to import tab if tour is empty
     if (showsData.length === 0 && travelData.length === 0 && accomData.length === 0) {
@@ -463,8 +470,23 @@ export default function ArtistPage() {
       return
     }
 
+    if (modal === 'setlist') {
+      const { songs, notes } = form
+      const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id, show_id: setlistShow?.id }
+      const existing = setlists.find(s => s.show_id === setlistShow?.id)
+      if (existing) {
+        await supabase.from('setlists').update({ songs, notes: notes || null, updated_at: new Date().toISOString() }).eq('id', existing.id)
+      } else {
+        await supabase.from('setlists').insert({ ...base, songs, notes: notes || null })
+      }
+      await loadTourData(selectedTour.id)
+      setSaving(false)
+      closeModal()
+      return
+    }
+
     const tableMap: Record<string, string> = {
-      show: 'shows', travel: 'travel', accommodation: 'accommodation', contact: 'contacts', press: 'press'
+      show: 'shows', travel: 'travel', accommodation: 'accommodation', contact: 'contacts', press: 'press', document: 'tour_documents'
     }
     const table = tableMap[modal as string]
     if (!table) { setSaving(false); return }
@@ -1048,6 +1070,101 @@ export default function ArtistPage() {
               </>
             )}
 
+            {modal === 'setlist' && (() => {
+              const songs = Array.isArray(form.songs) ? form.songs : []
+              function updateSong(i: number, key: string, value: string) {
+                const next = [...songs]
+                next[i] = { ...next[i], [key]: value }
+                setForm({ ...form, songs: next })
+              }
+              function addSong() {
+                setForm({ ...form, songs: [...songs, { title: '', duration: '', notes: '' }] })
+              }
+              function removeSong(i: number) {
+                setForm({ ...form, songs: songs.filter((_: any, idx: number) => idx !== i) })
+              }
+              function moveSong(i: number, dir: -1 | 1) {
+                const j = i + dir
+                if (j < 0 || j >= songs.length) return
+                const next = [...songs]
+                ;[next[i], next[j]] = [next[j], next[i]]
+                setForm({ ...form, songs: next })
+              }
+              const totalSeconds = songs.reduce((sum: number, s: any) => {
+                if (!s.duration) return sum
+                const parts = s.duration.split(':').map((x: string) => parseInt(x) || 0)
+                if (parts.length === 2) return sum + parts[0] * 60 + parts[1]
+                return sum
+              }, 0)
+              const totalMin = Math.floor(totalSeconds / 60)
+              const totalSec = totalSeconds % 60
+
+              return (
+                <>
+                  <div style={{ marginBottom: 12, fontSize: 13, color: muted, fontStyle: 'italic' }}>
+                    {setlistShow?.venue} — {setlistShow?.date}
+                  </div>
+                  <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+                    {songs.map((song: any, i: number) => (
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 70px 1fr 60px', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted, textAlign: 'center' }}>{i + 1}</span>
+                        <input style={inputStyle} value={song.title || ''} onChange={e => updateSong(i, 'title', e.target.value)} placeholder="Song title" />
+                        <input style={{ ...inputStyle, textAlign: 'center' }} value={song.duration || ''} onChange={e => updateSong(i, 'duration', e.target.value)} placeholder="3:45" />
+                        <input style={inputStyle} value={song.notes || ''} onChange={e => updateSong(i, 'notes', e.target.value)} placeholder="Notes (key, segue...)" />
+                        <div style={{ display: 'flex', gap: 2 }}>
+                          <button onClick={() => moveSong(i, -1)} disabled={i === 0} style={{ background: 'transparent', border: `1px solid ${border}`, borderRadius: 4, cursor: i === 0 ? 'default' : 'pointer', fontSize: 10, padding: '3px 5px', color: muted, opacity: i === 0 ? 0.3 : 1 }}>↑</button>
+                          <button onClick={() => moveSong(i, 1)} disabled={i === songs.length - 1} style={{ background: 'transparent', border: `1px solid ${border}`, borderRadius: 4, cursor: i === songs.length - 1 ? 'default' : 'pointer', fontSize: 10, padding: '3px 5px', color: muted, opacity: i === songs.length - 1 ? 0.3 : 1 }}>↓</button>
+                          <button onClick={() => removeSong(i)} style={{ background: '#fff0f0', border: '1px solid #ffcccc', borderRadius: 4, cursor: 'pointer', fontSize: 10, padding: '3px 5px', color: '#cc0000' }}>✕</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <button onClick={addSong}
+                      style={{ padding: '6px 12px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
+                      + ADD SONG
+                    </button>
+                    {totalSeconds > 0 && (
+                      <span style={{ fontSize: 12, color: muted, fontFamily: 'monospace' }}>
+                        Total: {totalMin}:{String(totalSec).padStart(2, '0')} · {songs.length} songs
+                      </span>
+                    )}
+                  </div>
+                  <div style={fieldStyle}>
+                    <label style={labelStyle}>Setlist notes</label>
+                    <textarea style={{ ...inputStyle, minHeight: 60, fontFamily: 'Georgia, serif' }} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Between-song banter, tech cues, encore plan..." />
+                  </div>
+                </>
+              )
+            })()}
+
+            {modal === 'document' && (
+              <>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Category *</label>
+                  <select style={inputStyle} value={form.category || 'visa'} onChange={e => setForm({ ...form, category: e.target.value })}>
+                    <option value="visa">Visa</option>
+                    <option value="tax">Tax</option>
+                    <option value="insurance">Insurance</option>
+                    <option value="contract">Contract</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Label *</label>
+                  <input style={inputStyle} value={form.label || ''} onChange={e => setForm({ ...form, label: e.target.value })} placeholder="e.g. UK Certificate of Sponsorship" />
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>URL *</label>
+                  <input style={inputStyle} value={form.url || ''} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="https://dropbox.com/..." />
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Notes</label>
+                  <input style={inputStyle} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Expires, ref numbers, etc." />
+                </div>
+              </>
+            )}
+
             {modal === 'settlement' && (
               <>
                 <div style={{ marginBottom: 8, fontSize: 13, color: muted, fontStyle: 'italic' }}>
@@ -1423,7 +1540,7 @@ export default function ArtistPage() {
               <div style={{ display: 'grid', gap: 20 }}>
                 {/* Manual add row */}
                 <div className="add-row" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {([['show', '+ Show'], ['travel', '+ Travel'], ['accommodation', '+ Hotel'], ['contact', '+ Contact'], ['press', '+ Press']] as const).map(([type, label]) => (
+                  {([['show', '+ Show'], ['travel', '+ Travel'], ['accommodation', '+ Hotel'], ['contact', '+ Contact'], ['press', '+ Press'], ['document', '+ Docs']] as const).map(([type, label]) => (
                     <button key={type} onClick={() => openModal(type)}
                       style={{ padding: '6px 12px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
                       {label}
@@ -1492,7 +1609,17 @@ export default function ArtistPage() {
                             )
                           })()}
                           {(() => {
-                            const s = settlements.find(s => s.show_id === show.id)
+                            const sl = setlists.find(s => s.show_id === show.id)
+                            const songCount = sl && Array.isArray(sl.songs) ? sl.songs.length : 0
+                            return (
+                              <button onClick={() => { setSetlistShow(show); openModal('setlist', sl || { songs: [], show_id: show.id }) }}
+                                style={{ background: songCount > 0 ? '#F5F0FF' : 'transparent', border: `1px solid ${songCount > 0 ? '#8B7EC6' : border}`, borderRadius: 6, color: songCount > 0 ? '#5B4B8A' : muted, cursor: 'pointer', fontSize: 10, padding: '3px 8px', fontFamily: 'monospace', letterSpacing: 1 }}
+                                title="Setlist">
+                                {songCount > 0 ? `♪ ${songCount}` : '♪ SET'}
+                              </button>
+                            )
+                          })()}
+                          {(() => {
                             const statusColor: Record<string,string> = { paid: '#2d7a4f', partial: '#B8860B', pending: muted, disputed: '#C00' }
                             return (
                               <button onClick={() => { setSettlementShow(show); openModal('settlement', s || {}) }}
@@ -1643,6 +1770,51 @@ export default function ArtistPage() {
                         </div>
                       )
                     })}
+                  </div>
+                )}
+                {documents.length > 0 && (
+                  <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
+                    <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 14 }}>📎</span>
+                      Documents — {documents.length}
+                    </div>
+                    {(() => {
+                      const byCategory = documents.reduce((acc: any, d: any) => {
+                        const cat = d.category || 'other'
+                        if (!acc[cat]) acc[cat] = []
+                        acc[cat].push(d)
+                        return acc
+                      }, {})
+                      const catLabels: Record<string, string> = { visa: 'Visa', tax: 'Tax', insurance: 'Insurance', contract: 'Contract', other: 'Other' }
+                      const catColors: Record<string, string> = { visa: '#5B4B8A', tax: '#B8860B', insurance: '#3D6B50', contract: '#C4622D', other: '#8A8580' }
+                      const catOrder = ['visa', 'tax', 'insurance', 'contract', 'other']
+                      return catOrder.filter(c => byCategory[c]).map(cat => (
+                        <div key={cat} style={{ marginBottom: 14 }}>
+                          <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: catColors[cat], marginBottom: 8, textTransform: 'uppercase' }}>
+                            {catLabels[cat]}
+                          </div>
+                          {byCategory[cat].map((d: any, i: number) => (
+                            <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#F9F6F2', borderRadius: 6, marginBottom: 4, gap: 10 }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <a href={d.url} target="_blank" rel="noreferrer"
+                                  style={{ fontSize: 13, fontWeight: 600, color: accent, textDecoration: 'none', display: 'block', wordBreak: 'break-word' }}>
+                                  {d.label} ↗
+                                </a>
+                                {d.notes && <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>{d.notes}</div>}
+                              </div>
+                              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                                <button onClick={() => openModal('document', d)}
+                                  style={{ background: 'transparent', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 12, padding: '3px 9px' }}
+                                  title="Edit">✎</button>
+                                <button onClick={() => setConfirmDelete({ table: 'tour_documents', id: d.id, label: d.label })}
+                                  style={{ background: '#fff0f0', border: '1px solid #ffcccc', borderRadius: 6, color: '#cc0000', cursor: 'pointer', fontSize: 12, padding: '3px 9px', fontWeight: 700 }}
+                                  title="Delete">✕</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ))
+                    })()}
                   </div>
                 )}
                 {settlements.length > 0 && (

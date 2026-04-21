@@ -33,16 +33,18 @@ export default function FestivalSheetPage() {
   const [artist, setArtist] = useState<any>(null)
   const [shows, setShows] = useState<any[]>([])
   const [press, setPress] = useState<any[]>([])
+  const [setlists, setSetlists] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set())
 
   useEffect(() => { loadData() }, [params.tour_id])
 
   async function loadData() {
-    const [tourRes, showsRes, pressRes] = await Promise.all([
+    const [tourRes, showsRes, pressRes, setlistsRes] = await Promise.all([
       supabase.from('tours').select('*, artists(*)').eq('id', params.tour_id).single(),
       supabase.from('shows').select('*').eq('tour_id', params.tour_id).order('date'),
       supabase.from('press').select('*').eq('tour_id', params.tour_id).order('date'),
+      supabase.from('setlists').select('*').eq('tour_id', params.tour_id),
     ])
     if (tourRes.data) {
       setTour(tourRes.data)
@@ -50,6 +52,7 @@ export default function FestivalSheetPage() {
     }
     setShows(showsRes.data || [])
     setPress(pressRes.data || [])
+    setSetlists(setlistsRes.data || [])
 
     // Auto-expand today's day if it's in the festival, else expand all
     const today = new Date().toISOString().split('T')[0]
@@ -229,7 +232,9 @@ export default function FestivalSheetPage() {
                   )}
 
                   {/* Show details */}
-                  {dayShows.map((show: any, i: number) => (
+                  {dayShows.map((show: any, i: number) => {
+                    const showSetlist = setlists.find((sl: any) => sl.show_id === show.id)
+                    return (
                     <div key={i} style={{ marginBottom: 16, padding: '14px 16px', background: sectionBg, borderRadius: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: accent, textTransform: 'uppercase' }}>Show</span>
@@ -259,8 +264,30 @@ export default function FestivalSheetPage() {
                           {show.backline}
                         </div>
                       )}
+                      {showSetlist && Array.isArray(showSetlist.songs) && showSetlist.songs.length > 0 && (
+                        <div style={{ marginTop: 10, padding: '10px 12px', background: '#fff', borderLeft: '3px solid #5B4B8A', borderRadius: 4 }}>
+                          <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: '#5B4B8A', marginBottom: 8 }}>
+                            ♪ SETLIST · {showSetlist.songs.length} SONGS
+                          </div>
+                          <div style={{ display: 'grid', gap: 4 }}>
+                            {showSetlist.songs.map((song: any, si: number) => (
+                              <div key={si} style={{ display: 'grid', gridTemplateColumns: '24px 1fr auto', gap: 10, fontSize: 13, alignItems: 'baseline' }}>
+                                <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted, textAlign: 'center' }}>{si + 1}</span>
+                                <span style={{ fontWeight: 500 }}>{song.title}{song.notes && <span style={{ color: muted, fontStyle: 'italic', fontWeight: 400 }}> - {song.notes}</span>}</span>
+                                {song.duration && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>{song.duration}</span>}
+                              </div>
+                            ))}
+                          </div>
+                          {showSetlist.notes && (
+                            <div style={{ marginTop: 8, fontSize: 11, color: muted, fontStyle: 'italic', whiteSpace: 'pre-wrap' }}>
+                              {showSetlist.notes}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    )
+                  })}
 
                   {/* Press entries */}
                   {dayPress.map((p: any, i: number) => (

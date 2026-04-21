@@ -210,6 +210,53 @@ const TOOLS: any[] = [
       required: ['id'],
     },
   },
+  {
+    name: 'set_setlist',
+    description: 'Set or replace the setlist for a specific show. Songs array is a list of song objects with title, duration (e.g. "3:45"), and optional notes.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        show_id: { type: 'string', description: 'The show ID to attach the setlist to' },
+        songs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              duration: { type: 'string' },
+              notes: { type: 'string' },
+            },
+            required: ['title'],
+          },
+        },
+        notes: { type: 'string', description: 'General notes about the setlist' },
+      },
+      required: ['show_id', 'songs'],
+    },
+  },
+  {
+    name: 'add_document',
+    description: 'Add a document link to the tour (visa, tax, insurance, contract, or other)',
+    input_schema: {
+      type: 'object',
+      properties: {
+        category: { type: 'string', description: 'visa|tax|insurance|contract|other' },
+        label: { type: 'string', description: 'Human-readable label e.g. "UK Certificate of Sponsorship"' },
+        url: { type: 'string', description: 'Dropbox, Google Drive or any public URL' },
+        notes: { type: 'string' },
+      },
+      required: ['label', 'url'],
+    },
+  },
+  {
+    name: 'delete_document',
+    description: 'Delete a tour document link',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+  },
 ]
 
 async function executeTool(
@@ -295,6 +342,34 @@ async function executeTool(
         if (error) throw error
         return { success: true, message: `Deleted press commitment` }
       }
+      case 'set_setlist': {
+        const { show_id, songs, notes } = toolInput
+        // Upsert: one setlist per show_id
+        const existing = await supabase.from('setlists').select('id').eq('show_id', show_id).single()
+        if (existing.data) {
+          const { error } = await supabase.from('setlists')
+            .update({ songs, notes: notes || null, updated_at: new Date().toISOString() })
+            .eq('id', existing.data.id)
+          if (error) throw error
+          return { success: true, message: `Updated setlist (${songs.length} songs)` }
+        } else {
+          const { error } = await supabase.from('setlists')
+            .insert({ show_id, tour_id: tourId, org_id: orgId, songs, notes: notes || null })
+          if (error) throw error
+          return { success: true, message: `Added setlist with ${songs.length} songs` }
+        }
+      }
+      case 'add_document': {
+        const { data, error } = await supabase.from('tour_documents')
+          .insert({ ...toolInput, tour_id: tourId, org_id: orgId }).select().single()
+        if (error) throw error
+        return { success: true, message: `Added document: ${toolInput.label}`, data }
+      }
+      case 'delete_document': {
+        const { error } = await supabase.from('tour_documents').delete().eq('id', toolInput.id)
+        if (error) throw error
+        return { success: true, message: `Deleted document` }
+      }
       default:
         return { success: false, message: `Unknown tool: ${toolName}` }
     }
@@ -314,13 +389,15 @@ export async function POST(request: NextRequest) {
     )
 
     // Load full tour context
-    const [tourRes, showsRes, travelRes, accomRes, contactsRes, pressRes] = await Promise.all([
+    const [tourRes, showsRes, travelRes, accomRes, contactsRes, pressRes, setlistsRes, docsRes] = await Promise.all([
       supabase.from('tours').select('*, artists(name, project)').eq('id', tourId).single(),
       supabase.from('shows').select('*').eq('tour_id', tourId).order('date'),
       supabase.from('travel').select('*').eq('tour_id', tourId).order('travel_date'),
       supabase.from('accommodation').select('*').eq('tour_id', tourId).order('check_in'),
       supabase.from('contacts').select('*').eq('tour_id', tourId),
       supabase.from('press').select('*').eq('tour_id', tourId).order('date'),
+      supabase.from('setlists').select('*').eq('tour_id', tourId),
+      supabase.from('tour_documents').select('*').eq('tour_id', tourId),
     ])
 
     const tour = tourRes.data
@@ -329,6 +406,8 @@ export async function POST(request: NextRequest) {
     const accommodation = accomRes.data || []
     const contacts = contactsRes.data || []
     const press = pressRes.data || []
+    const setlists = setlistsRes.data || []
+    const documents = docsRes.data || []
     const orgId = tour?.org_id
 
     const context = `
@@ -348,7 +427,18 @@ CONTACTS (${contacts.length}):
 ${contacts.length ? contacts.map(c => `- id:${c.id} | ${c.name}${c.role ? ' ('+c.role+')' : ''}${c.phone ? ' | '+c.phone : ''}${c.email ? ' | '+c.email : ''}`).join('\n') : 'None'}
 
 PRESS (${press.length}):
-${press.length ? press.map(p => `- id:${p.id} | ${p.date}${p.time ? ' '+p.time : ''} | ${p.type || 'interview'}${p.outlet ? ' - '+p.outlet : ''}${p.location ? ' | '+p.location : ''}${p.contact_name ? ' | Contact: '+p.contact_name : ''}${p.notes ? ' | '+p.notes : ''}`).join('\n') : 'None'}`.trim()
+${press.length ? press.map(p => `- id:${p.id} | ${p.date}${p.time ? ' '+p.time : ''} | ${p.type || 'interview'}${p.outlet ? ' - '+p.outlet : ''}${p.location ? ' | '+p.location : ''}${p.contact_name ? ' | Contact: '+p.contact_name : ''}${p.notes ? ' | '+p.notes : ''}`).join('\n') : 'None'}
+
+SETLISTS (${setlists.length}):
+${setlists.length ? setlists.map(sl => {
+  const show = shows.find((s: any) => s.id === sl.show_id)
+  const showLabel = show ? `${show.date} ${show.venue}` : 'Unknown show'
+  const songCount = Array.isArray(sl.songs) ? sl.songs.length : 0
+  return `- show:${showLabel} | ${songCount} songs${sl.notes ? ' | '+sl.notes : ''}`
+}).join('\n') : 'None'}
+
+DOCUMENTS (${documents.length}):
+${documents.length ? documents.map(d => `- id:${d.id} | [${d.category || 'other'}] ${d.label} | ${d.url}${d.notes ? ' | '+d.notes : ''}`).join('\n') : 'None'}`.trim()
 
     const systemPrompt = `You are an agentic tour management assistant. You have full access to this tour's data and can make changes directly.
 
@@ -357,7 +447,7 @@ ${context}
 
 You can:
 - Answer questions about the tour
-- Make changes: add/update/delete shows, travel, hotels, contacts, press commitments
+- Make changes: add/update/delete shows, travel, hotels, contacts, press commitments, setlists, documents
 - Draft emails and documents
 - Spot problems and fix them
 
@@ -367,7 +457,8 @@ Examples:
 - "Change the VA703 departure to 21:00" → find the VA703 travel record by id, call update_travel
 - "Add a hotel in Perth, Westin, check in 22nd March" → call add_accommodation
 - "Add a triple j interview on the 15th at 10am" → call add_press with type: radio, outlet: triple j
-- "Emma has a photo shoot with Rolling Stone on the 3rd at 2pm in Sydney" → call add_press
+- "Set the setlist for the Alice Springs show: Song A 3:20, Song B 4:15, Song C 5:02" → find show by venue/date, call set_setlist
+- "Add a dropbox link for the UK visa docs: https://..." → call add_document with category: visa
 - "Delete the soundcheck on the 15th" → find the show, call update_show with soundcheck_time: ""
 
 Be direct. Act first, explain briefly after. If you're unsure which record to update (e.g. multiple flights on same day), ask which one.`

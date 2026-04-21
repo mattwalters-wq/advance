@@ -37,6 +37,7 @@ export default function DaySheetPage() {
   const [contacts, setContacts] = useState<any[]>([])
   const [rider, setRider] = useState<any>(null)
   const [press, setPress] = useState<any[]>([])
+  const [setlist, setSetlist] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [mode, setMode] = useState<'day' | 'trip'>('day')
@@ -70,13 +71,14 @@ export default function DaySheetPage() {
 
     setShow(showData)
 
-    const [tourRes, travelRes, accomRes, contactsRes, riderRes, pressRes] = await Promise.all([
+    const [tourRes, travelRes, accomRes, contactsRes, riderRes, pressRes, setlistRes] = await Promise.all([
       supabase.from('tours').select('*, artists(*)').eq('id', showData.tour_id).single(),
       supabase.from('travel').select('*').eq('tour_id', showData.tour_id).order('travel_date'),
       supabase.from('accommodation').select('*').eq('tour_id', showData.tour_id).order('check_in'),
       supabase.from('contacts').select('*').eq('tour_id', showData.tour_id),
       supabase.from('riders').select('*').eq('tour_id', showData.tour_id).single(),
       supabase.from('press').select('*').eq('tour_id', showData.tour_id).order('date'),
+      supabase.from('setlists').select('*').eq('show_id', showData.id).single(),
     ])
 
     const tourData = tourRes.data
@@ -103,6 +105,7 @@ export default function DaySheetPage() {
     setContacts(contactsRes.data || [])
     setRider(riderRes.data || null)
     setPress(pressRes.data || [])
+    setSetlist(setlistRes.data || null)
     setLoading(false)
   }
 
@@ -518,6 +521,52 @@ export default function DaySheetPage() {
             </div>
           </div>
         )}
+
+        {/* ── SETLIST (day mode only) ── */}
+        {mode === 'day' && setlist && Array.isArray(setlist.songs) && setlist.songs.length > 0 && (() => {
+          const totalSeconds = setlist.songs.reduce((sum: number, s: any) => {
+            if (!s.duration) return sum
+            const parts = s.duration.split(':').map((x: string) => parseInt(x) || 0)
+            if (parts.length === 2) return sum + parts[0] * 60 + parts[1]
+            return sum
+          }, 0)
+          const totalMin = Math.floor(totalSeconds / 60)
+          const totalSec = totalSeconds % 60
+          return (
+            <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
+              <div style={{ padding: '11px 24px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 14 }}>♪</span>
+                  <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: muted, textTransform: 'uppercase' }}>Setlist</span>
+                </div>
+                {totalSeconds > 0 && (
+                  <span style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>
+                    {setlist.songs.length} songs · {totalMin}:{String(totalSec).padStart(2, '0')}
+                  </span>
+                )}
+              </div>
+              <div style={{ padding: '4px 24px' }}>
+                {setlist.songs.map((song: any, i: number) => (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '28px 1fr auto', gap: 12, padding: '10px 0', borderBottom: i < setlist.songs.length - 1 ? `1px solid ${border}` : 'none', alignItems: 'center' }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted, textAlign: 'center' }}>{i + 1}</span>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>{song.title}</div>
+                      {song.notes && <div style={{ fontSize: 11, color: muted, marginTop: 2, fontStyle: 'italic' }}>{song.notes}</div>}
+                    </div>
+                    {song.duration && (
+                      <span style={{ fontFamily: 'monospace', fontSize: 12, color: muted, whiteSpace: 'nowrap' }}>{song.duration}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {setlist.notes && (
+                <div style={{ padding: '12px 24px', background: '#F9F6F2', borderTop: `1px solid ${border}`, fontSize: 12, color: muted, fontStyle: 'italic', whiteSpace: 'pre-wrap' }}>
+                  {setlist.notes}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* Footer */}
         <div style={{ textAlign: 'center', paddingTop: 20, fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: '#C8BFB0' }}>
