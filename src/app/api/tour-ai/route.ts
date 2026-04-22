@@ -15,6 +15,7 @@ const TOOLS: any[] = [
         venue: { type: 'string' },
         city: { type: 'string' },
         country: { type: 'string' },
+        type: { type: 'string', description: 'show|rehearsal|travel_day|day_off - default is show' },
         set_time: { type: 'string', description: 'HH:MM 24hr' },
         doors_time: { type: 'string', description: 'HH:MM 24hr' },
         soundcheck_time: { type: 'string', description: 'HH:MM 24hr' },
@@ -35,6 +36,7 @@ const TOOLS: any[] = [
         date: { type: 'string' },
         venue: { type: 'string' },
         city: { type: 'string' },
+        type: { type: 'string', description: 'show|rehearsal|travel_day|day_off' },
         set_time: { type: 'string' },
         doors_time: { type: 'string' },
         soundcheck_time: { type: 'string' },
@@ -114,6 +116,7 @@ const TOOLS: any[] = [
         name: { type: 'string' },
         address: { type: 'string' },
         confirmation: { type: 'string' },
+        rooming: { type: 'string', description: 'Rooming list text, one room per line e.g. "Room 1: Emma, Ben\\nRoom 2: David"' },
         notes: { type: 'string' },
       },
       required: ['check_in', 'name'],
@@ -131,6 +134,7 @@ const TOOLS: any[] = [
         name: { type: 'string' },
         address: { type: 'string' },
         confirmation: { type: 'string' },
+        rooming: { type: 'string' },
         notes: { type: 'string' },
       },
       required: ['id'],
@@ -542,13 +546,13 @@ TOUR: ${tour?.name} — ${tour?.artists?.name}
 STATUS: ${tour?.status || 'routing'}
 
 SHOWS (${shows.length}):
-${shows.length ? shows.map(s => `- id:${s.id} | ${s.date} | ${s.venue}, ${s.city || ''}${s.set_time ? ' | Stage '+s.set_time : ''}${s.doors_time ? ' | Doors '+s.doors_time : ''}${s.soundcheck_time ? ' | SC '+s.soundcheck_time : ''}${s.catering ? ' | Catering: '+s.catering : ''}${s.notes ? ' | Notes: '+s.notes : ''}`).join('\n') : 'None'}
+${shows.length ? shows.map(s => `- id:${s.id} | ${s.date} | [${s.type || 'show'}] ${s.venue}, ${s.city || ''}${s.set_time ? ' | Stage '+s.set_time : ''}${s.doors_time ? ' | Doors '+s.doors_time : ''}${s.soundcheck_time ? ' | SC '+s.soundcheck_time : ''}${s.catering ? ' | Catering: '+s.catering : ''}${s.notes ? ' | Notes: '+s.notes : ''}`).join('\n') : 'None'}
 
 TRAVEL (${travel.length}):
 ${travel.length ? travel.map(t => `- id:${t.id} | ${t.travel_date} | ${t.from_location} → ${t.to_location}${t.carrier ? ' | '+t.carrier : ''}${t.departure_time ? ' | Dep '+t.departure_time : ''}${t.arrival_time ? ' | Arr '+t.arrival_time : ''}${t.reference ? ' | Ref: '+t.reference : ''}${t.travellers ? ' | 👤 '+t.travellers : ''}`).join('\n') : 'None'}
 
 ACCOMMODATION (${accommodation.length}):
-${accommodation.length ? accommodation.map(a => `- id:${a.id} | ${a.check_in}${a.check_out ? ' to '+a.check_out : ''} | ${a.name}${a.address ? ', '+a.address : ''}${a.confirmation ? ' | Ref: '+a.confirmation : ''}`).join('\n') : 'None'}
+${accommodation.length ? accommodation.map(a => `- id:${a.id} | ${a.check_in}${a.check_out ? ' to '+a.check_out : ''} | ${a.name}${a.address ? ', '+a.address : ''}${a.confirmation ? ' | Ref: '+a.confirmation : ''}${a.rooming ? ' | Rooming: '+a.rooming.replace(/\n/g, ' · ') : ''}`).join('\n') : 'None'}
 
 CONTACTS (${contacts.length}):
 ${contacts.length ? contacts.map(c => `- id:${c.id} | ${c.name}${c.role ? ' ('+c.role+')' : ''}${c.phone ? ' | '+c.phone : ''}${c.email ? ' | '+c.email : ''}`).join('\n') : 'None'}
@@ -604,6 +608,8 @@ Examples:
 - "Add Sarah Smith as photographer for the Kaffee Kultus show" → call add_show_person with role: photographer
 - "Add Emma's mum +1 to the Saarbrücken guest list" → call add_guest with name: Emma's mum, plus_n: 1
 - "Put James from Sony on the London guest list plus 2" → call add_guest with name: James (Sony), plus_n: 2
+- "Add a rehearsal day at Bakehouse on May 10 from 2-6pm" → call add_show with type: rehearsal, date: 2026-05-10, venue: Bakehouse, soundcheck_time: 14:00, set_time: 18:00
+- "Set the rooming for the Premier Inn: Room 1 Emma and Ben, Room 2 David" → call update_accommodation with rooming: "Room 1: Emma, Ben\nRoom 2: David"
 - "Delete the soundcheck on the 15th" → find the show, call update_show with soundcheck_time: ""
 
 Be direct. Act first, explain briefly after. If you're unsure which record to update (e.g. multiple flights on same day), ask which one.`

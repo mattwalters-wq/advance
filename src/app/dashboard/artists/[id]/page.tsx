@@ -816,9 +816,20 @@ export default function ArtistPage() {
 
             {modal === 'show' && (
               <>
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Venue *</label>
-                  <input style={inputStyle} value={form.venue || ''} onChange={e => setForm({ ...form, venue: e.target.value })} placeholder="Venue name" />
+                <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 12, marginBottom: 16 }}>
+                  <div>
+                    <label style={labelStyle}>Type</label>
+                    <select style={inputStyle} value={form.type || 'show'} onChange={e => setForm({ ...form, type: e.target.value })}>
+                      <option value="show">Show</option>
+                      <option value="rehearsal">Rehearsal</option>
+                      <option value="travel_day">Travel day</option>
+                      <option value="day_off">Day off</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>{form.type === 'rehearsal' ? 'Studio / Venue *' : form.type === 'travel_day' ? 'Leg description *' : form.type === 'day_off' ? 'Location *' : 'Venue *'}</label>
+                    <input style={inputStyle} value={form.venue || ''} onChange={e => setForm({ ...form, venue: e.target.value })} placeholder={form.type === 'rehearsal' ? 'Bakehouse Studios' : form.type === 'day_off' ? 'Tokyo' : 'Venue name'} />
+                  </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
                   <div>
@@ -1020,6 +1031,11 @@ export default function ArtistPage() {
                 <div style={fieldStyle}>
                   <label style={labelStyle}>Guests</label>
                   <input style={inputStyle} value={form.travellers || ''} onChange={e => setForm({ ...form, travellers: e.target.value })} placeholder="e.g. Emma, Ben" />
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Rooming list</label>
+                  <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: 80, fontFamily: 'monospace', fontSize: 12 }} value={form.rooming || ''} onChange={e => setForm({ ...form, rooming: e.target.value })} placeholder={'Room 1: Emma, Ben\nRoom 2: David\nRoom 3: Yanya'} />
+                  <div style={{ fontSize: 11, color: muted, marginTop: 4, fontStyle: 'italic' }}>One room per line. Shows on the day sheet.</div>
                 </div>
                 <div style={fieldStyle}>
                   <label style={labelStyle}>Notes</label>
@@ -1688,7 +1704,17 @@ export default function ArtistPage() {
                 </div>
                 {shows.length > 0 && (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
-                    <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Shows — {shows.length}</div>
+                    <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>
+                      {(() => {
+                        const showCount = shows.filter(s => !s.type || s.type === 'show').length
+                        const rehearsalCount = shows.filter(s => s.type === 'rehearsal').length
+                        const otherCount = shows.length - showCount - rehearsalCount
+                        const parts = [`${showCount} show${showCount !== 1 ? 's' : ''}`]
+                        if (rehearsalCount) parts.push(`${rehearsalCount} rehearsal${rehearsalCount !== 1 ? 's' : ''}`)
+                        if (otherCount) parts.push(`${otherCount} other`)
+                        return `Schedule — ${parts.join(' · ')}`
+                      })()}
+                    </div>
                     {shows.map((show, i) => {
                       const v = show.venue || ''
                       const venueName = v.length > 55 ? v.split(/\s*[-–]\s*(?:Access|Park in|Contact|via\s|Turn|From\s)/i)[0].trim() : v
@@ -1699,8 +1725,8 @@ export default function ArtistPage() {
                       const songCount = sl && Array.isArray(sl.songs) ? sl.songs.length : 0
                       const peopleCount = showPeople.filter(p => p.show_id === show.id).length
                       const guestCount = guestList.filter(g => g.show_id === show.id).reduce((s: number, g: any) => s + 1 + (g.plus_n || 0), 0)
-                      const sameVenue = shows.filter(s => s.venue === show.venue)
-                      const isFestival = sameVenue.length >= 2
+                      const sameVenue = shows.filter(s => (!s.type || s.type === 'show') && s.venue === show.venue)
+                      const isFestival = (!show.type || show.type === 'show') && sameVenue.length >= 2
                       const statusColor: Record<string,string> = { paid: '#2d7a4f', partial: '#B8860B', pending: muted, disputed: '#C00' }
 
                       return (
@@ -1724,7 +1750,14 @@ export default function ArtistPage() {
                           <div style={{ width: 1, background: border, alignSelf: 'stretch', flexShrink: 0 }} />
                           {/* Venue + city */}
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{venueName}</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {show.type && show.type !== 'show' && (
+                                <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.5, color: show.type === 'rehearsal' ? '#5B4B8A' : show.type === 'day_off' ? '#3D6B50' : '#8A8580', background: show.type === 'rehearsal' ? '#F5F0FF' : show.type === 'day_off' ? '#F0FFF4' : '#F5F0E8', border: `1px solid ${show.type === 'rehearsal' ? '#8B7EC6' : show.type === 'day_off' ? '#3D6B50' : border}`, padding: '2px 6px', borderRadius: 3, flexShrink: 0 }}>
+                                  {show.type === 'rehearsal' ? 'REHEARSAL' : show.type === 'travel_day' ? 'TRAVEL' : 'DAY OFF'}
+                                </span>
+                              )}
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{venueName}</span>
+                            </div>
                             <div style={{ fontSize: 12, color: muted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {[show.city, show.country && show.country !== 'AU' ? show.country : null].filter(Boolean).join(', ')}
                               {show.set_time && <span style={{ marginLeft: 8, fontFamily: 'monospace', color: accent, fontWeight: 700 }}>· {formatTime(show.set_time)}</span>}

@@ -472,6 +472,14 @@ export default function DaySheetPage() {
                     {a.confirmation && <Pill label="Ref" value={a.confirmation} />}
                   </div>
                   {a.travellers && <div style={{ fontSize: 13, color: muted }}>👤 {a.travellers}</div>}
+                  {a.rooming && (
+                    <div style={{ marginTop: 10, padding: '10px 12px', background: '#F9F6F2', borderLeft: `3px solid ${accent}`, borderRadius: 4 }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: accent, marginBottom: 6 }}>ROOMING</div>
+                      <div style={{ fontSize: 13, color: text, lineHeight: 1.7, whiteSpace: 'pre-wrap' as const, fontFamily: 'monospace' }}>
+                        {a.rooming}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
