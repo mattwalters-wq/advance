@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase'
 
 const supabase = createClient()
 
-type ModalType = 'show' | 'travel' | 'accommodation' | 'contact' | 'tour' | 'rider' | 'settlement' | 'press' | 'setlist' | 'document' | 'person' | null
+type ModalType = 'show' | 'travel' | 'accommodation' | 'contact' | 'tour' | 'rider' | 'settlement' | 'press' | 'setlist' | 'document' | 'person' | 'guest' | null
 
 export default function ArtistPage() {
   const params = useParams()
@@ -23,6 +23,7 @@ export default function ArtistPage() {
   const [setlists, setSetlists] = useState<any[]>([])
   const [documents, setDocuments] = useState<any[]>([])
   const [showPeople, setShowPeople] = useState<any[]>([])
+  const [guestList, setGuestList] = useState<any[]>([])
   const [darkMode, setDarkMode] = useState(false)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -47,6 +48,7 @@ export default function ArtistPage() {
   const [settlementShow, setSettlementShow] = useState<any>(null)
   const [setlistShow, setSetlistShow] = useState<any>(null)
   const [personShow, setPersonShow] = useState<any>(null)
+  const [guestShow, setGuestShow] = useState<any>(null)
   const [expandedShowId, setExpandedShowId] = useState<string | null>(null)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set(['travel', 'accommodation', 'contacts', 'press', 'documents']))
   const [importJobs, setImportJobs] = useState<any[]>([])
@@ -106,7 +108,7 @@ export default function ArtistPage() {
   }
 
   async function loadTourData(tourId: string) {
-    const [s, t, a, c, p, sl, d, sp] = await Promise.all([
+    const [s, t, a, c, p, sl, d, sp, gl] = await Promise.all([
       supabase.from('shows').select('*').eq('tour_id', tourId).order('date'),
       supabase.from('travel').select('*').eq('tour_id', tourId).order('travel_date'),
       supabase.from('accommodation').select('*').eq('tour_id', tourId).order('check_in'),
@@ -115,6 +117,7 @@ export default function ArtistPage() {
       supabase.from('setlists').select('*').eq('tour_id', tourId),
       supabase.from('tour_documents').select('*').eq('tour_id', tourId).order('category'),
       supabase.from('show_people').select('*').eq('tour_id', tourId),
+      supabase.from('guest_list').select('*').eq('tour_id', tourId).order('name'),
     ])
     const showsData = s.data || []
     const travelData = t.data || []
@@ -127,6 +130,7 @@ export default function ArtistPage() {
     setSetlists(sl.data || [])
     setDocuments(d.data || [])
     setShowPeople(sp.data || [])
+    setGuestList(gl.data || [])
     setWarnings(computeWarnings(showsData, travelData, accomData))
     // Auto-switch to import tab if tour is empty
     if (showsData.length === 0 && travelData.length === 0 && accomData.length === 0) {
@@ -498,6 +502,20 @@ export default function ArtistPage() {
         await supabase.from('show_people').update(updates).eq('id', editingId)
       } else {
         await supabase.from('show_people').insert({ ...base, ...form })
+      }
+      await loadTourData(selectedTour.id)
+      setSaving(false)
+      closeModal()
+      return
+    }
+
+    if (modal === 'guest') {
+      const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id, show_id: guestShow?.id || form.show_id }
+      if (editingId) {
+        const { id, tour_id, org_id, created_at, show_id, ...updates } = form
+        await supabase.from('guest_list').update(updates).eq('id', editingId)
+      } else {
+        await supabase.from('guest_list').insert({ ...base, ...form })
       }
       await loadTourData(selectedTour.id)
       setSaving(false)
@@ -1185,6 +1203,28 @@ export default function ArtistPage() {
               </>
             )}
 
+            {modal === 'guest' && (
+              <>
+                <div style={{ marginBottom: 12, fontSize: 13, color: muted, fontStyle: 'italic' }}>
+                  {guestShow?.venue} — {guestShow?.date}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Name *</label>
+                    <input style={inputStyle} value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Guest name" autoFocus />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>+N</label>
+                    <input type="number" min="0" style={inputStyle} value={form.plus_n ?? 0} onChange={e => setForm({ ...form, plus_n: parseInt(e.target.value) || 0 })} placeholder="0" />
+                  </div>
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Notes</label>
+                  <input style={inputStyle} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Requested by Emma, pickup at box office..." />
+                </div>
+              </>
+            )}
+
             {modal === 'person' && (
               <>
                 <div style={{ marginBottom: 12, fontSize: 13, color: muted, fontStyle: 'italic' }}>
@@ -1658,6 +1698,7 @@ export default function ArtistPage() {
                       const sl = setlists.find(s => s.show_id === show.id)
                       const songCount = sl && Array.isArray(sl.songs) ? sl.songs.length : 0
                       const peopleCount = showPeople.filter(p => p.show_id === show.id).length
+                      const guestCount = guestList.filter(g => g.show_id === show.id).reduce((s: number, g: any) => s + 1 + (g.plus_n || 0), 0)
                       const sameVenue = shows.filter(s => s.venue === show.venue)
                       const isFestival = sameVenue.length >= 2
                       const statusColor: Record<string,string> = { paid: '#2d7a4f', partial: '#B8860B', pending: muted, disputed: '#C00' }
@@ -1702,6 +1743,9 @@ export default function ArtistPage() {
                             )}
                             {peopleCount > 0 && (
                               <span title={`${peopleCount} support/photog`} style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>👥{peopleCount}</span>
+                            )}
+                            {guestCount > 0 && (
+                              <span title={`${guestCount} on guest list`} style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>🎟{guestCount}</span>
                             )}
                             <span style={{ fontSize: 14, color: muted, transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0, marginLeft: 4 }}>›</span>
                           </div>
@@ -1769,6 +1813,71 @@ export default function ArtistPage() {
                                     style={{ background: 'transparent', border: `1px dashed ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
                                     + SUPPORT / PHOTOG / ETC
                                   </button>
+                                </div>
+                              )
+                            })()}
+                            {/* Guest list */}
+                            {(() => {
+                              const guests = guestList.filter(g => g.show_id === show.id)
+                              const totalHeads = guests.reduce((sum: number, g: any) => sum + 1 + (g.plus_n || 0), 0)
+                              return (
+                                <div style={{ marginBottom: 12 }}>
+                                  {guests.length > 0 && (
+                                    <div style={{ marginBottom: 8 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, padding: '0 2px' }}>
+                                        <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, textTransform: 'uppercase' }}>
+                                          Guest list · {guests.length} {guests.length === 1 ? 'entry' : 'entries'} · {totalHeads} {totalHeads === 1 ? 'head' : 'heads'}
+                                        </span>
+                                        <button onClick={(e) => {
+                                          e.stopPropagation()
+                                          if (!show.guest_list_token) return
+                                          const url = `${window.location.origin}/guests/${show.guest_list_token}`
+                                          navigator.clipboard.writeText(url)
+                                          alert(`Public guest list link copied:\n${url}`)
+                                        }}
+                                          style={{ background: 'transparent', border: `1px solid ${border}`, borderRadius: 5, color: muted, cursor: show.guest_list_token ? 'pointer' : 'not-allowed', fontSize: 10, padding: '3px 8px', fontFamily: 'monospace', letterSpacing: 1, opacity: show.guest_list_token ? 1 : 0.4 }}>
+                                          {show.guest_list_token ? 'COPY SHARE LINK' : 'NO LINK YET'}
+                                        </button>
+                                      </div>
+                                      <div style={{ display: 'grid', gap: 4 }}>
+                                        {guests.map((g: any) => (
+                                          <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', background: '#F9F6F2', borderRadius: 6, fontSize: 12 }}>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                              <span style={{ fontWeight: 600, color: text }}>{g.name}</span>
+                                              {g.plus_n > 0 && <span style={{ fontFamily: 'monospace', fontSize: 11, color: accent, marginLeft: 6, fontWeight: 700 }}>+{g.plus_n}</span>}
+                                              {g.notes && <span style={{ color: muted, fontSize: 11, fontStyle: 'italic', marginLeft: 8 }}>· {g.notes}</span>}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                                              <button onClick={(e) => { e.stopPropagation(); setGuestShow(show); openModal('guest', g) }}
+                                                style={{ background: 'transparent', border: `1px solid ${border}`, borderRadius: 5, color: muted, cursor: 'pointer', fontSize: 11, padding: '2px 7px' }}>✎</button>
+                                              <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ table: 'guest_list', id: g.id, label: `${g.name} from ${show.venue}` }) }}
+                                                style={{ background: '#fff0f0', border: '1px solid #ffcccc', borderRadius: 5, color: '#cc0000', cursor: 'pointer', fontSize: 11, padding: '2px 7px' }}>✕</button>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                    <button onClick={(e) => { e.stopPropagation(); setGuestShow(show); openModal('guest', { plus_n: 0 }) }}
+                                      style={{ background: 'transparent', border: `1px dashed ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
+                                      + GUEST
+                                    </button>
+                                    {!show.guest_list_token && guests.length > 0 && (
+                                      <button onClick={async (e) => {
+                                        e.stopPropagation()
+                                        const token = Math.random().toString(36).substring(2, 12) + Date.now().toString(36).substring(-4)
+                                        await supabase.from('shows').update({ guest_list_token: token }).eq('id', show.id)
+                                        if (selectedTour) await loadTourData(selectedTour.id)
+                                        const url = `${window.location.origin}/guests/${token}`
+                                        navigator.clipboard.writeText(url)
+                                        alert(`Share link created & copied:\n${url}`)
+                                      }}
+                                        style={{ background: 'transparent', border: `1px solid ${accent}`, borderRadius: 6, color: accent, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
+                                        🔗 CREATE SHARE LINK
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               )
                             })()}

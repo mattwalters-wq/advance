@@ -308,6 +308,43 @@ const TOOLS: any[] = [
       required: ['id'],
     },
   },
+  {
+    name: 'add_guest',
+    description: 'Add a guest to the guest list for a specific show. plus_n is the number of additional guests (0 means just the person, 1 means +1).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        show_id: { type: 'string' },
+        name: { type: 'string' },
+        plus_n: { type: 'number' },
+        notes: { type: 'string' },
+      },
+      required: ['show_id', 'name'],
+    },
+  },
+  {
+    name: 'update_guest',
+    description: 'Update a guest list entry',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        name: { type: 'string' },
+        plus_n: { type: 'number' },
+        notes: { type: 'string' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'delete_guest',
+    description: 'Remove a guest from the guest list',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+  },
 ]
 
 async function executeTool(
@@ -438,6 +475,24 @@ async function executeTool(
         if (error) throw error
         return { success: true, message: `Removed show person` }
       }
+      case 'add_guest': {
+        const { data, error } = await supabase.from('guest_list')
+          .insert({ ...toolInput, tour_id: tourId, org_id: orgId }).select().single()
+        if (error) throw error
+        const total = 1 + (toolInput.plus_n || 0)
+        return { success: true, message: `Added ${toolInput.name}${toolInput.plus_n ? ` +${toolInput.plus_n}` : ''} to guest list (${total} total)`, data }
+      }
+      case 'update_guest': {
+        const { id, ...updates } = toolInput
+        const { error } = await supabase.from('guest_list').update(updates).eq('id', id)
+        if (error) throw error
+        return { success: true, message: `Updated guest` }
+      }
+      case 'delete_guest': {
+        const { error } = await supabase.from('guest_list').delete().eq('id', toolInput.id)
+        if (error) throw error
+        return { success: true, message: `Removed from guest list` }
+      }
       default:
         return { success: false, message: `Unknown tool: ${toolName}` }
     }
@@ -457,7 +512,7 @@ export async function POST(request: NextRequest) {
     )
 
     // Load full tour context
-    const [tourRes, showsRes, travelRes, accomRes, contactsRes, pressRes, setlistsRes, docsRes, peopleRes] = await Promise.all([
+    const [tourRes, showsRes, travelRes, accomRes, contactsRes, pressRes, setlistsRes, docsRes, peopleRes, guestsRes] = await Promise.all([
       supabase.from('tours').select('*, artists(name, project)').eq('id', tourId).single(),
       supabase.from('shows').select('*').eq('tour_id', tourId).order('date'),
       supabase.from('travel').select('*').eq('tour_id', tourId).order('travel_date'),
@@ -467,6 +522,7 @@ export async function POST(request: NextRequest) {
       supabase.from('setlists').select('*').eq('tour_id', tourId),
       supabase.from('tour_documents').select('*').eq('tour_id', tourId),
       supabase.from('show_people').select('*').eq('tour_id', tourId),
+      supabase.from('guest_list').select('*').eq('tour_id', tourId),
     ])
 
     const tour = tourRes.data
@@ -478,6 +534,7 @@ export async function POST(request: NextRequest) {
     const setlists = setlistsRes.data || []
     const documents = docsRes.data || []
     const showPeople = peopleRes.data || []
+    const guestList = guestsRes.data || []
     const orgId = tour?.org_id
 
     const context = `
@@ -515,6 +572,13 @@ ${showPeople.length ? showPeople.map(p => {
   const show = shows.find((s: any) => s.id === p.show_id)
   const showLabel = show ? `${show.date} ${show.venue}` : 'Unknown show'
   return `- id:${p.id} | show:${showLabel} | [${p.role || 'other'}] ${p.name}${p.set_time ? ' @ '+p.set_time : ''}${p.fee ? ' | '+(p.currency || 'AUD')+' '+p.fee : ''}${p.notes ? ' | '+p.notes : ''}`
+}).join('\n') : 'None'}
+
+GUEST LIST (${guestList.length}):
+${guestList.length ? guestList.map(g => {
+  const show = shows.find((s: any) => s.id === g.show_id)
+  const showLabel = show ? `${show.date} ${show.venue}` : 'Unknown show'
+  return `- id:${g.id} | show:${showLabel} | ${g.name}${g.plus_n ? ' +'+g.plus_n : ''}${g.notes ? ' | '+g.notes : ''}`
 }).join('\n') : 'None'}`.trim()
 
     const systemPrompt = `You are an agentic tour management assistant. You have full access to this tour's data and can make changes directly.
@@ -538,6 +602,8 @@ Examples:
 - "Add a dropbox link for the UK visa docs: https://..." → call add_document with category: visa
 - "Add Hatchie as support for the Bochum show at 8pm, fee $500" → call add_show_person with role: support, name: Hatchie, set_time: 20:00, fee: 500
 - "Add Sarah Smith as photographer for the Kaffee Kultus show" → call add_show_person with role: photographer
+- "Add Emma's mum +1 to the Saarbrücken guest list" → call add_guest with name: Emma's mum, plus_n: 1
+- "Put James from Sony on the London guest list plus 2" → call add_guest with name: James (Sony), plus_n: 2
 - "Delete the soundcheck on the 15th" → find the show, call update_show with soundcheck_time: ""
 
 Be direct. Act first, explain briefly after. If you're unsure which record to update (e.g. multiple flights on same day), ask which one.`
