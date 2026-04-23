@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
       const { data, error } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
         email: authUser.user.email,
-        options: { redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard` }
+        options: { redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/dashboard` }
       })
       if (error) throw error
       return NextResponse.json({ link: data.properties?.action_link, email: authUser.user.email })
