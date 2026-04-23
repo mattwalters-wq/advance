@@ -40,11 +40,19 @@ export async function GET(request: NextRequest) {
       ])
       const artists = artistsRes.data || []
       const artistIds = artists.map((a: any) => a.id)
-      const tourIds: string[] = []
 
-      const toursRes = await supabase.from('tours').select('*, artists(name)').eq('org_id', drilldown).order('created_at', { ascending: false })
-      const tours = toursRes.data || []
-      tours.forEach((t: any) => tourIds.push(t.id))
+      // Fetch tours both by org_id AND by artist_id (in case org_id wasn't set on creation)
+      const [toursByOrg, toursByArtist] = await Promise.all([
+        supabase.from('tours').select('*, artists(name)').eq('org_id', drilldown),
+        artistIds.length > 0
+          ? supabase.from('tours').select('*, artists(name)').in('artist_id', artistIds)
+          : Promise.resolve({ data: [] }),
+      ])
+      // Merge and deduplicate
+      const allTours = [...(toursByOrg.data || []), ...(toursByArtist.data || [])]
+      const seen = new Set<string>()
+      const tours = allTours.filter((t: any) => { if (seen.has(t.id)) return false; seen.add(t.id); return true })
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
       const [showsRes, travelRes, accomRes, guestsRes, peopleRes] = await Promise.all([
         supabase.from('shows').select('id, date, venue, city, tour_id, type').eq('org_id', drilldown).order('date', { ascending: false }),
@@ -91,7 +99,12 @@ export async function GET(request: NextRequest) {
       email: emailMap[p.id] || null,
       last_sign_in: lastSignInMap[p.id] || null,
       artist_count: (artistsRes.data || []).filter((a: any) => a.org_id === p.id).length,
-      tour_count: (toursRes.data || []).filter((t: any) => t.org_id === p.id).length,
+      tour_count: (toursRes.data || []).filter((t: any) => {
+        if (t.org_id === p.id) return true
+        // fallback: check if the tour's artist belongs to this user
+        const artist = (artistsRes.data || []).find((a: any) => a.id === t.artist_id)
+        return artist?.org_id === p.id
+      }).length,
       show_count: (showsRes.data || []).filter((s: any) => s.org_id === p.id).length,
     }))
 
