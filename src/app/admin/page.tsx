@@ -59,7 +59,7 @@ export default function AdminPage() {
   }
 
   async function impersonate(userId: string) {
-    if (!confirm('Generate impersonation link for this user? You will be signed in as them.')) return
+    if (!confirm('Generate impersonation link? Paste it into an incognito window to enter this account.')) return
     setImpersonating(true)
     try {
       const token = await getToken()
@@ -70,8 +70,8 @@ export default function AdminPage() {
       })
       const result = await res.json()
       if (result.link) {
-        window.open(result.link, '_blank')
-        showToast(`Opened impersonation link for ${result.email}`)
+        await navigator.clipboard.writeText(result.link)
+        showToast(`✓ Link copied for ${result.email} — paste into incognito window`)
       } else {
         showToast(`Error: ${result.error}`)
       }
@@ -177,7 +177,7 @@ export default function AdminPage() {
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => impersonate(drillUser.id)} disabled={impersonating}
               style={{ padding: '6px 14px', background: accent, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1 }}>
-              {impersonating ? '...' : '⚡ ENTER ACCOUNT'}
+              {impersonating ? '...' : '⚡ COPY LOGIN LINK'}
             </button>
             <button onClick={() => resetPassword(drillUser.id, drillUser.email)}
               style={{ padding: '6px 14px', background: 'transparent', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1 }}>
