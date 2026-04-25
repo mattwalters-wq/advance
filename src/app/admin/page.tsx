@@ -59,26 +59,9 @@ export default function AdminPage() {
   }
 
   async function impersonate(userId: string) {
-    if (!confirm('Generate impersonation link? Paste it into an incognito window to enter this account.')) return
-    setImpersonating(true)
-    try {
-      const token = await getToken()
-      const res = await fetch('/api/admin', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, action: 'impersonate' })
-      })
-      const result = await res.json()
-      if (result.link) {
-        await navigator.clipboard.writeText(result.link)
-        showToast(`✓ Link copied for ${result.email} — paste into incognito window`)
-      } else {
-        showToast(`Error: ${result.error}`)
-      }
-    } catch (e: any) {
-      showToast(`Error: ${e.message}`)
-    }
-    setImpersonating(false)
+    const url = `/dashboard?superadmin=1&org_id=${userId}`
+    window.open(url, '_blank')
+    showToast('Opening account in god mode...')
   }
 
   async function resetPassword(userId: string, email: string) {
@@ -177,7 +160,7 @@ export default function AdminPage() {
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => impersonate(drillUser.id)} disabled={impersonating}
               style={{ padding: '6px 14px', background: accent, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1 }}>
-              {impersonating ? '...' : '⚡ COPY LOGIN LINK'}
+              {impersonating ? '...' : '⚡ ENTER ACCOUNT'}
             </button>
             <button onClick={() => resetPassword(drillUser.id, drillUser.email)}
               style={{ padding: '6px 14px', background: 'transparent', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1 }}>

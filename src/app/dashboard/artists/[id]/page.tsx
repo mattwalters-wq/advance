@@ -94,8 +94,19 @@ export default function ArtistPage() {
       // Prefer non-archived tours (no end_date OR end_date in future)
       const today = new Date().toISOString().split('T')[0]
       const active = toursData.filter((t: any) => !t.end_date || t.end_date >= today)
-      // Active sorted earliest first (nearest upcoming), else most recent archived
-      const picked = active.length > 0 ? active[0] : toursData[toursData.length - 1]
+      // Pick the tour with start_date closest to today (nearest upcoming)
+      const future = active.filter((t: any) => !t.start_date || t.start_date >= today)
+      const past = active.filter((t: any) => t.start_date && t.start_date < today)
+      let picked
+      if (future.length > 0) {
+        // Nearest future start_date first
+        picked = future.sort((a: any, b: any) => (a.start_date || '').localeCompare(b.start_date || ''))[0]
+      } else if (past.length > 0) {
+        // Most recently started tour (in progress)
+        picked = past.sort((a: any, b: any) => (b.start_date || '').localeCompare(a.start_date || ''))[0]
+      } else {
+        picked = toursData[toursData.length - 1]
+      }
       setSelectedTour(picked)
     }
     // Get user name (non-blocking)

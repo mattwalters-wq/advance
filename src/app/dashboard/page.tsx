@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 const supabase = createClient()
+const ADMIN_EMAIL = 'mattwaltersconsulting@gmail.com'
 
 export default function DashboardPage() {
   const [artists, setArtists] = useState<any[]>([])
@@ -12,13 +13,33 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [godMode, setGodMode] = useState<any>(null) // { orgId, name }
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/auth/signin'); return }
+
+    // God mode: admin can view any user's roster
+    const superadmin = searchParams.get('superadmin')
+    const orgId = searchParams.get('org_id')
+    if (superadmin === '1' && orgId && user.email === ADMIN_EMAIL) {
+      // Load the target user's profile and artists
+      const [profileRes, artistsRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', orgId).single(),
+        supabase.from('artists').select('*').eq('org_id', orgId).order('name'),
+      ])
+      setUser(user)
+      setProfile(profileRes.data)
+      setArtists(artistsRes.data || [])
+      setGodMode({ orgId, name: profileRes.data?.full_name || orgId })
+      setLoading(false)
+      return
+    }
+
     setUser(user)
     // Parallelise profile + artists
     const [profileRes, artistsRes] = await Promise.all([
@@ -134,6 +155,19 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {/* God mode banner */}
+      {godMode && (
+        <div style={{ background: '#B8860B', padding: '8px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontFamily: 'monospace', fontSize: 11, letterSpacing: 2, color: '#fff' }}>
+            ⚡ GOD MODE — viewing as <strong>{godMode.name}</strong>
+          </div>
+          <button onClick={() => router.push('/admin')}
+            style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 5, color: '#fff', cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, padding: '4px 10px', letterSpacing: 1 }}>
+            ← BACK TO ADMIN
+          </button>
+        </div>
+      )}
+
       {/* Main */}
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px' }}>
 
@@ -168,7 +202,7 @@ export default function DashboardPage() {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
             {artists.map((artist, i) => (
-              <div key={artist.id} className="artist-card fade-in" onClick={() => router.push(`/dashboard/artists/${artist.id}`)}
+              <div key={artist.id} className="artist-card fade-in" onClick={() => router.push(`/dashboard/artists/${artist.id}${godMode ? `?superadmin=1&org_id=${godMode.orgId}` : ''}`)}
                 style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', cursor: 'pointer', border: '1px solid #E8E0D4', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', animationDelay: `${i * 0.06}s`, animationFillMode: 'both' }}>
                 {/* Colour band */}
                 <div style={{ height: 5, background: artist.color || '#C4622D' }} />
