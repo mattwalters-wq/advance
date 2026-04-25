@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 const supabase = createClient()
 const ADMIN_EMAIL = 'mattwaltersconsulting@gmail.com'
 
-export default function DashboardPage() {
+function DashboardInner() {
   const [artists, setArtists] = useState<any[]>([])
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
@@ -222,5 +222,13 @@ export default function DashboardPage() {
         )}
       </main>
     </div>
+  )
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div style={{ background: '#F4EFE6', minHeight: '100vh' }} />}>
+      <DashboardInner />
+    </Suspense>
   )
 }
