@@ -15,7 +15,7 @@ const TOOLS: any[] = [
         venue: { type: 'string' },
         city: { type: 'string' },
         country: { type: 'string' },
-        type: { type: 'string', description: 'show|rehearsal|travel_day|day_off - default is show' },
+        type: { type: 'string', description: 'show|rehearsal|recording|press|travel_day|day_off - default is show' },
         set_time: { type: 'string', description: 'HH:MM 24hr' },
         doors_time: { type: 'string', description: 'HH:MM 24hr' },
         soundcheck_time: { type: 'string', description: 'HH:MM 24hr' },

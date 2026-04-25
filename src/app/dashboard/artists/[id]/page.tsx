@@ -860,13 +860,15 @@ export default function ArtistPage() {
                     <select style={inputStyle} value={form.type || 'show'} onChange={e => setForm({ ...form, type: e.target.value })}>
                       <option value="show">Show</option>
                       <option value="rehearsal">Rehearsal</option>
+                      <option value="recording">Recording</option>
+                      <option value="press">Press day</option>
                       <option value="travel_day">Travel day</option>
                       <option value="day_off">Day off</option>
                     </select>
                   </div>
                   <div>
-                    <label style={labelStyle}>{form.type === 'rehearsal' ? 'Studio / Venue *' : form.type === 'travel_day' ? 'Leg description *' : form.type === 'day_off' ? 'Location *' : 'Venue *'}</label>
-                    <input style={inputStyle} value={form.venue || ''} onChange={e => setForm({ ...form, venue: e.target.value })} placeholder={form.type === 'rehearsal' ? 'Bakehouse Studios' : form.type === 'day_off' ? 'Tokyo' : 'Venue name'} />
+                    <label style={labelStyle}>{form.type === 'rehearsal' ? 'Studio / Venue *' : form.type === 'recording' ? 'Studio *' : form.type === 'press' ? 'Location *' : form.type === 'travel_day' ? 'Leg description *' : form.type === 'day_off' ? 'Location *' : 'Venue *'}</label>
+                    <input style={inputStyle} value={form.venue || ''} onChange={e => setForm({ ...form, venue: e.target.value })} placeholder={form.type === 'rehearsal' ? 'Bakehouse Studios' : form.type === 'recording' ? 'Studios 301' : form.type === 'press' ? 'Sydney' : form.type === 'day_off' ? 'Tokyo' : 'Venue name'} />
                   </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
@@ -1765,9 +1767,13 @@ export default function ArtistPage() {
                       {(() => {
                         const showCount = shows.filter(s => !s.type || s.type === 'show').length
                         const rehearsalCount = shows.filter(s => s.type === 'rehearsal').length
-                        const otherCount = shows.length - showCount - rehearsalCount
+                        const recordingCount = shows.filter(s => s.type === 'recording').length
+                        const pressCount = shows.filter(s => s.type === 'press').length
+                        const otherCount = shows.length - showCount - rehearsalCount - recordingCount - pressCount
                         const parts = [`${showCount} show${showCount !== 1 ? 's' : ''}`]
                         if (rehearsalCount) parts.push(`${rehearsalCount} rehearsal${rehearsalCount !== 1 ? 's' : ''}`)
+                        if (recordingCount) parts.push(`${recordingCount} recording${recordingCount !== 1 ? 's' : ''}`)
+                        if (pressCount) parts.push(`${pressCount} press day${pressCount !== 1 ? 's' : ''}`)
                         if (otherCount) parts.push(`${otherCount} other`)
                         return `Schedule — ${parts.join(' · ')}`
                       })()}
@@ -1809,8 +1815,12 @@ export default function ArtistPage() {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 8 }}>
                               {show.type && show.type !== 'show' && (
-                                <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.5, color: show.type === 'rehearsal' ? '#5B4B8A' : show.type === 'day_off' ? '#3D6B50' : '#8A8580', background: show.type === 'rehearsal' ? '#F5F0FF' : show.type === 'day_off' ? '#F0FFF4' : '#F5F0E8', border: `1px solid ${show.type === 'rehearsal' ? '#8B7EC6' : show.type === 'day_off' ? '#3D6B50' : border}`, padding: '2px 6px', borderRadius: 3, flexShrink: 0 }}>
-                                  {show.type === 'rehearsal' ? 'REHEARSAL' : show.type === 'travel_day' ? 'TRAVEL' : 'DAY OFF'}
+                                <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.5,
+                                  color: show.type === 'rehearsal' ? '#5B4B8A' : show.type === 'recording' ? '#1A6B8A' : show.type === 'press' ? '#B8860B' : show.type === 'day_off' ? '#3D6B50' : '#8A8580',
+                                  background: show.type === 'rehearsal' ? '#F5F0FF' : show.type === 'recording' ? '#F0F8FF' : show.type === 'press' ? '#FFFBF0' : show.type === 'day_off' ? '#F0FFF4' : '#F5F0E8',
+                                  border: `1px solid ${show.type === 'rehearsal' ? '#8B7EC6' : show.type === 'recording' ? '#1A6B8A' : show.type === 'press' ? '#B8860B' : show.type === 'day_off' ? '#3D6B50' : border}`,
+                                  padding: '2px 6px', borderRadius: 3, flexShrink: 0 }}>
+                                  {show.type === 'rehearsal' ? 'REHEARSAL' : show.type === 'recording' ? 'RECORDING' : show.type === 'press' ? 'PRESS DAY' : show.type === 'travel_day' ? 'TRAVEL' : 'DAY OFF'}
                                 </span>
                               )}
                               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{venueName}</span>
