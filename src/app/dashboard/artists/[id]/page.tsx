@@ -15,6 +15,7 @@ export default function ArtistPage() {
   const [tours, setTours] = useState<any[]>([])
   const [selectedTour, setSelectedTour] = useState<any>(null)
   const [showArchive, setShowArchive] = useState(false)
+  const [allTourShows, setAllTourShows] = useState<any[]>([])
   const [shows, setShows] = useState<any[]>([])
   const [travel, setTravel] = useState<any[]>([])
   const [accommodation, setAccommodation] = useState<any[]>([])
@@ -89,20 +90,28 @@ export default function ArtistPage() {
     if (!artistRes.data) { router.push('/dashboard'); return }
     setArtist(artistRes.data)
     const toursData = toursRes.data || []
+    const tourIds = toursData.map((t: any) => t.id)
+    // Fetch all shows across all tours for archive detection
+    const allShowsRes = tourIds.length > 0
+      ? await supabase.from('shows').select('id, tour_id, date').in('tour_id', tourIds)
+      : { data: [] }
+    const allShows = allShowsRes.data || []
     setTours(toursData)
+    setAllTourShows(allShows)
     if (toursData.length > 0) {
-      // Prefer non-archived tours (no end_date OR end_date in future)
       const today = new Date().toISOString().split('T')[0]
-      const active = toursData.filter((t: any) => !t.end_date || t.end_date >= today)
-      // Pick the tour with start_date closest to today (nearest upcoming)
+      function isArchivedCheck(t: any) {
+        if (t.end_date) return t.end_date < today
+        const latestShow = allShows.filter((s: any) => s.tour_id === t.id).map((s: any) => s.date).filter(Boolean).sort().reverse()[0]
+        return latestShow ? latestShow < today : false
+      }
+      const active = toursData.filter((t: any) => !isArchivedCheck(t))
       const future = active.filter((t: any) => !t.start_date || t.start_date >= today)
       const past = active.filter((t: any) => t.start_date && t.start_date < today)
       let picked
       if (future.length > 0) {
-        // Nearest future start_date first
         picked = future.sort((a: any, b: any) => (a.start_date || '').localeCompare(b.start_date || ''))[0]
       } else if (past.length > 0) {
-        // Most recently started tour (in progress)
         picked = past.sort((a: any, b: any) => (b.start_date || '').localeCompare(a.start_date || ''))[0]
       } else {
         picked = toursData[toursData.length - 1]
@@ -1486,11 +1495,13 @@ export default function ArtistPage() {
         {tours.length > 0 && (() => {
           const today = new Date().toISOString().split('T')[0]
 
-          // Archive a tour only if end_date is set AND past
-          // (we can't reliably check show dates because shows state only holds current tour)
+          // Archive if end_date is past, OR if no end_date but all shows are in the past
           function isArchived(tour: any): boolean {
-            if (!tour.end_date) return false
-            return tour.end_date < today
+            if (tour.end_date) return tour.end_date < today
+            const tourShows = allTourShows.filter((s: any) => s.tour_id === tour.id)
+            if (tourShows.length === 0) return false
+            const latestShow = tourShows.map((s: any) => s.date).filter(Boolean).sort().reverse()[0]
+            return latestShow ? latestShow < today : false
           }
 
           const activeTours = tours.filter(t => !isArchived(t))
