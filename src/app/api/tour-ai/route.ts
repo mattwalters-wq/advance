@@ -373,7 +373,7 @@ async function executeTool(
         return { success: true, message: `Updated show` }
       }
       case 'delete_show': {
-        const { error } = await supabase.from('shows').delete().eq('id', toolInput.id)
+        const { error } = await supabase.from('shows').update({ deleted_at: new Date().toISOString() }).eq('id', toolInput.id)
         if (error) throw error
         return { success: true, message: `Deleted show` }
       }
@@ -390,7 +390,7 @@ async function executeTool(
         return { success: true, message: `Updated travel leg` }
       }
       case 'delete_travel': {
-        const { error } = await supabase.from('travel').delete().eq('id', toolInput.id)
+        const { error } = await supabase.from('travel').update({ deleted_at: new Date().toISOString() }).eq('id', toolInput.id)
         if (error) throw error
         return { success: true, message: `Deleted travel leg` }
       }
@@ -407,7 +407,7 @@ async function executeTool(
         return { success: true, message: `Updated accommodation` }
       }
       case 'delete_accommodation': {
-        const { error } = await supabase.from('accommodation').delete().eq('id', toolInput.id)
+        const { error } = await supabase.from('accommodation').update({ deleted_at: new Date().toISOString() }).eq('id', toolInput.id)
         if (error) throw error
         return { success: true, message: `Deleted accommodation` }
       }
@@ -430,14 +430,13 @@ async function executeTool(
         return { success: true, message: `Updated press commitment` }
       }
       case 'delete_press': {
-        const { error } = await supabase.from('press').delete().eq('id', toolInput.id)
+        const { error } = await supabase.from('press').update({ deleted_at: new Date().toISOString() }).eq('id', toolInput.id)
         if (error) throw error
         return { success: true, message: `Deleted press commitment` }
       }
       case 'set_setlist': {
         const { show_id, songs, notes } = toolInput
-        // Upsert: one setlist per show_id
-        const existing = await supabase.from('setlists').select('id').eq('show_id', show_id).single()
+        const existing = await supabase.from('setlists').select('id').eq('show_id', show_id).is('deleted_at', null).single()
         if (existing.data) {
           const { error } = await supabase.from('setlists')
             .update({ songs, notes: notes || null, updated_at: new Date().toISOString() })
@@ -458,7 +457,7 @@ async function executeTool(
         return { success: true, message: `Added document: ${toolInput.label}`, data }
       }
       case 'delete_document': {
-        const { error } = await supabase.from('tour_documents').delete().eq('id', toolInput.id)
+        const { error } = await supabase.from('tour_documents').update({ deleted_at: new Date().toISOString() }).eq('id', toolInput.id)
         if (error) throw error
         return { success: true, message: `Deleted document` }
       }
@@ -475,7 +474,7 @@ async function executeTool(
         return { success: true, message: `Updated show person` }
       }
       case 'delete_show_person': {
-        const { error } = await supabase.from('show_people').delete().eq('id', toolInput.id)
+        const { error } = await supabase.from('show_people').update({ deleted_at: new Date().toISOString() }).eq('id', toolInput.id)
         if (error) throw error
         return { success: true, message: `Removed show person` }
       }
@@ -493,7 +492,7 @@ async function executeTool(
         return { success: true, message: `Updated guest` }
       }
       case 'delete_guest': {
-        const { error } = await supabase.from('guest_list').delete().eq('id', toolInput.id)
+        const { error } = await supabase.from('guest_list').update({ deleted_at: new Date().toISOString() }).eq('id', toolInput.id)
         if (error) throw error
         return { success: true, message: `Removed from guest list` }
       }
@@ -518,15 +517,15 @@ export async function POST(request: NextRequest) {
     // Load full tour context
     const [tourRes, showsRes, travelRes, accomRes, contactsRes, pressRes, setlistsRes, docsRes, peopleRes, guestsRes] = await Promise.all([
       supabase.from('tours').select('*, artists(name, project)').eq('id', tourId).single(),
-      supabase.from('shows').select('*').eq('tour_id', tourId).order('date'),
-      supabase.from('travel').select('*').eq('tour_id', tourId).order('travel_date'),
-      supabase.from('accommodation').select('*').eq('tour_id', tourId).order('check_in'),
-      supabase.from('contacts').select('*').eq('tour_id', tourId),
-      supabase.from('press').select('*').eq('tour_id', tourId).order('date'),
-      supabase.from('setlists').select('*').eq('tour_id', tourId),
-      supabase.from('tour_documents').select('*').eq('tour_id', tourId),
-      supabase.from('show_people').select('*').eq('tour_id', tourId),
-      supabase.from('guest_list').select('*').eq('tour_id', tourId),
+      supabase.from('shows').select('*').eq('tour_id', tourId).is('deleted_at', null).order('date'),
+      supabase.from('travel').select('*').eq('tour_id', tourId).is('deleted_at', null).order('travel_date'),
+      supabase.from('accommodation').select('*').eq('tour_id', tourId).is('deleted_at', null).order('check_in'),
+      supabase.from('contacts').select('*').eq('tour_id', tourId).is('deleted_at', null),
+      supabase.from('press').select('*').eq('tour_id', tourId).is('deleted_at', null).order('date'),
+      supabase.from('setlists').select('*').eq('tour_id', tourId).is('deleted_at', null),
+      supabase.from('tour_documents').select('*').eq('tour_id', tourId).is('deleted_at', null),
+      supabase.from('show_people').select('*').eq('tour_id', tourId).is('deleted_at', null),
+      supabase.from('guest_list').select('*').eq('tour_id', tourId).is('deleted_at', null),
     ])
 
     const tour = tourRes.data

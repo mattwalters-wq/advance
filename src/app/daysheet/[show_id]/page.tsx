@@ -74,13 +74,13 @@ export default function DaySheetPage() {
 
     const [tourRes, travelRes, accomRes, contactsRes, riderRes, pressRes, setlistRes, peopleRes] = await Promise.all([
       supabase.from('tours').select('*, artists(*)').eq('id', showData.tour_id).single(),
-      supabase.from('travel').select('*').eq('tour_id', showData.tour_id).order('travel_date'),
-      supabase.from('accommodation').select('*').eq('tour_id', showData.tour_id).order('check_in'),
-      supabase.from('contacts').select('*').eq('tour_id', showData.tour_id),
+      supabase.from('travel').select('*').eq('tour_id', showData.tour_id).is('deleted_at', null).order('travel_date'),
+      supabase.from('accommodation').select('*').eq('tour_id', showData.tour_id).is('deleted_at', null).order('check_in'),
+      supabase.from('contacts').select('*').eq('tour_id', showData.tour_id).is('deleted_at', null),
       supabase.from('riders').select('*').eq('tour_id', showData.tour_id).single(),
-      supabase.from('press').select('*').eq('tour_id', showData.tour_id).order('date'),
-      supabase.from('setlists').select('*').eq('show_id', showData.id).single(),
-      supabase.from('show_people').select('*').eq('show_id', showData.id),
+      supabase.from('press').select('*').eq('tour_id', showData.tour_id).is('deleted_at', null).order('date'),
+      supabase.from('setlists').select('*').eq('show_id', showData.id).is('deleted_at', null).single(),
+      supabase.from('show_people').select('*').eq('show_id', showData.id).is('deleted_at', null),
     ])
 
     const tourData = tourRes.data

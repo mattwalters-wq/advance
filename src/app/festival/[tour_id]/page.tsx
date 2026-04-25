@@ -43,10 +43,10 @@ export default function FestivalSheetPage() {
   async function loadData() {
     const [tourRes, showsRes, pressRes, setlistsRes, peopleRes] = await Promise.all([
       supabase.from('tours').select('*, artists(*)').eq('id', params.tour_id).single(),
-      supabase.from('shows').select('*').eq('tour_id', params.tour_id).order('date'),
-      supabase.from('press').select('*').eq('tour_id', params.tour_id).order('date'),
-      supabase.from('setlists').select('*').eq('tour_id', params.tour_id),
-      supabase.from('show_people').select('*').eq('tour_id', params.tour_id),
+      supabase.from('shows').select('*').eq('tour_id', params.tour_id).is('deleted_at', null).order('date'),
+      supabase.from('press').select('*').eq('tour_id', params.tour_id).is('deleted_at', null).order('date'),
+      supabase.from('setlists').select('*').eq('tour_id', params.tour_id).is('deleted_at', null),
+      supabase.from('show_people').select('*').eq('tour_id', params.tour_id).is('deleted_at', null),
     ])
     if (tourRes.data) {
       setTour(tourRes.data)

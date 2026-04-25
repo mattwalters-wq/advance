@@ -93,7 +93,7 @@ export default function ArtistPage() {
     const tourIds = toursData.map((t: any) => t.id)
     // Fetch all shows across all tours for archive detection
     const allShowsRes = tourIds.length > 0
-      ? await supabase.from('shows').select('id, tour_id, date').in('tour_id', tourIds)
+      ? await supabase.from('shows').select('id, tour_id, date').in('tour_id', tourIds).is('deleted_at', null)
       : { data: [] }
     const allShows = allShowsRes.data || []
     setTours(toursData)
@@ -129,15 +129,15 @@ export default function ArtistPage() {
 
   async function loadTourData(tourId: string) {
     const [s, t, a, c, p, sl, d, sp, gl] = await Promise.all([
-      supabase.from('shows').select('*').eq('tour_id', tourId).order('date'),
-      supabase.from('travel').select('*').eq('tour_id', tourId).order('travel_date'),
-      supabase.from('accommodation').select('*').eq('tour_id', tourId).order('check_in'),
-      supabase.from('contacts').select('*').eq('tour_id', tourId),
-      supabase.from('press').select('*').eq('tour_id', tourId).order('date'),
-      supabase.from('setlists').select('*').eq('tour_id', tourId),
-      supabase.from('tour_documents').select('*').eq('tour_id', tourId).order('category'),
-      supabase.from('show_people').select('*').eq('tour_id', tourId),
-      supabase.from('guest_list').select('*').eq('tour_id', tourId).order('name'),
+      supabase.from('shows').select('*').eq('tour_id', tourId).is('deleted_at', null).order('date'),
+      supabase.from('travel').select('*').eq('tour_id', tourId).is('deleted_at', null).order('travel_date'),
+      supabase.from('accommodation').select('*').eq('tour_id', tourId).is('deleted_at', null).order('check_in'),
+      supabase.from('contacts').select('*').eq('tour_id', tourId).is('deleted_at', null),
+      supabase.from('press').select('*').eq('tour_id', tourId).is('deleted_at', null).order('date'),
+      supabase.from('setlists').select('*').eq('tour_id', tourId).is('deleted_at', null),
+      supabase.from('tour_documents').select('*').eq('tour_id', tourId).is('deleted_at', null).order('category'),
+      supabase.from('show_people').select('*').eq('tour_id', tourId).is('deleted_at', null),
+      supabase.from('guest_list').select('*').eq('tour_id', tourId).is('deleted_at', null).order('name'),
     ])
     const showsData = s.data || []
     const travelData = t.data || []
@@ -186,12 +186,30 @@ export default function ArtistPage() {
     setNotes(prev => prev.filter(n => n.id !== id))
   }
 
+  const [undoItem, setUndoItem] = useState<{ table: string, id: string, label: string } | null>(null)
+  const [undoTimer, setUndoTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
+
   async function handleDelete() {
     if (!confirmDelete) return
     setDeleting(true)
-    await supabase.from(confirmDelete.table).delete().eq('id', confirmDelete.id)
+    // Soft delete - set deleted_at instead of hard delete
+    await supabase.from(confirmDelete.table).update({ deleted_at: new Date().toISOString() }).eq('id', confirmDelete.id)
+    const deleted = { ...confirmDelete }
     setConfirmDelete(null)
     setDeleting(false)
+    if (selectedTour) await loadTourData(selectedTour.id)
+    // Show undo toast for 8 seconds
+    if (undoTimer) clearTimeout(undoTimer)
+    setUndoItem(deleted)
+    const timer = setTimeout(() => setUndoItem(null), 8000)
+    setUndoTimer(timer)
+  }
+
+  async function handleUndo() {
+    if (!undoItem) return
+    await supabase.from(undoItem.table).update({ deleted_at: null }).eq('id', undoItem.id)
+    if (undoTimer) clearTimeout(undoTimer)
+    setUndoItem(null)
     if (selectedTour) await loadTourData(selectedTour.id)
   }
 
@@ -1441,6 +1459,23 @@ export default function ArtistPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Undo toast */}
+      {undoItem && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#1A1714', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14, zIndex: 300, boxShadow: '0 4px 24px rgba(0,0,0,0.3)', maxWidth: 420, width: 'calc(100% - 32px)' }}>
+          <span style={{ fontSize: 13, color: '#F4EFE6', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            Deleted: {undoItem.label}
+          </span>
+          <button onClick={handleUndo}
+            style={{ background: accent, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontFamily: 'monospace', fontSize: 11, letterSpacing: 1, padding: '6px 14px', flexShrink: 0 }}>
+            UNDO
+          </button>
+          <button onClick={() => { if (undoTimer) clearTimeout(undoTimer); setUndoItem(null) }}
+            style={{ background: 'transparent', border: 'none', color: '#4A4540', cursor: 'pointer', fontSize: 16, padding: '0 4px', flexShrink: 0 }}>
+            ✕
+          </button>
         </div>
       )}
 
