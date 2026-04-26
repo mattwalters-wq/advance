@@ -965,7 +965,44 @@ export default function BudgetPage() {
                 )}
 
                 {/* Summary cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+                {(() => {
+                  // Breakeven calculation
+                  const fixedShows = showsWithData.filter(s => s.isFixed && s.settlement)
+                  const vsShows = showsWithData.filter(s => !s.isFixed && s.settlement)
+                  const avgFee = fixedShows.length > 0 ? fixedShows.reduce((sum, s) => sum + s.income, 0) / fixedShows.length : 0
+                  const breakevenShows = avgFee > 0 ? Math.ceil(totalExpenses / avgFee) : null
+
+                  // For door/vs shows: avg net per ticket across those shows
+                  const vsBreakevenTickets = vsShows.length > 0 ? (() => {
+                    const totalVsCapacity = vsShows.reduce((s, show) => s + (show.settlement?.capacity || 0), 0)
+                    const avgCapacity = totalVsCapacity / vsShows.length
+                    const avgTicketPrice = vsShows.reduce((s, show) => s + (parseFloat(show.settlement?.ticket_price) || 0), 0) / vsShows.length
+                    const avgVsPct = vsShows.reduce((s, show) => {
+                      const detail = (show.settlement?.deal_type_detail || '').toLowerCase()
+                      const m = detail.match(/(\d+)%/)
+                      return s + (m ? parseInt(m[1]) / 100 : 0.85)
+                    }, 0) / vsShows.length
+                    const netPerTicket = avgTicketPrice * avgVsPct
+                    return netPerTicket > 0 ? Math.ceil(totalExpenses / netPerTicket) : null
+                  })() : null
+
+                  const breakEvenCard = {
+                    label: 'Breakeven',
+                    value: breakevenShows !== null
+                      ? `${breakevenShows} show${breakevenShows !== 1 ? 's' : ''}`
+                      : vsBreakevenTickets !== null
+                        ? `~${vsBreakevenTickets.toLocaleString()} tickets`
+                        : totalExpenses === 0 ? '—' : 'Add fees',
+                    color: netPosition >= 0 ? green : '#B8860B',
+                    sub: breakevenShows !== null
+                      ? `at avg ${fmtAmount(avgFee, primaryCurrency)} per show`
+                      : vsBreakevenTickets !== null
+                        ? `across ${vsShows.length} door deal${vsShows.length !== 1 ? 's' : ''}`
+                        : 'Enter show fees to calculate',
+                  }
+
+                  return (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                   {[
                     {
                       label: 'Total Income',
@@ -991,6 +1028,7 @@ export default function BudgetPage() {
                       color: netPositionAUD >= 0 ? green : red,
                       sub: 'before tax & commission'
                     },
+                    breakEvenCard,
                   ].map((c, i) => (
                     <div key={i} style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: '20px' }}>
                       <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 8, textTransform: 'uppercase' }}>{c.label}</div>
@@ -999,6 +1037,8 @@ export default function BudgetPage() {
                     </div>
                   ))}
                 </div>
+                  )
+                })()}
 
                 {/* Expenses breakdown bar */}
                 {expenses.length > 0 && (
@@ -1134,6 +1174,18 @@ export default function BudgetPage() {
                             {Math.round(scenario * (show.settlement.capacity - (show.settlement.guests || 0)) / 100)} sold
                           </div>
                         )}
+                        {!show.isFixed && show.settlement.ticket_price > 0 && show.settlement.vs_amount > 0 && (() => {
+                          const netPerTicket = parseFloat(show.settlement.ticket_price) * (parseFloat(show.settlement.vs_amount) / 100)
+                          const showCosts = show.expenseTotal + (totalExpenses - expenses.reduce((s: number, e: any) => s + (e.show_id ? (parseFloat(e.amount) || 0) : 0), 0)) / (showsWithData.filter(s => s.settlement).length || 1)
+                          const beTickets = netPerTicket > 0 ? Math.ceil(showCosts / netPerTicket) : null
+                          const beCapPct = beTickets && show.settlement.capacity ? Math.round(beTickets / show.settlement.capacity * 100) : null
+                          if (!beTickets) return null
+                          return (
+                            <div style={{ fontSize: 11, color: '#B8860B', fontFamily: 'monospace', marginTop: 2 }}>
+                              BE: {beTickets} tickets{beCapPct ? ` (${beCapPct}%)` : ''}
+                            </div>
+                          )
+                        })()}
                       </>
                     ) : (
                       <div style={{ fontSize: 13, color: muted, fontStyle: 'italic' }}>No fee set</div>
