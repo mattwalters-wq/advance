@@ -172,14 +172,22 @@ function AddExpenseModal({ shows, border, text, muted, accent, bg, card, onClose
   )
 }
 
-function AddIncomeModal({ shows, border, text, muted, accent, bg, card, green, onClose, onSave }: any) {
+function AddIncomeModal({ shows, border, text, muted, accent, bg, card, green, onClose, onSave, defaultShowId }: any) {
   const [venue, setVenue] = useState('')
   const [amount, setAmount] = useState('')
-  const [currency, setCurrency] = useState('AUD')
+  const [currency, setCurrency] = useState('EUR')
   const [dealType, setDealType] = useState('guarantee')
   const [notes, setNotes] = useState('')
-  const [showId, setShowId] = useState('')
+  const [showId, setShowId] = useState(defaultShowId || '')
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (defaultShowId) {
+      setShowId(defaultShowId)
+      const show = shows.find((s: any) => s.id === defaultShowId)
+      if (show) setVenue(show.venue)
+    }
+  }, [defaultShowId])
 
   const inputStyle = { width: '100%', padding: '9px 12px', border: `1px solid ${border}`, borderRadius: 8, background: bg, color: text, fontSize: 14, fontFamily: 'Georgia, serif', outline: 'none', boxSizing: 'border-box' as const }
   const labelStyle = { fontSize: 11, fontFamily: 'monospace', letterSpacing: '0.15em', color: muted, display: 'block', marginBottom: 5, textTransform: 'uppercase' as const }
@@ -396,6 +404,7 @@ export default function BudgetPage() {
   const [scenario, setScenario] = useState(100)
   const [showAddExpense, setShowAddExpense] = useState(false)
   const [showAddIncome, setShowAddIncome] = useState(false)
+  const [addIncomeShowId, setAddIncomeShowId] = useState<string | null>(null)
   const [fxRates, setFxRates] = useState<Record<string, number>>({})
   const [fxLoading, setFxLoading] = useState(false)
   const [fxUpdated, setFxUpdated] = useState('')
@@ -1127,7 +1136,7 @@ export default function BudgetPage() {
                                   )}
                                 </>
                               ) : (
-                                <button onClick={() => { setShowAddIncome(true) }}
+                                <button onClick={() => { setAddIncomeShowId(show.id); setShowAddIncome(true) }}
                                   style={{ fontSize: 10, fontFamily: 'monospace', letterSpacing: 1, color: muted, background: 'transparent', border: `1px dashed ${border}`, borderRadius: 4, padding: '3px 8px', cursor: 'pointer' }}>
                                   + ADD FEE
                                 </button>
@@ -1358,7 +1367,8 @@ export default function BudgetPage() {
         {showAddIncome && (
           <AddIncomeModal
             shows={shows} border={border} text={text} muted={muted} accent={accent} bg={bg} card={card} green={green}
-            onClose={() => setShowAddIncome(false)}
+            defaultShowId={addIncomeShowId}
+            onClose={() => { setShowAddIncome(false); setAddIncomeShowId(null) }}
             onSave={async (data: any) => {
               const { data: { user } } = await supabase.auth.getUser()
               const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', user!.id).single()
@@ -1370,6 +1380,7 @@ export default function BudgetPage() {
               }
               await loadBudget(selectedTourId)
               setShowAddIncome(false)
+              setAddIncomeShowId(null)
             }}
           />
         )}
