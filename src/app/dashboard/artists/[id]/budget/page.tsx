@@ -1326,7 +1326,9 @@ export default function BudgetPage() {
         )}
 
         {/* ── MERCH VIEW ── */}
-        {view === 'merch' && <MerchEstimator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} onProfitChange={setMerchProfit} />}
+        <div style={{ display: view === 'merch' ? 'block' : 'none' }}>
+          <MerchEstimator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} onProfitChange={setMerchProfit} />
+        </div>
 
         {/* ── MODALS ── */}
         {showAddExpense && (
