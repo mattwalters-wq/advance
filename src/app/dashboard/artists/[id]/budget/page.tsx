@@ -1496,7 +1496,8 @@ export default function BudgetPage() {
                           <ExpenseRow key={e.id || i} expense={e} border={border} muted={muted} text={text} red={red} green={green} accent={accent} darkMode={darkMode} card={card} bg={bg}
                             onUpdate={async (updates: any) => {
                               const { error } = await supabase.from('expenses').update(updates).eq('id', e.id)
-                              if (!error) await loadBudget(selectedTourId)
+                              if (error) { alert(`Save failed: ${error.message}`); return }
+                              await loadBudget(selectedTourId)
                             }}
                             onDelete={async () => {
                               const { error } = await supabase.from('expenses').delete().eq('id', e.id)
