@@ -989,16 +989,14 @@ export default function BudgetPage() {
                   const surplus = Math.max(0, effectiveTotalIncome - totalExpenses)
 
                   const breakEvenCard = {
-                    label: 'Breakeven',
-                    value: shortfall > 0
-                      ? `${fmtAmount(shortfall, primaryCurrency)} short`
+                    label: 'Breakeven target',
+                    value: fmtAmount(totalExpenses, primaryCurrency),
+                    color: shortfall > 0 ? '#B8860B' : green,
+                    sub: shortfall > 0
+                      ? `need ${fmtAmount(shortfall, primaryCurrency)} more to break even`
                       : surplus > 0
-                        ? `${fmtAmount(surplus, primaryCurrency)} clear`
-                        : '—',
-                    color: shortfall > 0 ? red : green,
-                    sub: totalExpenses > 0
-                      ? `${breakevenProgress}% of costs covered${hasProjected ? ' (incl. projected)' : ''}`
-                      : 'No expenses entered',
+                        ? `${fmtAmount(surplus, primaryCurrency)} above breakeven`
+                        : totalExpenses === 0 ? 'No expenses entered' : 'Exactly at breakeven',
                     progress: breakevenProgress,
                   }
 
@@ -1046,9 +1044,15 @@ export default function BudgetPage() {
                       <div style={{ fontSize: 22, fontWeight: 700, color: c.color, marginBottom: 4 }}>{c.value}</div>
                       <div style={{ fontSize: 11, color: muted, marginBottom: c.progress !== undefined ? 8 : 0 }}>{c.sub}</div>
                       {c.progress !== undefined && totalExpenses > 0 && (
-                        <div style={{ background: border, borderRadius: 4, height: 4, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${c.progress}%`, background: c.progress >= 100 ? green : c.progress >= 70 ? '#B8860B' : red, borderRadius: 4, transition: 'width 0.3s' }} />
-                        </div>
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>{c.progress}% covered</span>
+                            <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>100%</span>
+                          </div>
+                          <div style={{ background: border, borderRadius: 4, height: 6, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${c.progress}%`, background: c.progress >= 100 ? green : c.progress >= 70 ? '#B8860B' : red, borderRadius: 4, transition: 'width 0.3s' }} />
+                          </div>
+                        </>
                       )}
                     </div>
                   ))}
