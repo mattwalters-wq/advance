@@ -50,6 +50,7 @@ export default function ArtistPage() {
   const [setlistShow, setSetlistShow] = useState<any>(null)
   const [personShow, setPersonShow] = useState<any>(null)
   const [guestShow, setGuestShow] = useState<any>(null)
+  const [moveShow, setMoveShow] = useState<any>(null)
   const [expandedShowId, setExpandedShowId] = useState<string | null>(null)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set(['travel', 'accommodation', 'contacts', 'press', 'documents']))
   const [importJobs, setImportJobs] = useState<any[]>([])
@@ -1502,6 +1503,57 @@ export default function ArtistPage() {
         </div>
       )}
 
+      {/* Move show to tour modal */}
+      {moveShow && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => setMoveShow(null)}>
+          <div style={{ background: card, borderRadius: 16, padding: 28, width: '100%', maxWidth: 400 }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Move show to another tour</div>
+            <div style={{ fontSize: 13, color: muted, marginBottom: 20 }}>{moveShow.venue} — {moveShow.date}</div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {tours.filter((t: any) => t.id !== selectedTour?.id).map((t: any) => (
+                <button key={t.id}
+                  onClick={async () => {
+                    await supabase.from('shows').update({ tour_id: t.id, org_id: t.org_id }).eq('id', moveShow.id)
+                    setMoveShow(null)
+                    if (selectedTour) await loadTourData(selectedTour.id)
+                  }}
+                  style={{ padding: '12px 16px', background: card, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', textAlign: 'left' as const, fontSize: 14, color: text, fontFamily: 'Georgia, serif' }}>
+                  <div style={{ fontWeight: 600 }}>{t.name}</div>
+                  {t.start_date && <div style={{ fontSize: 11, color: muted, marginTop: 2, fontFamily: 'monospace' }}>{t.start_date}</div>}
+                </button>
+              ))}
+              <button
+                onClick={async () => {
+                  const name = prompt('New tour name:')
+                  if (!name?.trim()) return
+                  const { data: newTour } = await supabase.from('tours').insert({
+                    name: name.trim(),
+                    artist_id: artist?.id,
+                    org_id: selectedTour?.org_id,
+                    status: 'routing',
+                  }).select().single()
+                  if (newTour) {
+                    await supabase.from('shows').update({ tour_id: newTour.id, org_id: newTour.org_id }).eq('id', moveShow.id)
+                    const { data: refreshedTours } = await supabase.from('tours').select('*').eq('artist_id', artist?.id).order('start_date')
+                    if (refreshedTours) setTours(refreshedTours)
+                    setSelectedTour(newTour)
+                  }
+                  setMoveShow(null)
+                }}
+                style={{ padding: '12px 16px', background: 'transparent', border: `1px dashed ${border}`, borderRadius: 8, cursor: 'pointer', textAlign: 'left' as const, fontSize: 13, color: muted, fontFamily: 'monospace', letterSpacing: 1 }}>
+                + CREATE NEW TOUR
+              </button>
+            </div>
+            <button onClick={() => setMoveShow(null)}
+              style={{ marginTop: 16, width: '100%', padding: '10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Undo toast */}
       {undoItem && (
         <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#1A1714', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14, zIndex: 300, boxShadow: '0 4px 24px rgba(0,0,0,0.3)', maxWidth: 420, width: 'calc(100% - 32px)' }}>
@@ -2057,6 +2109,10 @@ export default function ArtistPage() {
                               <button onClick={(e) => { e.stopPropagation(); openModal('show', show) }}
                                 style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 12, padding: '6px 12px' }}>
                                 ✎ Edit
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); setMoveShow(show) }}
+                                style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
+                                ⇄ MOVE
                               </button>
                               <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ table: 'shows', id: show.id, label: `${show.venue} — ${show.date}` }) }}
                                 style={{ background: '#fff0f0', border: '1px solid #ffcccc', borderRadius: 6, color: '#cc0000', cursor: 'pointer', fontSize: 12, padding: '6px 12px', fontWeight: 700 }}>
