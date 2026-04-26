@@ -235,13 +235,44 @@ function AddIncomeModal({ shows, border, text, muted, accent, bg, card, green, o
   )
 }
 
-function MerchEstimator({ card, border, text, muted, accent, green, red, bg, darkMode, onProfitChange }: any) {
+function MerchEstimator({ card, border, text, muted, accent, green, red, bg, darkMode, onProfitChange, tourId, supabase }: any) {
   const [capacity, setCapacity] = useState('200')
   const [attendance, setAttendance] = useState('75')
   const [conversionRate, setConversionRate] = useState('15')
   const [avgSpend, setAvgSpend] = useState('35')
   const [shows, setShows] = useState('15')
   const [costPercent, setCostPercent] = useState('30')
+  const [loaded, setLoaded] = useState(false)
+
+  // Load saved settings from tour
+  useEffect(() => {
+    if (!tourId || !supabase) return
+    supabase.from('tours').select('merch_settings').eq('id', tourId).single().then(({ data }: any) => {
+      if (data?.merch_settings) {
+        const s = data.merch_settings
+        if (s.capacity) setCapacity(s.capacity)
+        if (s.attendance) setAttendance(s.attendance)
+        if (s.conversionRate) setConversionRate(s.conversionRate)
+        if (s.avgSpend) setAvgSpend(s.avgSpend)
+        if (s.shows) setShows(s.shows)
+        if (s.costPercent) setCostPercent(s.costPercent)
+      }
+      setLoaded(true)
+    })
+  }, [tourId])
+
+  // Save settings when they change (debounced)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!loaded || !tourId || !supabase) return
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      supabase.from('tours').update({
+        merch_settings: { capacity, attendance, conversionRate, avgSpend, shows, costPercent }
+      }).eq('id', tourId)
+    }, 800)
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
+  }, [capacity, attendance, conversionRate, avgSpend, shows, costPercent, loaded])
 
   const attendees = Math.round(parseFloat(capacity) * parseFloat(attendance) / 100) || 0
   const buyersPerShow = Math.round(attendees * parseFloat(conversionRate) / 100) || 0
@@ -1346,7 +1377,7 @@ export default function BudgetPage() {
 
         {/* ── MERCH VIEW ── */}
         <div style={{ display: view === 'merch' ? 'block' : 'none' }}>
-          <MerchEstimator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} onProfitChange={setMerchProfit} />
+          <MerchEstimator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} onProfitChange={setMerchProfit} tourId={selectedTourId} supabase={supabase} />
         </div>
 
         {/* ── MODALS ── */}
