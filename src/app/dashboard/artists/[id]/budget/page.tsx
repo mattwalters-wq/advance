@@ -966,42 +966,50 @@ export default function BudgetPage() {
 
                 {/* Summary cards */}
                 {(() => {
-                  // Breakeven calculation
-                  const fixedShows = showsWithData.filter(s => s.isFixed && s.settlement)
-                  const vsShows = showsWithData.filter(s => !s.isFixed && s.settlement)
-                  const avgFee = fixedShows.length > 0 ? fixedShows.reduce((sum, s) => sum + s.income, 0) / fixedShows.length : 0
-                  const breakevenShows = avgFee > 0 ? Math.ceil(totalExpenses / avgFee) : null
+                  // For shows with door deals but $0 income (no settlement data),
+                  // estimate projected revenue from capacity if available
+                  const projectedFromUnsettled = showsWithData
+                    .filter(s => !s.settlement || (s.income === 0 && s.settlement))
+                    .reduce((sum, show) => {
+                      // If we have a settlement with capacity + ticket_price, project it
+                      if (show.settlement?.capacity && show.settlement?.ticket_price) {
+                        const paidCap = Math.max(0, show.settlement.capacity - (show.settlement.guests || 0))
+                        const projected = paidCap * (scenario / 100) * parseFloat(show.settlement.ticket_price) * ((parseFloat(show.settlement.vs_amount) || 85) / 100)
+                        return sum + projected
+                      }
+                      return sum
+                    }, 0)
 
-                  // For door/vs shows: avg net per ticket across those shows
-                  const vsBreakevenTickets = vsShows.length > 0 ? (() => {
-                    const totalVsCapacity = vsShows.reduce((s, show) => s + (show.settlement?.capacity || 0), 0)
-                    const avgCapacity = totalVsCapacity / vsShows.length
-                    const avgTicketPrice = vsShows.reduce((s, show) => s + (parseFloat(show.settlement?.ticket_price) || 0), 0) / vsShows.length
-                    const avgVsPct = vsShows.reduce((s, show) => {
-                      const detail = (show.settlement?.deal_type_detail || '').toLowerCase()
-                      const m = detail.match(/(\d+)%/)
-                      return s + (m ? parseInt(m[1]) / 100 : 0.85)
-                    }, 0) / vsShows.length
-                    const netPerTicket = avgTicketPrice * avgVsPct
-                    return netPerTicket > 0 ? Math.ceil(totalExpenses / netPerTicket) : null
-                  })() : null
+                  const effectiveTotalIncome = totalFees + projectedFromUnsettled
+                  const hasProjected = projectedFromUnsettled > 0
+
+                  // Breakeven: how far are we from covering costs?
+                  const breakevenProgress = totalExpenses > 0 ? Math.min(100, Math.round((effectiveTotalIncome / totalExpenses) * 100)) : 100
+                  const shortfall = Math.max(0, totalExpenses - effectiveTotalIncome)
+                  const surplus = Math.max(0, effectiveTotalIncome - totalExpenses)
 
                   const breakEvenCard = {
                     label: 'Breakeven',
-                    value: breakevenShows !== null
-                      ? `${breakevenShows} show${breakevenShows !== 1 ? 's' : ''}`
-                      : vsBreakevenTickets !== null
-                        ? `~${vsBreakevenTickets.toLocaleString()} tickets`
-                        : totalExpenses === 0 ? '—' : 'Add fees',
-                    color: netPosition >= 0 ? green : '#B8860B',
-                    sub: breakevenShows !== null
-                      ? `at avg ${fmtAmount(avgFee, primaryCurrency)} per show`
-                      : vsBreakevenTickets !== null
-                        ? `across ${vsShows.length} door deal${vsShows.length !== 1 ? 's' : ''}`
-                        : 'Enter show fees to calculate',
+                    value: shortfall > 0
+                      ? `${fmtAmount(shortfall, primaryCurrency)} short`
+                      : surplus > 0
+                        ? `${fmtAmount(surplus, primaryCurrency)} clear`
+                        : '—',
+                    color: shortfall > 0 ? red : green,
+                    sub: totalExpenses > 0
+                      ? `${breakevenProgress}% of costs covered${hasProjected ? ' (incl. projected)' : ''}`
+                      : 'No expenses entered',
+                    progress: breakevenProgress,
                   }
 
                   return (
+                <>
+                {hasProjected && (
+                  <div style={{ background: '#FFFBF0', border: `1px solid #B8860B`, borderRadius: 8, padding: '10px 16px', fontSize: 12, color: '#7A5A00', marginBottom: 4 }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, marginRight: 8 }}>PROJECTED</span>
+                    {showsWithData.filter(s => s.settlement?.capacity && s.settlement?.ticket_price && s.income === 0).length} door deal{showsWithData.filter(s => s.settlement?.capacity && s.settlement?.ticket_price && s.income === 0).length !== 1 ? 's' : ''} estimated at {scenario}% capacity · +{fmtAmount(projectedFromUnsettled, primaryCurrency)}
+                  </div>
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                   {[
                     {
@@ -1010,7 +1018,8 @@ export default function BudgetPage() {
                         ? `AUD ${Math.round(totalFeesAUD).toLocaleString()}`
                         : fmtAmount(totalFees, primaryCurrency),
                       color: green,
-                      sub: `${settlements.length} show${settlements.length !== 1 ? 's' : ''} · ${scenario}% capacity`
+                      sub: `${settlements.length} show${settlements.length !== 1 ? 's' : ''} · ${scenario}% capacity`,
+                      progress: undefined,
                     },
                     {
                       label: 'Total Expenses',
@@ -1018,7 +1027,8 @@ export default function BudgetPage() {
                         ? `AUD ${Math.round(totalExpensesAUD).toLocaleString()}`
                         : fmtAmount(totalExpenses, primaryCurrency),
                       color: red,
-                      sub: `${expenses.length} item${expenses.length !== 1 ? 's' : ''}`
+                      sub: `${expenses.length} item${expenses.length !== 1 ? 's' : ''}`,
+                      progress: undefined,
                     },
                     {
                       label: netPositionAUD >= 0 ? 'Net Profit' : 'Net Loss',
@@ -1026,17 +1036,24 @@ export default function BudgetPage() {
                         ? `AUD ${Math.round(Math.abs(netPositionAUD)).toLocaleString()}`
                         : fmtAmount(Math.abs(netPosition), primaryCurrency),
                       color: netPositionAUD >= 0 ? green : red,
-                      sub: 'before tax & commission'
+                      sub: 'before tax & commission',
+                      progress: undefined,
                     },
-                    breakEvenCard,
+                    { ...breakEvenCard, progress: breakevenProgress },
                   ].map((c, i) => (
                     <div key={i} style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: '20px' }}>
                       <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 8, textTransform: 'uppercase' }}>{c.label}</div>
                       <div style={{ fontSize: 22, fontWeight: 700, color: c.color, marginBottom: 4 }}>{c.value}</div>
-                      <div style={{ fontSize: 11, color: muted }}>{c.sub}</div>
+                      <div style={{ fontSize: 11, color: muted, marginBottom: c.progress !== undefined ? 8 : 0 }}>{c.sub}</div>
+                      {c.progress !== undefined && totalExpenses > 0 && (
+                        <div style={{ background: border, borderRadius: 4, height: 4, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${c.progress}%`, background: c.progress >= 100 ? green : c.progress >= 70 ? '#B8860B' : red, borderRadius: 4, transition: 'width 0.3s' }} />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
+                </>
                   )
                 })()}
 
