@@ -54,7 +54,14 @@ export default function ArtistPage() {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set(['travel', 'accommodation', 'contacts', 'press', 'documents']))
   const [importJobs, setImportJobs] = useState<any[]>([])
   const [importDragging, setImportDragging] = useState(false)
-  const [importTab, setImportTab] = useState<'drop' | 'paste'>('drop')
+  const [importTab, setImportTab] = useState<'drop' | 'paste' | 'bandsintown'>('drop')
+  const [bitArtistName, setBitArtistName] = useState('')
+  const [bitEvents, setBitEvents] = useState<any[]>([])
+  const [bitLoading, setBitLoading] = useState(false)
+  const [bitError, setBitError] = useState('')
+  const [bitSelected, setBitSelected] = useState<Set<string>>(new Set())
+  const [bitImporting, setBitImporting] = useState(false)
+  const [bitDone, setBitDone] = useState(0)
   const [pasteText, setPasteText] = useState('')
   const [pasteLabel, setPasteLabel] = useState('')
   const [aiMessages, setAiMessages] = useState<any[]>([])
@@ -2534,7 +2541,7 @@ export default function ArtistPage() {
 
                 {/* Tab toggle */}
                 <div style={{ display: 'flex', gap: 0, background: darkMode ? '#222' : '#EDE8DF', borderRadius: 8, padding: 3, alignSelf: 'flex-start' }}>
-                  {([['drop', '⊕ Drop files'], ['paste', '⌘ Paste text']] as const).map(([t, label]) => (
+                  {([['drop', '⊕ Drop files'], ['paste', '⌘ Paste text'], ['bandsintown', '⟳ Bandsintown']] as const).map(([t, label]) => (
                     <button key={t} onClick={() => setImportTab(t)}
                       style={{ padding: '7px 16px', borderRadius: 6, background: importTab === t ? (darkMode ? '#333' : '#fff') : 'transparent', color: importTab === t ? text : muted, border: 'none', cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', fontWeight: importTab === t ? 700 : 400, boxShadow: importTab === t ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s', whiteSpace: 'nowrap' as const }}>
                       {label}
@@ -2625,6 +2632,135 @@ export default function ArtistPage() {
                         </button>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* BANDSINTOWN TAB */}
+                {importTab === 'bandsintown' && (
+                  <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: 24 }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.2em', color: muted, marginBottom: 16 }}>SYNC FROM BANDSINTOWN</div>
+                    <div style={{ fontSize: 13, color: muted, marginBottom: 20, lineHeight: 1.6 }}>
+                      Enter the artist name exactly as it appears on Bandsintown to pull upcoming shows into this tour.
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                      <input
+                        value={bitArtistName}
+                        onChange={e => { setBitArtistName(e.target.value); setBitEvents([]); setBitError(''); setBitDone(0) }}
+                        placeholder="e.g. The Stamps"
+                        onKeyDown={e => e.key === 'Enter' && !bitLoading && bitArtistName.trim() && (async () => {
+                          setBitLoading(true); setBitError(''); setBitEvents([]); setBitDone(0)
+                          const res = await fetch(`/api/bandsintown?artist=${encodeURIComponent(bitArtistName.trim())}`)
+                          const data = await res.json()
+                          if (!res.ok) { setBitError(data.error || 'Failed to fetch'); setBitLoading(false); return }
+                          setBitEvents(data.shows || [])
+                          setBitSelected(new Set((data.shows || []).map((s: any) => s.bandsintown_id)))
+                          setBitLoading(false)
+                        })()}
+                        style={{ flex: 1, padding: '10px 14px', border: `1px solid ${border}`, borderRadius: 8, background: darkMode ? '#1a1a1a' : '#F9F6F2', color: text, fontSize: 14, fontFamily: 'Georgia, serif', outline: 'none' }}
+                      />
+                      <button
+                        disabled={bitLoading || !bitArtistName.trim()}
+                        onClick={async () => {
+                          setBitLoading(true); setBitError(''); setBitEvents([]); setBitDone(0)
+                          const res = await fetch(`/api/bandsintown?artist=${encodeURIComponent(bitArtistName.trim())}`)
+                          const data = await res.json()
+                          if (!res.ok) { setBitError(data.error || 'Failed to fetch'); setBitLoading(false); return }
+                          setBitEvents(data.shows || [])
+                          setBitSelected(new Set((data.shows || []).map((s: any) => s.bandsintown_id)))
+                          setBitLoading(false)
+                        }}
+                        style={{ padding: '10px 20px', background: accent, color: '#fff', border: 'none', borderRadius: 8, cursor: bitArtistName.trim() ? 'pointer' : 'default', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, opacity: bitArtistName.trim() ? 1 : 0.5, whiteSpace: 'nowrap' as const }}>
+                        {bitLoading ? 'FETCHING...' : 'FETCH SHOWS'}
+                      </button>
+                    </div>
+
+                    {bitError && (
+                      <div style={{ color: '#C00', fontSize: 13, marginBottom: 12, padding: '10px 14px', background: '#fff0f0', borderRadius: 8 }}>
+                        {bitError}
+                      </div>
+                    )}
+
+                    {bitEvents.length > 0 && (
+                      <>
+                        <div style={{ fontSize: 12, color: muted, marginBottom: 10, display: 'flex', justifyContent: 'space-between' }}>
+                          <span>{bitEvents.length} upcoming show{bitEvents.length !== 1 ? 's' : ''} found · {bitSelected.size} selected</span>
+                          <button onClick={() => setBitSelected(bitSelected.size === bitEvents.length ? new Set() : new Set(bitEvents.map((s: any) => s.bandsintown_id)))}
+                            style={{ background: 'none', border: 'none', color: accent, cursor: 'pointer', fontSize: 11, fontFamily: 'monospace', letterSpacing: 1 }}>
+                            {bitSelected.size === bitEvents.length ? 'DESELECT ALL' : 'SELECT ALL'}
+                          </button>
+                        </div>
+                        <div style={{ display: 'grid', gap: 6, marginBottom: 16, maxHeight: 320, overflowY: 'auto' as const }}>
+                          {bitEvents.map((show: any) => {
+                            const sel = bitSelected.has(show.bandsintown_id)
+                            return (
+                              <div key={show.bandsintown_id}
+                                onClick={() => {
+                                  const next = new Set(bitSelected)
+                                  if (next.has(show.bandsintown_id)) next.delete(show.bandsintown_id)
+                                  else next.add(show.bandsintown_id)
+                                  setBitSelected(next)
+                                }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: sel ? (darkMode ? '#2a2520' : '#FDF5EF') : (darkMode ? '#1a1a1a' : '#F9F6F2'), borderRadius: 8, cursor: 'pointer', border: `1px solid ${sel ? accent : border}` }}>
+                                <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${sel ? accent : muted}`, background: sel ? accent : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {sel && <span style={{ color: '#fff', fontSize: 11, lineHeight: 1 }}>✓</span>}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{show.venue}</div>
+                                  <div style={{ fontSize: 11, color: muted, fontFamily: 'monospace' }}>
+                                    {show.date}{show.city ? ` · ${show.city}` : ''}{show.country ? `, ${show.country}` : ''}
+                                  </div>
+                                </div>
+                                {show.ticket_url && (
+                                  <a href={show.ticket_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                                    style={{ fontSize: 10, color: accent, fontFamily: 'monospace', textDecoration: 'none', flexShrink: 0 }}>
+                                    TICKETS ↗
+                                  </a>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                        {bitDone > 0 && (
+                          <div style={{ padding: '10px 14px', background: '#F0FFF4', borderRadius: 8, fontSize: 13, color: '#2d7a4f', marginBottom: 12 }}>
+                            ✓ {bitDone} show{bitDone !== 1 ? 's' : ''} imported successfully
+                          </div>
+                        )}
+                        <button
+                          disabled={bitSelected.size === 0 || bitImporting}
+                          onClick={async () => {
+                            if (!selectedTour) return
+                            setBitImporting(true)
+                            const toImport = bitEvents.filter((s: any) => bitSelected.has(s.bandsintown_id))
+                            let count = 0
+                            for (const show of toImport) {
+                              const { error } = await supabase.from('shows').insert({
+                                tour_id: selectedTour.id,
+                                org_id: selectedTour.org_id,
+                                date: show.date,
+                                venue: show.venue,
+                                city: show.city,
+                                country: show.country,
+                                set_time: show.set_time && show.set_time !== '00:00' ? show.set_time : null,
+                                notes: show.ticket_url ? `Tickets: ${show.ticket_url}` : null,
+                              })
+                              if (!error) count++
+                            }
+                            setBitDone(count)
+                            setBitImporting(false)
+                            setBitSelected(new Set())
+                            if (selectedTour) await loadTourData(selectedTour.id)
+                          }}
+                          style={{ width: '100%', padding: '12px', background: bitSelected.size > 0 ? accent : border, color: '#fff', border: 'none', borderRadius: 8, cursor: bitSelected.size > 0 ? 'pointer' : 'default', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2 }}>
+                          {bitImporting ? 'IMPORTING...' : `IMPORT ${bitSelected.size} SHOW${bitSelected.size !== 1 ? 'S' : ''} →`}
+                        </button>
+                      </>
+                    )}
+
+                    {!bitLoading && !bitError && bitEvents.length === 0 && bitArtistName && (
+                      <div style={{ textAlign: 'center', padding: '30px 0', color: muted, fontSize: 13, fontStyle: 'italic' }}>
+                        Search for an artist above to see their upcoming shows.
+                      </div>
+                    )}
                   </div>
                 )}
 
