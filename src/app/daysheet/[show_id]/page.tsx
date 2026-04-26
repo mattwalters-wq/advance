@@ -123,10 +123,17 @@ export default function DaySheetPage() {
   if (notFound) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F9F6F2', fontFamily: 'sans-serif', color: muted }}>Show not found.</div>
 
   // Build schedule timeline
-  const schedule: { time: string; sort: string; event: string }[] = []
-  if (show?.soundcheck_time) schedule.push({ time: fmt(show.soundcheck_time), sort: show.soundcheck_time, event: 'Soundcheck' })
-  if (show?.doors_time) schedule.push({ time: fmt(show.doors_time), sort: show.doors_time, event: 'Doors open' })
-  if (show?.set_time) schedule.push({ time: fmt(show.set_time), sort: show.set_time, event: 'Performance' })
+  const isNonShow = ['rehearsal', 'recording', 'press'].includes(show?.type || '')
+  const schedule: { time: string; sort: string; event: string; highlight?: boolean }[] = []
+  if (show?.arrival_time) schedule.push({ time: fmt(show.arrival_time), sort: show.arrival_time, event: 'Artist arrival' })
+  if (isNonShow) {
+    if (show?.soundcheck_time) schedule.push({ time: fmt(show.soundcheck_time), sort: show.soundcheck_time, event: 'Start', highlight: true })
+    if (show?.set_time) schedule.push({ time: fmt(show.set_time), sort: show.set_time, event: 'Finish' })
+  } else {
+    if (show?.soundcheck_time) schedule.push({ time: fmt(show.soundcheck_time), sort: show.soundcheck_time, event: 'Soundcheck' })
+    if (show?.doors_time) schedule.push({ time: fmt(show.doors_time), sort: show.doors_time, event: 'Doors open' })
+    if (show?.set_time) schedule.push({ time: fmt(show.set_time), sort: show.set_time, event: 'Performance', highlight: true })
+  }
   schedule.sort((a, b) => a.sort.localeCompare(b.sort))
 
   // Extract all unique traveller names
@@ -285,9 +292,9 @@ export default function DaySheetPage() {
                 {schedule.length > 0 && (
                   <div className="times-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(schedule.length, 3)}, 1fr)`, gap: 10, marginBottom: show?.catering || show?.backline || show?.notes ? 16 : 0 }}>
                     {schedule.map((s, i) => (
-                      <div key={i} style={{ background: s.event === 'Performance' ? accent : sectionBg, borderRadius: 8, padding: '14px 16px', textAlign: 'center' }}>
-                        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: s.event === 'Performance' ? 'rgba(255,255,255,0.75)' : muted, textTransform: 'uppercase', marginBottom: 5 }}>{s.event}</div>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: s.event === 'Performance' ? '#fff' : text, lineHeight: 1 }}>{s.time}</div>
+                      <div key={i} style={{ background: s.highlight ? accent : sectionBg, borderRadius: 8, padding: '14px 16px', textAlign: 'center' }}>
+                        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: s.highlight ? 'rgba(255,255,255,0.75)' : muted, textTransform: 'uppercase', marginBottom: 5 }}>{s.event}</div>
+                        <div style={{ fontSize: 24, fontWeight: 700, color: s.highlight ? '#fff' : text, lineHeight: 1 }}>{s.time}</div>
                       </div>
                     ))}
                   </div>

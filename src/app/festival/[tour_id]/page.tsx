@@ -181,6 +181,7 @@ export default function FestivalSheetPage() {
           // Build schedule for the day
           const schedule: { time: string; sort: string; event: string; highlight?: boolean }[] = []
           dayShows.forEach((s: any) => {
+            if (s.arrival_time) schedule.push({ time: fmt(s.arrival_time), sort: s.arrival_time, event: 'Artist arrival' })
             if (s.soundcheck_time) schedule.push({ time: fmt(s.soundcheck_time), sort: s.soundcheck_time, event: 'Soundcheck' })
             if (s.doors_time) schedule.push({ time: fmt(s.doors_time), sort: s.doors_time, event: 'Doors' })
             if (s.set_time) schedule.push({ time: fmt(s.set_time), sort: s.set_time, event: 'Performance', highlight: true })

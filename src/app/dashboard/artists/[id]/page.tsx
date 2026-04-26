@@ -889,7 +889,7 @@ export default function ArtistPage() {
                   const isNonShow = ['rehearsal', 'recording', 'press'].includes(form.type || '')
                   return (
                     <>
-                      <div style={{ display: 'grid', gridTemplateColumns: isNonShow ? '1fr 1fr' : '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: isNonShow ? '1fr 1fr' : '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
                         {isNonShow ? (
                           <>
                             <div>
@@ -903,6 +903,10 @@ export default function ArtistPage() {
                           </>
                         ) : (
                           <>
+                            <div>
+                              <label style={labelStyle}>Artist arrival</label>
+                              <input style={inputStyle} type="time" value={form.arrival_time || ''} onChange={e => setForm({ ...form, arrival_time: e.target.value })} />
+                            </div>
                             <div>
                               <label style={labelStyle}>Doors</label>
                               <input style={inputStyle} type="time" value={form.doors_time || ''} onChange={e => setForm({ ...form, doors_time: e.target.value })} />
@@ -1896,6 +1900,7 @@ export default function ArtistPage() {
                                   </>
                                 ) : (
                                   <>
+                                    {show.arrival_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>Arrive {formatTime(show.arrival_time)}</span>}
                                     {show.doors_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>Doors {formatTime(show.doors_time)}</span>}
                                     {show.soundcheck_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>SC {formatTime(show.soundcheck_time)}</span>}
                                     {show.set_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: accent, fontWeight: 700 }}>Stage {formatTime(show.set_time)}</span>}
