@@ -885,24 +885,48 @@ export default function ArtistPage() {
                   <label style={labelStyle}>Date *</label>
                   <input style={inputStyle} type="date" value={form.date || ''} onChange={e => setForm({ ...form, date: e.target.value })} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
-                  <div>
-                    <label style={labelStyle}>Doors</label>
-                    <input style={inputStyle} type="time" value={form.doors_time || ''} onChange={e => setForm({ ...form, doors_time: e.target.value })} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Soundcheck</label>
-                    <input style={inputStyle} type="time" value={form.soundcheck_time || ''} onChange={e => setForm({ ...form, soundcheck_time: e.target.value })} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Stage</label>
-                    <input style={inputStyle} type="time" value={form.set_time || ''} onChange={e => setForm({ ...form, set_time: e.target.value })} />
-                  </div>
-                </div>
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Stage name</label>
-                  <input style={inputStyle} value={form.stage || ''} onChange={e => setForm({ ...form, stage: e.target.value })} placeholder="e.g. Main Stage" />
-                </div>
+                {(() => {
+                  const isNonShow = ['rehearsal', 'recording', 'press'].includes(form.type || '')
+                  return (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: isNonShow ? '1fr 1fr' : '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+                        {isNonShow ? (
+                          <>
+                            <div>
+                              <label style={labelStyle}>Start</label>
+                              <input style={inputStyle} type="time" value={form.soundcheck_time || ''} onChange={e => setForm({ ...form, soundcheck_time: e.target.value })} />
+                            </div>
+                            <div>
+                              <label style={labelStyle}>Finish</label>
+                              <input style={inputStyle} type="time" value={form.set_time || ''} onChange={e => setForm({ ...form, set_time: e.target.value })} />
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div>
+                              <label style={labelStyle}>Doors</label>
+                              <input style={inputStyle} type="time" value={form.doors_time || ''} onChange={e => setForm({ ...form, doors_time: e.target.value })} />
+                            </div>
+                            <div>
+                              <label style={labelStyle}>Soundcheck</label>
+                              <input style={inputStyle} type="time" value={form.soundcheck_time || ''} onChange={e => setForm({ ...form, soundcheck_time: e.target.value })} />
+                            </div>
+                            <div>
+                              <label style={labelStyle}>Stage</label>
+                              <input style={inputStyle} type="time" value={form.set_time || ''} onChange={e => setForm({ ...form, set_time: e.target.value })} />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      {!isNonShow && (
+                        <div style={fieldStyle}>
+                          <label style={labelStyle}>Stage name</label>
+                          <input style={inputStyle} value={form.stage || ''} onChange={e => setForm({ ...form, stage: e.target.value })} placeholder="e.g. Main Stage" />
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
                 <div style={fieldStyle}>
                   <label style={labelStyle}>Notes</label>
                   <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: 70 }} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any notes..." />
@@ -1827,7 +1851,11 @@ export default function ArtistPage() {
                             </div>
                             <div style={{ fontSize: 12, color: muted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {[show.city, show.country && show.country !== 'AU' ? show.country : null].filter(Boolean).join(', ')}
-                              {show.set_time && <span style={{ marginLeft: 8, fontFamily: 'monospace', color: accent, fontWeight: 700 }}>· {formatTime(show.set_time)}</span>}
+                              {['rehearsal','recording','press'].includes(show.type) ? (
+                                show.soundcheck_time && <span style={{ marginLeft: 8, fontFamily: 'monospace', color: accent, fontWeight: 700 }}>· {formatTime(show.soundcheck_time)}</span>
+                              ) : (
+                                show.set_time && <span style={{ marginLeft: 8, fontFamily: 'monospace', color: accent, fontWeight: 700 }}>· {formatTime(show.set_time)}</span>
+                              )}
                             </div>
                           </div>
                           {/* Status indicators */}
@@ -1861,10 +1889,19 @@ export default function ArtistPage() {
                             {/* Times row */}
                             {(show.doors_time || show.soundcheck_time || show.set_time || show.stage || show.catering || show.backline) && (
                               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
-                                {show.doors_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>Doors {formatTime(show.doors_time)}</span>}
-                                {show.soundcheck_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>SC {formatTime(show.soundcheck_time)}</span>}
-                                {show.set_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: accent, fontWeight: 700 }}>Stage {formatTime(show.set_time)}</span>}
-                                {show.stage && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>{show.stage}</span>}
+                                {['rehearsal','recording','press'].includes(show.type) ? (
+                                  <>
+                                    {show.soundcheck_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>Start {formatTime(show.soundcheck_time)}</span>}
+                                    {show.set_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: accent, fontWeight: 700 }}>Finish {formatTime(show.set_time)}</span>}
+                                  </>
+                                ) : (
+                                  <>
+                                    {show.doors_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>Doors {formatTime(show.doors_time)}</span>}
+                                    {show.soundcheck_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>SC {formatTime(show.soundcheck_time)}</span>}
+                                    {show.set_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: accent, fontWeight: 700 }}>Stage {formatTime(show.set_time)}</span>}
+                                    {show.stage && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>{show.stage}</span>}
+                                  </>
+                                )}
                                 {show.catering && <span style={{ fontSize: 11, color: muted }}>🍽 {show.catering}</span>}
                                 {show.backline && <span style={{ fontSize: 11, color: muted }}>🎸 {show.backline}</span>}
                               </div>
