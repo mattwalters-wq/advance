@@ -235,7 +235,7 @@ function AddIncomeModal({ shows, border, text, muted, accent, bg, card, green, o
   )
 }
 
-function PerDiemEstimator({ card, border, text, muted, accent, green, red, bg, darkMode, tourId, supabase }: any) {
+function PerDiemEstimator({ card, border, text, muted, accent, green, red, bg, darkMode, tourId, supabase, onCostChange }: any) {
   const [people, setPeople] = useState('3')
   const [days, setDays] = useState('21')
   const [dailyRate, setDailyRate] = useState('50')
@@ -262,6 +262,10 @@ function PerDiemEstimator({ card, border, text, muted, accent, green, red, bg, d
   const totalPerDiem = parseFloat(people) * parseFloat(days) * parseFloat(dailyRate) || 0
   const totalMeals = parseFloat(people) * parseFloat(days) * parseFloat(mealAllowance) || 0
   const totalCost = totalPerDiem + totalMeals
+
+  useEffect(() => {
+    if (onCostChange) onCostChange({ cost: totalCost, currency })
+  }, [totalCost, currency])
 
   const inputStyle = { width: '100%', padding: '8px 10px', border: `1px solid ${border}`, borderRadius: 6, background: bg, color: text, fontSize: 14, fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box' as const, textAlign: 'center' as const }
 
@@ -470,11 +474,29 @@ function ExpenseRow({ expense: e, border, muted, text, red, green, accent, darkM
     setEditing(false)
   }
 
+  const [partialAmount, setPartialAmount] = useState(String(e.amount_paid || ''))
+  const [showPartial, setShowPartial] = useState(false)
+
   async function togglePaid() {
-    await onUpdate({ status: e.status === 'paid' ? 'pending' : 'paid' })
+    if (e.status === 'paid') {
+      await onUpdate({ status: 'pending', amount_paid: null })
+    } else {
+      await onUpdate({ status: 'paid', amount_paid: parseFloat(e.amount) || 0 })
+    }
+  }
+
+  async function savePartial() {
+    const paid = parseFloat(partialAmount) || 0
+    const total = parseFloat(e.amount) || 0
+    const status = paid >= total ? 'paid' : paid > 0 ? 'partial' : 'pending'
+    await onUpdate({ status, amount_paid: paid > 0 ? paid : null })
+    setShowPartial(false)
   }
 
   const isPaid = e.status === 'paid'
+  const isPartial = e.status === 'partial'
+  const totalAmt = parseFloat(e.amount || 0)
+  const paidAmt = parseFloat(e.amount_paid || 0)
 
   if (editing) {
     return (
@@ -506,21 +528,51 @@ function ExpenseRow({ expense: e, border, muted, text, red, green, accent, darkM
   }
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: isLast ? 'none' : `1px solid ${border}`, gap: 12, opacity: isPaid ? 0.65 : 1 }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, color: text, textDecoration: isPaid ? 'line-through' : 'none' }}>{e.description}</div>
-        {e.notes && <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>{e.notes}</div>}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        <button onClick={togglePaid} title={isPaid ? 'Mark as pending' : 'Mark as paid'}
-          style={{ padding: '3px 8px', background: isPaid ? green : 'transparent', color: isPaid ? '#fff' : muted, border: `1px solid ${isPaid ? green : border}`, borderRadius: 20, cursor: 'pointer', fontFamily: 'monospace', fontSize: 8, letterSpacing: 1, whiteSpace: 'nowrap' }}>
-          {isPaid ? '✓ PAID' : 'PENDING'}
-        </button>
-        <div style={{ fontSize: 13, fontWeight: 600, color: isPaid ? muted : red, whiteSpace: 'nowrap' }}>
-          {e.currency} {parseFloat(e.amount || 0).toLocaleString()}
+    <div style={{ borderBottom: isLast ? 'none' : `1px solid ${border}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', gap: 12, opacity: isPaid ? 0.65 : 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, color: text, textDecoration: isPaid ? 'line-through' : 'none' }}>{e.description}</div>
+          {e.notes && <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>{e.notes}</div>}
+          {isPartial && <div style={{ fontSize: 11, color: '#B8860B', marginTop: 2 }}>
+            Paid: {e.currency} {paidAmt.toLocaleString()} of {totalAmt.toLocaleString()} · outstanding {e.currency} {(totalAmt - paidAmt).toLocaleString()}
+          </div>}
         </div>
-        <button onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: muted, fontSize: 14, padding: '2px 4px', lineHeight: 1 }} title="Edit">✎</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {/* Status cycle button */}
+          <button onClick={togglePaid}
+            style={{ padding: '3px 8px', background: isPaid ? green : isPartial ? '#B8860B' : 'transparent', color: isPaid || isPartial ? '#fff' : muted, border: `1px solid ${isPaid ? green : isPartial ? '#B8860B' : border}`, borderRadius: 20, cursor: 'pointer', fontFamily: 'monospace', fontSize: 8, letterSpacing: 1, whiteSpace: 'nowrap' as const }}>
+            {isPaid ? '✓ PAID' : isPartial ? '½ PARTIAL' : 'PENDING'}
+          </button>
+          {/* Partial payment button */}
+          {!isPaid && (
+            <button onClick={() => setShowPartial(!showPartial)}
+              style={{ padding: '3px 6px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 4, cursor: 'pointer', fontSize: 10, lineHeight: 1 }}
+              title="Enter partial payment">⅓</button>
+          )}
+          <div style={{ fontSize: 13, fontWeight: 600, color: isPaid ? muted : red, whiteSpace: 'nowrap' as const }}>
+            {e.currency} {totalAmt.toLocaleString()}
+          </div>
+          <button onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: muted, fontSize: 14, padding: '2px 4px', lineHeight: 1 }} title="Edit">✎</button>
+        </div>
       </div>
+      {/* Partial amount input */}
+      {showPartial && !isPaid && (
+        <div style={{ padding: '8px 0 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: muted, whiteSpace: 'nowrap' as const }}>Amount paid so far:</span>
+          <input type="number" value={partialAmount} onChange={e => setPartialAmount(e.target.value)}
+            placeholder={`0 – ${totalAmt}`}
+            style={{ flex: 1, padding: '6px 10px', border: `1px solid ${border}`, borderRadius: 6, background: bg, color: text, fontSize: 13, fontFamily: 'monospace', outline: 'none' }} />
+          <span style={{ fontSize: 11, color: muted }}>{e.currency}</span>
+          <button onClick={savePartial}
+            style={{ padding: '6px 14px', background: '#B8860B', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
+            SAVE
+          </button>
+          <button onClick={() => setShowPartial(false)}
+            style={{ padding: '6px 10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontSize: 11 }}>
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -536,6 +588,7 @@ export default function BudgetPage() {
   const [expenses, setExpenses] = useState<any[]>([])
   const [view, setView] = useState<'overview' | 'shows' | 'expenses' | 'merch' | 'import'>('overview')
   const [merchProfit, setMerchProfit] = useState(0)
+  const [perDiemCost, setPerDiemCost] = useState({ cost: 0, currency: 'AUD' })
   const [scenario, setScenario] = useState(100)
   const [showAddExpense, setShowAddExpense] = useState(false)
   const [showAddIncome, setShowAddIncome] = useState(false)
@@ -686,6 +739,7 @@ export default function BudgetPage() {
 
   const totalFees = settlements.reduce((s, x) => s + calcIncome(x, scenario), 0)
   const totalExpenses = expenses.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)
+  // Convert per diem cost to primary currency for consistent maths (done after primaryCurrency declared below)
   const netPosition = totalFees + merchProfit - totalExpenses
 
   // AUD-converted totals (only meaningful if FX rates loaded and mixed currencies)
@@ -973,6 +1027,16 @@ export default function BudgetPage() {
 
   const primaryCurrency = settlements[0]?.currency || expenses[0]?.currency || 'AUD'
   const merchProfitInPrimary = primaryCurrency === 'AUD' ? merchProfit : (merchProfit / (fxRates[primaryCurrency] || 1))
+  // Per diem cost converted to primary currency
+  const perDiemInPrimary = perDiemCost.cost > 0
+    ? (perDiemCost.currency === primaryCurrency
+        ? perDiemCost.cost
+        : perDiemCost.currency === 'AUD'
+          ? perDiemCost.cost / (fxRates[primaryCurrency] || 1)
+          : perDiemCost.cost * (fxRates[perDiemCost.currency] || 1) / (fxRates[primaryCurrency] || 1))
+    : 0
+  const totalWithPerDiem = totalExpenses + perDiemInPrimary
+  const netWithAll = totalFees + merchProfitInPrimary - totalWithPerDiem
 
   return (
     <div style={{ background: bg, minHeight: '100vh', fontFamily: 'Georgia, serif', color: text }}>
@@ -1134,13 +1198,13 @@ export default function BudgetPage() {
                   const hasProjected = projectedFromUnsettled > 0
 
                   // Breakeven: how far are we from covering costs?
-                  const breakevenProgress = totalExpenses > 0 ? Math.min(100, Math.round((effectiveTotalIncome / totalExpenses) * 100)) : 100
-                  const shortfall = Math.max(0, totalExpenses - effectiveTotalIncome)
-                  const surplus = Math.max(0, effectiveTotalIncome - totalExpenses)
+                  const breakevenProgress = totalWithPerDiem > 0 ? Math.min(100, Math.round((effectiveTotalIncome / totalWithPerDiem) * 100)) : 100
+                  const shortfall = Math.max(0, totalWithPerDiem - effectiveTotalIncome)
+                  const surplus = Math.max(0, effectiveTotalIncome - totalWithPerDiem)
 
                   const breakEvenCard = {
                     label: 'Breakeven target',
-                    value: fmtAmount(totalExpenses, primaryCurrency),
+                    value: fmtAmount(totalWithPerDiem, primaryCurrency),
                     color: shortfall > 0 ? '#B8860B' : green,
                     sub: shortfall > 0
                       ? `need ${fmtAmount(shortfall, primaryCurrency)} more to break even`
@@ -1173,17 +1237,17 @@ export default function BudgetPage() {
                       label: 'Total Expenses',
                       value: viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
                         ? `AUD ${Math.round(totalExpensesAUD).toLocaleString()}`
-                        : fmtAmount(totalExpenses, primaryCurrency),
+                        : fmtAmount(totalWithPerDiem, primaryCurrency),
                       color: red,
-                      sub: `${expenses.length} item${expenses.length !== 1 ? 's' : ''}`,
+                      sub: `${expenses.length} item${expenses.length !== 1 ? 's' : ''}${perDiemInPrimary > 0 ? ` · +${fmtAmount(Math.round(perDiemInPrimary), primaryCurrency)} per diem` : ''}`,
                       progress: undefined,
                     },
                     {
-                      label: netPositionAUD >= 0 ? 'Net Profit' : 'Net Loss',
+                      label: netWithAll >= 0 ? 'Net Profit' : 'Net Loss',
                       value: viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
                         ? `AUD ${Math.round(Math.abs(netPositionAUD)).toLocaleString()}`
-                        : fmtAmount(Math.abs(netPosition), primaryCurrency),
-                      color: netPositionAUD >= 0 ? green : red,
+                        : fmtAmount(Math.abs(netWithAll), primaryCurrency),
+                      color: netWithAll >= 0 ? green : red,
                       sub: 'before tax & commission',
                       progress: undefined,
                     },
@@ -1457,11 +1521,15 @@ export default function BudgetPage() {
                         : fmtAmount(totalExpenses, primaryCurrency)}
                     </div>
                   </div>
-                  {expenses.some((e: any) => e.status === 'paid') && (
+                  {expenses.some((e: any) => e.status === 'paid' || e.status === 'partial') && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: green }}>PAID</span>
                       <span style={{ fontSize: 15, fontWeight: 600, color: green }}>
-                        {fmtAmount(expenses.filter((e: any) => e.status === 'paid').reduce((s: number, e: any) => s + (parseFloat(e.amount) || 0), 0), primaryCurrency)}
+                        {fmtAmount(expenses.reduce((s: number, e: any) => {
+                          if (e.status === 'paid') return s + (parseFloat(e.amount) || 0)
+                          if (e.status === 'partial') return s + (parseFloat(e.amount_paid) || 0)
+                          return s
+                        }, 0), primaryCurrency)}
                       </span>
                     </div>
                   )}
@@ -1469,7 +1537,11 @@ export default function BudgetPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: muted }}>OUTSTANDING</span>
                       <span style={{ fontSize: 15, fontWeight: 600, color: muted }}>
-                        {fmtAmount(expenses.filter((e: any) => e.status !== 'paid').reduce((s: number, e: any) => s + (parseFloat(e.amount) || 0), 0), primaryCurrency)}
+                        {fmtAmount(expenses.reduce((s: number, e: any) => {
+                          if (e.status === 'paid') return s
+                          if (e.status === 'partial') return s + Math.max(0, (parseFloat(e.amount) || 0) - (parseFloat(e.amount_paid) || 0))
+                          return s + (parseFloat(e.amount) || 0)
+                        }, 0), primaryCurrency)}
                       </span>
                     </div>
                   )}
@@ -1482,6 +1554,9 @@ export default function BudgetPage() {
         {/* ── MERCH VIEW ── */}
         <div style={{ display: view === 'merch' ? 'block' : 'none' }}>
           <MerchEstimator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} onProfitChange={setMerchProfit} tourId={selectedTourId} supabase={supabase} />
+          <div style={{ marginTop: 16 }}>
+            <PerDiemEstimator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} tourId={selectedTourId} supabase={supabase} onCostChange={setPerDiemCost} />
+          </div>
         </div>
 
         {/* ── MODALS ── */}
