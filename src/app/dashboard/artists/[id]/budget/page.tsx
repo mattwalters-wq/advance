@@ -1095,32 +1095,41 @@ export default function BudgetPage() {
                   </div>
                 )}
 
-                {/* Settlements summary */}
-                {settlements.length > 0 && (
+                {/* Settlements summary - shows ALL shows, not just those with settlements */}
+                {shows.length > 0 && (
                   <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
                     <div style={{ background: '#1A1714', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: '#F5F0E8' }}>SHOW FEES</span>
-                      <span style={{ fontFamily: 'monospace', fontSize: 9, color: accent }}>{settlements.length} SHOWS · {fmtAmount(totalFees, primaryCurrency)}</span>
+                      <span style={{ fontFamily: 'monospace', fontSize: 9, color: accent }}>{shows.length} SHOWS · {fmtAmount(totalFees, primaryCurrency)}</span>
                     </div>
                     <div style={{ padding: '4px 20px' }}>
-                      {settlements.map((s, i) => {
-                        const show = shows.find(sh => sh.id === s.show_id)
-                        const income = calcIncome(s, scenario)
-                        const isFixed = !s.capacity || !s.ticket_price || !s.vs_amount ||
-                          (s.deal_type_detail || '').toLowerCase().includes('fixed')
+                      {showsWithData.filter((s: any) => !s.type || s.type === 'show').map((show: any, i: number) => {
+                        const s = show.settlement
+                        const income = show.income
+                        const isFixed = show.isFixed
+                        const showsFiltered = showsWithData.filter((x: any) => !x.type || x.type === 'show')
                         return (
-                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: i < settlements.length - 1 ? `1px solid ${border}` : 'none', gap: 12 }}>
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: i < showsFiltered.length - 1 ? `1px solid ${border}` : 'none', gap: 12 }}>
                             <div>
-                              <div style={{ fontSize: 13, fontWeight: 600 }}>{show?.venue || 'Show'}</div>
+                              <div style={{ fontSize: 13, fontWeight: 600 }}>{show.venue || 'Show'}</div>
                               <div style={{ fontSize: 11, color: muted, fontFamily: 'monospace', letterSpacing: 1, marginTop: 2 }}>
-                                {show?.date ? fmtDate(show.date) : ''}{show?.city ? ` · ${show.city}` : ''}
-                                {' · '}{isFixed ? 'FIXED' : `DOOR ${s.vs_amount}%`}
+                                {show.date ? fmtDate(show.date) : ''}{show.city ? ` · ${show.city}` : ''}
+                                {s ? ` · ${isFixed ? 'FIXED' : `DOOR ${s.vs_amount}%`}` : ''}
                               </div>
                             </div>
                             <div style={{ textAlign: 'right' }}>
-                              <div style={{ fontSize: 15, fontWeight: 700, color: green }}>{fmtAmount(income, s.currency)}</div>
-                              {!isFixed && parseFloat(s.agreed_amount) > 0 && income !== parseFloat(s.agreed_amount) && (
-                                <div style={{ fontSize: 10, color: muted }}>floor {fmtAmount(s.agreed_amount, s.currency)}</div>
+                              {s ? (
+                                <>
+                                  <div style={{ fontSize: 15, fontWeight: 700, color: green }}>{fmtAmount(income, s.currency)}</div>
+                                  {!isFixed && parseFloat(s.agreed_amount) > 0 && income !== parseFloat(s.agreed_amount) && (
+                                    <div style={{ fontSize: 10, color: muted }}>floor {fmtAmount(s.agreed_amount, s.currency)}</div>
+                                  )}
+                                </>
+                              ) : (
+                                <button onClick={() => { setShowAddIncome(true) }}
+                                  style={{ fontSize: 10, fontFamily: 'monospace', letterSpacing: 1, color: muted, background: 'transparent', border: `1px dashed ${border}`, borderRadius: 4, padding: '3px 8px', cursor: 'pointer' }}>
+                                  + ADD FEE
+                                </button>
                               )}
                             </div>
                           </div>
