@@ -227,7 +227,7 @@ function AddIncomeModal({ shows, border, text, muted, accent, bg, card, green, o
   )
 }
 
-function MerchEstimator({ card, border, text, muted, accent, green, red, bg, darkMode }: any) {
+function MerchEstimator({ card, border, text, muted, accent, green, red, bg, darkMode, onProfitChange }: any) {
   const [capacity, setCapacity] = useState('200')
   const [attendance, setAttendance] = useState('75')
   const [conversionRate, setConversionRate] = useState('15')
@@ -241,6 +241,10 @@ function MerchEstimator({ card, border, text, muted, accent, green, red, bg, dar
   const totalRevenue = revenuePerShow * (parseFloat(shows) || 0)
   const totalCost = totalRevenue * (parseFloat(costPercent) / 100)
   const totalProfit = totalRevenue - totalCost
+
+  useEffect(() => {
+    if (onProfitChange) onProfitChange(totalProfit)
+  }, [totalProfit])
 
   const inputStyle = { width: '100%', padding: '8px 10px', border: `1px solid ${border}`, borderRadius: 6, background: bg, color: text, fontSize: 14, fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box' as const, textAlign: 'center' as const }
 
@@ -388,6 +392,7 @@ export default function BudgetPage() {
   const [settlements, setSettlements] = useState<any[]>([])
   const [expenses, setExpenses] = useState<any[]>([])
   const [view, setView] = useState<'overview' | 'shows' | 'expenses' | 'merch' | 'import'>('overview')
+  const [merchProfit, setMerchProfit] = useState(0)
   const [scenario, setScenario] = useState(100)
   const [showAddExpense, setShowAddExpense] = useState(false)
   const [showAddIncome, setShowAddIncome] = useState(false)
@@ -537,7 +542,7 @@ export default function BudgetPage() {
 
   const totalFees = settlements.reduce((s, x) => s + calcIncome(x, scenario), 0)
   const totalExpenses = expenses.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)
-  const netPosition = totalFees - totalExpenses
+  const netPosition = totalFees + merchProfit - totalExpenses
 
   // AUD-converted totals (only meaningful if FX rates loaded and mixed currencies)
   const hasMixedCurrencies = Object.keys(fxRates).length > 0 && (
@@ -980,7 +985,7 @@ export default function BudgetPage() {
                       return sum
                     }, 0)
 
-                  const effectiveTotalIncome = totalFees + projectedFromUnsettled
+                  const effectiveTotalIncome = totalFees + projectedFromUnsettled + merchProfit
                   const hasProjected = projectedFromUnsettled > 0
 
                   // Breakeven: how far are we from covering costs?
@@ -1013,10 +1018,10 @@ export default function BudgetPage() {
                     {
                       label: 'Total Income',
                       value: viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
-                        ? `AUD ${Math.round(totalFeesAUD).toLocaleString()}`
-                        : fmtAmount(totalFees, primaryCurrency),
+                        ? `AUD ${Math.round(totalFeesAUD + merchProfit).toLocaleString()}`
+                        : fmtAmount(totalFees + merchProfit, primaryCurrency),
                       color: green,
-                      sub: `${settlements.length} show${settlements.length !== 1 ? 's' : ''} · ${scenario}% capacity`,
+                      sub: `${settlements.length} show${settlements.length !== 1 ? 's' : ''} · ${scenario}% capacity${merchProfit > 0 ? ` · +${fmtAmount(Math.round(merchProfit), 'AUD')} merch` : ''}`,
                       progress: undefined,
                     },
                     {
@@ -1321,7 +1326,7 @@ export default function BudgetPage() {
         )}
 
         {/* ── MERCH VIEW ── */}
-        {view === 'merch' && <MerchEstimator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} />}
+        {view === 'merch' && <MerchEstimator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} onProfitChange={setMerchProfit} />}
 
         {/* ── MODALS ── */}
         {showAddExpense && (
