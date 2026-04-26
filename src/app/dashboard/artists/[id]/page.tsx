@@ -56,6 +56,7 @@ export default function ArtistPage() {
   const [importDragging, setImportDragging] = useState(false)
   const [importTab, setImportTab] = useState<'drop' | 'paste' | 'bandsintown'>('drop')
   const [bitArtistName, setBitArtistName] = useState('')
+  const [bitApiKey, setBitApiKey] = useState('')
   const [bitEvents, setBitEvents] = useState<any[]>([])
   const [bitLoading, setBitLoading] = useState(false)
   const [bitError, setBitError] = useState('')
@@ -96,6 +97,8 @@ export default function ArtistPage() {
     ])
     if (!artistRes.data) { router.push('/dashboard'); return }
     setArtist(artistRes.data)
+    if (artistRes.data?.name) setBitArtistName(artistRes.data.name)
+    if (artistRes.data?.bandsintown_app_id) setBitApiKey(artistRes.data.bandsintown_app_id)
     const toursData = toursRes.data || []
     const tourIds = toursData.map((t: any) => t.id)
     // Fetch all shows across all tours for archive detection
@@ -2640,36 +2643,52 @@ export default function ArtistPage() {
                   <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: 24 }}>
                     <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.2em', color: muted, marginBottom: 16 }}>SYNC FROM BANDSINTOWN</div>
                     <div style={{ fontSize: 13, color: muted, marginBottom: 20, lineHeight: 1.6 }}>
-                      Enter the artist name exactly as it appears on Bandsintown to pull upcoming shows into this tour.
+                      Get your API key from <strong>Bandsintown for Artists</strong> → Settings → General → Get API Key. Each key is linked to one artist.
                     </div>
-                    <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-                      <input
-                        value={bitArtistName}
-                        onChange={e => { setBitArtistName(e.target.value); setBitEvents([]); setBitError(''); setBitDone(0) }}
-                        placeholder="e.g. The Stamps"
-                        onKeyDown={e => e.key === 'Enter' && !bitLoading && bitArtistName.trim() && (async () => {
-                          setBitLoading(true); setBitError(''); setBitEvents([]); setBitDone(0)
-                          const res = await fetch(`/api/bandsintown?artist=${encodeURIComponent(bitArtistName.trim())}`)
-                          const data = await res.json()
-                          if (!res.ok) { setBitError(data.error || 'Failed to fetch'); setBitLoading(false); return }
-                          setBitEvents(data.shows || [])
-                          setBitSelected(new Set((data.shows || []).map((s: any) => s.bandsintown_id)))
-                          setBitLoading(false)
-                        })()}
-                        style={{ flex: 1, padding: '10px 14px', border: `1px solid ${border}`, borderRadius: 8, background: darkMode ? '#1a1a1a' : '#F9F6F2', color: text, fontSize: 14, fontFamily: 'Georgia, serif', outline: 'none' }}
-                      />
+
+                    {/* Artist name + API key */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                      <div>
+                        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, color: muted, marginBottom: 4 }}>ARTIST NAME ON BANDSINTOWN</div>
+                        <input
+                          value={bitArtistName}
+                          onChange={e => { setBitArtistName(e.target.value); setBitEvents([]); setBitError(''); setBitDone(0) }}
+                          placeholder={artist?.name || 'e.g. The Stamps'}
+                          style={{ width: '100%', padding: '10px 14px', border: `1px solid ${border}`, borderRadius: 8, background: darkMode ? '#1a1a1a' : '#F9F6F2', color: text, fontSize: 13, fontFamily: 'Georgia, serif', outline: 'none', boxSizing: 'border-box' as const }}
+                        />
+                      </div>
+                      <div>
+                        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, color: muted, marginBottom: 4 }}>
+                          API KEY
+                          {artist?.bandsintown_app_id && <span style={{ color: '#2d7a4f', marginLeft: 6 }}>✓ saved</span>}
+                        </div>
+                        <input
+                          value={bitApiKey}
+                          onChange={e => setBitApiKey(e.target.value)}
+                          placeholder="Paste API key from Bandsintown"
+                          type="password"
+                          style={{ width: '100%', padding: '10px 14px', border: `1px solid ${border}`, borderRadius: 8, background: darkMode ? '#1a1a1a' : '#F9F6F2', color: text, fontSize: 13, fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box' as const }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                       <button
-                        disabled={bitLoading || !bitArtistName.trim()}
+                        disabled={bitLoading || !bitArtistName.trim() || !bitApiKey.trim()}
                         onClick={async () => {
                           setBitLoading(true); setBitError(''); setBitEvents([]); setBitDone(0)
-                          const res = await fetch(`/api/bandsintown?artist=${encodeURIComponent(bitArtistName.trim())}`)
+                          // Save API key to artist record
+                          if (bitApiKey.trim() && artist) {
+                            await supabase.from('artists').update({ bandsintown_app_id: bitApiKey.trim() }).eq('id', artist.id)
+                          }
+                          const res = await fetch(`/api/bandsintown?artist=${encodeURIComponent(bitArtistName.trim())}&app_id=${encodeURIComponent(bitApiKey.trim())}`)
                           const data = await res.json()
                           if (!res.ok) { setBitError(data.error || 'Failed to fetch'); setBitLoading(false); return }
                           setBitEvents(data.shows || [])
                           setBitSelected(new Set((data.shows || []).map((s: any) => s.bandsintown_id)))
                           setBitLoading(false)
                         }}
-                        style={{ padding: '10px 20px', background: accent, color: '#fff', border: 'none', borderRadius: 8, cursor: bitArtistName.trim() ? 'pointer' : 'default', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, opacity: bitArtistName.trim() ? 1 : 0.5, whiteSpace: 'nowrap' as const }}>
+                        style={{ flex: 1, padding: '10px 20px', background: (bitArtistName.trim() && bitApiKey.trim()) ? accent : border, color: '#fff', border: 'none', borderRadius: 8, cursor: (bitArtistName.trim() && bitApiKey.trim()) ? 'pointer' : 'default', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2 }}>
                         {bitLoading ? 'FETCHING...' : 'FETCH SHOWS'}
                       </button>
                     </div>
@@ -2754,12 +2773,6 @@ export default function ArtistPage() {
                           {bitImporting ? 'IMPORTING...' : `IMPORT ${bitSelected.size} SHOW${bitSelected.size !== 1 ? 'S' : ''} →`}
                         </button>
                       </>
-                    )}
-
-                    {!bitLoading && !bitError && bitEvents.length === 0 && bitArtistName && (
-                      <div style={{ textAlign: 'center', padding: '30px 0', color: muted, fontSize: 13, fontStyle: 'italic' }}>
-                        Search for an artist above to see their upcoming shows.
-                      </div>
                     )}
                   </div>
                 )}

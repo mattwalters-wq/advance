@@ -1,30 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const APP_ID = 'advance-app'
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const artistName = searchParams.get('artist')
+  const appId = searchParams.get('app_id')
 
-  if (!artistName) {
-    return NextResponse.json({ error: 'artist name required' }, { status: 400 })
-  }
+  if (!artistName) return NextResponse.json({ error: 'artist name required' }, { status: 400 })
+  if (!appId) return NextResponse.json({ error: 'Bandsintown API key required. Get it from Settings → General in your Bandsintown for Artists dashboard.' }, { status: 400 })
 
   try {
     const encoded = encodeURIComponent(artistName)
-    const url = `https://rest.bandsintown.com/artists/${encoded}/events/?app_id=${APP_ID}&date=upcoming`
+    const url = `https://rest.bandsintown.com/artists/${encoded}/events/?app_id=${appId}&date=upcoming`
     const res = await fetch(url, {
       headers: { 'Accept': 'application/json', 'User-Agent': 'Advance/1.0' }
     })
 
     if (!res.ok) {
       if (res.status === 404) return NextResponse.json({ error: 'Artist not found on Bandsintown' }, { status: 404 })
+      if (res.status === 403) return NextResponse.json({ error: 'Invalid API key or access denied. Check your Bandsintown API key.' }, { status: 403 })
       throw new Error(`Bandsintown API error: ${res.status}`)
     }
 
     const events = await res.json()
 
-    // Normalise into show-shaped objects
     const shows = (Array.isArray(events) ? events : []).map((e: any) => ({
       bandsintown_id: e.id,
       date: e.datetime?.split('T')[0] || null,
@@ -34,8 +32,6 @@ export async function GET(request: NextRequest) {
       country: e.venue?.country || null,
       region: e.venue?.region || null,
       ticket_url: e.offers?.[0]?.url || null,
-      description: e.description || null,
-      on_sale_datetime: e.on_sale_datetime || null,
       bandsintown_url: e.url || null,
       artist: e.artist?.name || artistName,
     }))
