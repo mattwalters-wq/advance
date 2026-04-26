@@ -2677,16 +2677,24 @@ export default function ArtistPage() {
                         disabled={bitLoading || !bitArtistName.trim() || !bitApiKey.trim()}
                         onClick={async () => {
                           setBitLoading(true); setBitError(''); setBitEvents([]); setBitDone(0)
-                          // Save API key to artist record
-                          if (bitApiKey.trim() && artist) {
-                            await supabase.from('artists').update({ bandsintown_app_id: bitApiKey.trim() }).eq('id', artist.id)
+                          try {
+                            if (bitApiKey.trim() && artist) {
+                              await supabase.from('artists').update({ bandsintown_app_id: bitApiKey.trim() }).eq('id', artist.id)
+                            }
+                            const res = await fetch(`/api/bandsintown?artist=${encodeURIComponent(bitArtistName.trim())}&app_id=${encodeURIComponent(bitApiKey.trim())}`)
+                            const data = await res.json()
+                            if (!res.ok) { setBitError(data.error || `Error ${res.status}`); return }
+                            if (!data.shows || data.shows.length === 0) {
+                              setBitError('No upcoming shows found for this artist on Bandsintown.')
+                              return
+                            }
+                            setBitEvents(data.shows)
+                            setBitSelected(new Set(data.shows.map((s: any) => s.bandsintown_id)))
+                          } catch (err: any) {
+                            setBitError(`Failed: ${err.message}`)
+                          } finally {
+                            setBitLoading(false)
                           }
-                          const res = await fetch(`/api/bandsintown?artist=${encodeURIComponent(bitArtistName.trim())}&app_id=${encodeURIComponent(bitApiKey.trim())}`)
-                          const data = await res.json()
-                          if (!res.ok) { setBitError(data.error || 'Failed to fetch'); setBitLoading(false); return }
-                          setBitEvents(data.shows || [])
-                          setBitSelected(new Set((data.shows || []).map((s: any) => s.bandsintown_id)))
-                          setBitLoading(false)
                         }}
                         style={{ flex: 1, padding: '10px 20px', background: (bitArtistName.trim() && bitApiKey.trim()) ? accent : border, color: '#fff', border: 'none', borderRadius: 8, cursor: (bitArtistName.trim() && bitApiKey.trim()) ? 'pointer' : 'default', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2 }}>
                         {bitLoading ? 'FETCHING...' : 'FETCH SHOWS'}
