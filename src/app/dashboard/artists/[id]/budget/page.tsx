@@ -235,6 +235,106 @@ function AddIncomeModal({ shows, border, text, muted, accent, bg, card, green, o
   )
 }
 
+function PerDiemEstimator({ card, border, text, muted, accent, green, red, bg, darkMode, tourId, supabase }: any) {
+  const [people, setPeople] = useState('3')
+  const [days, setDays] = useState('21')
+  const [dailyRate, setDailyRate] = useState('50')
+  const [currency, setCurrency] = useState('EUR')
+  const [mealAllowance, setMealAllowance] = useState('30')
+  const [loaded, setLoaded] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!tourId || !supabase) return
+    supabase.from('tours').select('perdiem_settings').eq('id', tourId).single().then(({ data }: any) => {
+      if (data?.perdiem_settings) {
+        const s = data.perdiem_settings
+        if (s.people) setPeople(s.people)
+        if (s.days) setDays(s.days)
+        if (s.dailyRate) setDailyRate(s.dailyRate)
+        if (s.currency) setCurrency(s.currency)
+        if (s.mealAllowance) setMealAllowance(s.mealAllowance)
+      }
+      setLoaded(true)
+    })
+  }, [tourId])
+
+  const totalPerDiem = parseFloat(people) * parseFloat(days) * parseFloat(dailyRate) || 0
+  const totalMeals = parseFloat(people) * parseFloat(days) * parseFloat(mealAllowance) || 0
+  const totalCost = totalPerDiem + totalMeals
+
+  const inputStyle = { width: '100%', padding: '8px 10px', border: `1px solid ${border}`, borderRadius: 6, background: bg, color: text, fontSize: 14, fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box' as const, textAlign: 'center' as const }
+
+  return (
+    <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
+      <div style={{ background: '#1A1714', padding: '12px 20px' }}>
+        <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: '#F5F0E8' }}>PER DIEM &amp; MEALS</span>
+      </div>
+      <div style={{ padding: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+          {[
+            { label: 'People', value: people, set: setPeople, suffix: 'people' },
+            { label: 'Tour days', value: days, set: setDays, suffix: 'days' },
+            { label: 'Per diem', value: dailyRate, set: setDailyRate, suffix: currency + '/day' },
+            { label: 'Meal allowance', value: mealAllowance, set: setMealAllowance, suffix: currency + '/day' },
+          ].map(({ label, value, set, suffix }) => (
+            <div key={label}>
+              <div style={{ fontSize: 10, fontFamily: 'monospace', letterSpacing: 1, color: muted, marginBottom: 4 }}>{label.toUpperCase()}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="number" value={value} onChange={e => set(e.target.value)} style={inputStyle} />
+                <span style={{ fontSize: 11, color: muted, whiteSpace: 'nowrap' }}>{suffix}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 10, fontFamily: 'monospace', letterSpacing: 1, color: muted, marginBottom: 4 }}>CURRENCY</div>
+          <select value={currency} onChange={e => setCurrency(e.target.value)}
+            style={{ ...inputStyle, textAlign: 'left' as const, width: 'auto' }}>
+            {['AUD', 'EUR', 'GBP', 'USD'].map(c => <option key={c}>{c}</option>)}
+          </select>
+        </div>
+
+        <div style={{ background: darkMode ? '#1a1a1a' : '#F9F6F2', borderRadius: 10, padding: '4px 16px', marginBottom: 16 }}>
+          {[
+            { label: 'Per diem total', value: `${currency} ${Math.round(totalPerDiem).toLocaleString()}`, sub: `${people} people × ${days} days × ${currency} ${dailyRate}` },
+            { label: 'Meals total', value: `${currency} ${Math.round(totalMeals).toLocaleString()}`, sub: `${people} people × ${days} days × ${currency} ${mealAllowance}` },
+          ].map((r, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: `1px solid ${border}` }}>
+              <div>
+                <div style={{ fontSize: 13, color: text }}>{r.label}</div>
+                <div style={{ fontSize: 11, color: muted }}>{r.sub}</div>
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: red }}>{r.value}</div>
+            </div>
+          ))}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0' }}>
+            <div style={{ fontFamily: 'monospace', fontSize: 11, letterSpacing: 2 }}>TOTAL PEOPLE COSTS</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: red }}>{currency} {Math.round(totalCost).toLocaleString()}</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ fontSize: 12, color: muted, lineHeight: 1.6, flex: 1 }}>
+            Per diem covers incidentals. Meal allowance is separate for breakfast/lunch/dinner. Both are estimates - add actuals as expenses.
+          </div>
+          <button onClick={async () => {
+            if (!tourId || !supabase) return
+            setSaving(true)
+            await supabase.from('tours').update({
+              perdiem_settings: { people, days, dailyRate, currency, mealAllowance }
+            }).eq('id', tourId)
+            setSaving(false)
+          }}
+            style={{ padding: '8px 20px', background: accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, flexShrink: 0 }}>
+            {saving ? 'SAVING...' : 'SAVE'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MerchEstimator({ card, border, text, muted, accent, green, red, bg, darkMode, onProfitChange, tourId, supabase }: any) {
   const [capacity, setCapacity] = useState('200')
   const [attendance, setAttendance] = useState('75')
@@ -243,6 +343,7 @@ function MerchEstimator({ card, border, text, muted, accent, green, red, bg, dar
   const [shows, setShows] = useState('15')
   const [costPercent, setCostPercent] = useState('30')
   const [loaded, setLoaded] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   // Load saved settings from tour
   useEffect(() => {
@@ -260,19 +361,6 @@ function MerchEstimator({ card, border, text, muted, accent, green, red, bg, dar
       setLoaded(true)
     })
   }, [tourId])
-
-  // Save settings when they change (debounced)
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => {
-    if (!loaded || !tourId || !supabase) return
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => {
-      supabase.from('tours').update({
-        merch_settings: { capacity, attendance, conversionRate, avgSpend, shows, costPercent }
-      }).eq('id', tourId)
-    }, 800)
-    return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
-  }, [capacity, attendance, conversionRate, avgSpend, shows, costPercent, loaded])
 
   const attendees = Math.round(parseFloat(capacity) * parseFloat(attendance) / 100) || 0
   const buyersPerShow = Math.round(attendees * parseFloat(conversionRate) / 100) || 0
@@ -342,11 +430,27 @@ function MerchEstimator({ card, border, text, muted, accent, green, red, bg, dar
             </div>
           </div>
 
-          <div style={{ marginTop: 12, fontSize: 12, color: muted, lineHeight: 1.6 }}>
-            Typical conversion rates: 10-20% for indie acts. Avg spend varies by merch mix - T-shirts push higher, vinyl higher still. Adjust cost of goods based on your supplier margins.
+          <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ fontSize: 12, color: muted, lineHeight: 1.6, flex: 1 }}>
+              Typical conversion: 10-20% for indie acts. Avg spend varies by merch mix.
+            </div>
+            <button onClick={async () => {
+              if (!tourId || !supabase) return
+              setSaving(true)
+              await supabase.from('tours').update({
+                merch_settings: { capacity, attendance, conversionRate, avgSpend, shows, costPercent }
+              }).eq('id', tourId)
+              setSaving(false)
+            }}
+              style={{ padding: '8px 20px', background: green, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, flexShrink: 0 }}>
+              {saving ? 'SAVING...' : 'SAVE'}
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Per Diem Estimator */}
+      <PerDiemEstimator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} tourId={tourId} supabase={supabase} />
     </div>
   )
 }
