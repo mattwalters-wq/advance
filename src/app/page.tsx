@@ -180,7 +180,7 @@ export default function LandingPage() {
         <div style={{ display: 'flex', gap: 24 }}>
           <a href="/terms" style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.15em', color: '#C8BFB0', textDecoration: 'none' }}>TERMS</a>
           <a href="/privacy" style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.15em', color: '#C8BFB0', textDecoration: 'none' }}>PRIVACY</a>
-          <a href="mailto:hello@getadvance.co" style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.15em', color: '#C8BFB0', textDecoration: 'none' }}>CONTACT</a>
+          <a href="/contact" style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.15em', color: '#C8BFB0', textDecoration: 'none' }}>CONTACT</a>
         </div>
       </footer>
     </div>

@@ -25,11 +25,11 @@ export default function TermsPage() {
           },
           {
             title: '2. Your account',
-            body: 'You are responsible for keeping your login details secure and for anything that happens under your account. Please use a strong password. If you think someone else has access to your account, contact us at hello@getadvance.co straight away.',
+            body: 'You are responsible for keeping your login details secure and for anything that happens under your account. Please use a strong password. If you think someone else has access to your account, contact us at info@mondamgmt.com straight away.',
           },
           {
             title: '3. Your data',
-            body: 'The tour data, contacts, documents and notes you add belong to you. We store them securely to make the product work, but we have no claim over your content. You can request a copy or deletion of your data at any time by emailing hello@getadvance.co.',
+            body: 'The tour data, contacts, documents and notes you add belong to you. We store them securely to make the product work, but we have no claim over your content. You can request a copy or deletion of your data at any time by emailing info@mondamgmt.com.',
           },
           {
             title: '4. Document processing',
@@ -49,7 +49,7 @@ export default function TermsPage() {
           },
           {
             title: '8. Get in touch',
-            body: 'Questions, concerns, feedback or just want to say hello? Email us at hello@getadvance.co.',
+            body: 'Questions, concerns, feedback or just want to say hello? Email us at info@mondamgmt.com.',
           },
         ].map((section, i) => (
           <div key={i} style={{ marginBottom: 36 }}>

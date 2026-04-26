@@ -18,7 +18,7 @@ export default function PrivacyPage() {
         {[
           {
             title: '1. Who we are',
-            body: 'Advance is an independent project based in Victoria, Australia. It is a tour management tool in active beta development. If you have any privacy questions, email us at hello@getadvance.co.',
+            body: 'Advance is an independent project based in Victoria, Australia. It is a tour management tool in active beta development. If you have any privacy questions, email us at info@mondamgmt.com.',
           },
           {
             title: '2. What we collect',
@@ -42,7 +42,7 @@ export default function PrivacyPage() {
           },
           {
             title: '7. Your rights',
-            body: 'You can ask us to export, correct or delete your data at any time. Just email hello@getadvance.co and we will sort it out promptly. If you close your account, your data is retained for 30 days in case you change your mind, then deleted.',
+            body: 'You can ask us to export, correct or delete your data at any time. Just email info@mondamgmt.com and we will sort it out promptly. If you close your account, your data is retained for 30 days in case you change your mind, then deleted.',
           },
           {
             title: '8. Cookies',
@@ -54,7 +54,7 @@ export default function PrivacyPage() {
           },
           {
             title: '10. Contact',
-            body: 'For any privacy questions email hello@getadvance.co.',
+            body: 'For any privacy questions email info@mondamgmt.com.',
           },
         ].map((section, i) => (
           <div key={i} style={{ marginBottom: 36 }}>
