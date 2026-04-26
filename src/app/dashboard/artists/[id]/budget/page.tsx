@@ -452,9 +452,6 @@ function MerchEstimator({ card, border, text, muted, accent, green, red, bg, dar
           </div>
         </div>
       </div>
-
-      {/* Per Diem Estimator */}
-      <PerDiemEstimator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} tourId={tourId} supabase={supabase} />
     </div>
   )
 }
