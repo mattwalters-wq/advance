@@ -551,7 +551,7 @@ export default function BudgetPage() {
   )
   const totalFeesAUD = settlements.reduce((s, x) => s + toAUD(calcIncome(x, scenario), x.currency), 0)
   const totalExpensesAUD = expenses.reduce((s, x) => s + toAUD(parseFloat(x.amount) || 0, x.currency), 0)
-  const netPositionAUD = totalFeesAUD - totalExpensesAUD
+  const netPositionAUD = totalFeesAUD + merchProfit - totalExpensesAUD
 
   const totalFeesBest = settlements.reduce((s, x) => s + calcIncome(x, 100), 0)
   const totalFeesWorst = settlements.reduce((s, x) => s + calcIncome(x, 0), 0)
@@ -828,6 +828,7 @@ export default function BudgetPage() {
   }
 
   const primaryCurrency = settlements[0]?.currency || expenses[0]?.currency || 'AUD'
+  const merchProfitInPrimary = primaryCurrency === 'AUD' ? merchProfit : (merchProfit / (fxRates[primaryCurrency] || 1))
 
   return (
     <div style={{ background: bg, minHeight: '100vh', fontFamily: 'Georgia, serif', color: text }}>
@@ -985,7 +986,7 @@ export default function BudgetPage() {
                       return sum
                     }, 0)
 
-                  const effectiveTotalIncome = totalFees + projectedFromUnsettled + merchProfit
+                  const effectiveTotalIncome = totalFees + projectedFromUnsettled + merchProfitInPrimary
                   const hasProjected = projectedFromUnsettled > 0
 
                   // Breakeven: how far are we from covering costs?
@@ -1019,9 +1020,9 @@ export default function BudgetPage() {
                       label: 'Total Income',
                       value: viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
                         ? `AUD ${Math.round(totalFeesAUD + merchProfit).toLocaleString()}`
-                        : fmtAmount(totalFees + merchProfit, primaryCurrency),
+                        : fmtAmount(totalFees + merchProfitInPrimary, primaryCurrency),
                       color: green,
-                      sub: `${settlements.length} show${settlements.length !== 1 ? 's' : ''} · ${scenario}% capacity${merchProfit > 0 ? ` · +${fmtAmount(Math.round(merchProfit), 'AUD')} merch` : ''}`,
+                      sub: `${settlements.length} show${settlements.length !== 1 ? 's' : ''} · ${scenario}% capacity${merchProfit > 0 ? ` · +${fmtAmount(Math.round(merchProfitInPrimary), primaryCurrency)} merch` : ''}`,
                       progress: undefined,
                     },
                     {
