@@ -51,26 +51,31 @@ export default function DaySheetPage() {
     if (!showData) { setNotFound(true); setLoading(false); return }
 
     // Check if this is a festival: 2+ shows at same venue on consecutive days
-    const { data: allTourShows } = await supabase.from('shows')
-      .select('id, date, venue, tour_id')
-      .eq('tour_id', showData.tour_id)
-      .eq('venue', showData.venue)
-      .order('date')
+    // Respect is_festival override: false = never redirect, true = always redirect
+    if (showData.is_festival === false) {
+      setShow(showData)
+    } else {
+      const { data: allTourShows } = await supabase.from('shows')
+        .select('id, date, venue, tour_id, is_festival')
+        .eq('tour_id', showData.tour_id)
+        .eq('venue', showData.venue)
+        .order('date')
 
-    if (allTourShows && allTourShows.length >= 2) {
-      // Check if dates are consecutive (all within a 14 day window, at same venue)
-      const dates = allTourShows.map(s => s.date).sort()
-      const first = new Date(dates[0] + 'T00:00:00')
-      const last = new Date(dates[dates.length - 1] + 'T00:00:00')
-      const spanDays = (last.getTime() - first.getTime()) / (1000 * 60 * 60 * 24)
-      if (spanDays <= 14) {
-        // It's a festival - redirect to festival view
+      let redirectToFestival = showData.is_festival === true
+      if (!redirectToFestival && allTourShows && allTourShows.length >= 2) {
+        const dates = allTourShows.map((s: any) => s.date).sort()
+        const first = new Date(dates[0] + 'T00:00:00')
+        const last = new Date(dates[dates.length - 1] + 'T00:00:00')
+        const spanDays = (last.getTime() - first.getTime()) / (1000 * 60 * 60 * 24)
+        redirectToFestival = spanDays <= 3
+      }
+
+      if (redirectToFestival) {
         window.location.replace(`/festival/${showData.tour_id}`)
         return
       }
+      setShow(showData)
     }
-
-    setShow(showData)
 
     const [tourRes, travelRes, accomRes, contactsRes, riderRes, pressRes, setlistRes, peopleRes] = await Promise.all([
       supabase.from('tours').select('*, artists(*)').eq('id', showData.tour_id).single(),

@@ -954,6 +954,22 @@ export default function ArtistPage() {
                   <label style={labelStyle}>Notes</label>
                   <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: 70 }} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any notes..." />
                 </div>
+                {(!form.type || form.type === 'show') && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#F9F6F2', borderRadius: 8, marginBottom: 16 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>Festival / multi-day event</div>
+                      <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>Override auto-detection for same-venue shows</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {[{ val: null, label: 'AUTO' }, { val: true, label: '✓ YES' }, { val: false, label: '✕ NO' }].map(({ val, label }) => (
+                        <button key={String(val)} onClick={() => setForm({ ...form, is_festival: val })}
+                          style={{ padding: '4px 10px', background: form.is_festival === val ? (val === false ? '#C00' : val === true ? '#2d7a4f' : accent) : 'transparent', color: form.is_festival === val ? '#fff' : muted, border: `1px solid ${form.is_festival === val ? (val === false ? '#C00' : val === true ? '#2d7a4f' : accent) : border}`, borderRadius: 20, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
                   <div>
                     <label style={labelStyle}>Catering / dinner</label>
@@ -1893,7 +1909,18 @@ export default function ArtistPage() {
                       const peopleCount = showPeople.filter(p => p.show_id === show.id).length
                       const guestCount = guestList.filter(g => g.show_id === show.id).reduce((s: number, g: any) => s + 1 + (g.plus_n || 0), 0)
                       const sameVenue = shows.filter(s => (!s.type || s.type === 'show') && s.venue === show.venue)
-                      const isFestival = (!show.type || show.type === 'show') && sameVenue.length >= 2
+                      // is_festival: true = force festival, false = force standalone, null = auto-detect
+                      const isFestival = (!show.type || show.type === 'show') && (
+                        show.is_festival === true ? true :
+                        show.is_festival === false ? false :
+                        sameVenue.length >= 2 && (() => {
+                          const dates = sameVenue.map((s: any) => s.date).filter(Boolean).sort()
+                          if (dates.length < 2) return false
+                          const first = new Date(dates[0] + 'T00:00:00')
+                          const last = new Date(dates[dates.length - 1] + 'T00:00:00')
+                          return (last.getTime() - first.getTime()) / (1000 * 60 * 60 * 24) <= 3
+                        })()
+                      )
                       const statusColor: Record<string,string> = { paid: '#2d7a4f', partial: '#B8860B', pending: muted, disputed: '#C00' }
 
                       return (
