@@ -810,7 +810,7 @@ export default function BudgetPage() {
   const [view, setView] = useState<'overview' | 'shows' | 'expenses' | 'merch' | 'import' | 'calculator'>('overview')
   const [merchProfit, setMerchProfit] = useState(0)
   const [perDiemCost, setPerDiemCost] = useState({ cost: 0, currency: 'AUD' })
-  const [scenario, setScenario] = useState(100)
+  const [scenario] = useState(100)
   const [showAddExpense, setShowAddExpense] = useState(false)
   const [showAddIncome, setShowAddIncome] = useState(false)
   const [addIncomeShowId, setAddIncomeShowId] = useState<string | null>(null)
@@ -1339,69 +1339,14 @@ export default function BudgetPage() {
               </div>
             ) : (
               <>
-                {/* Scenario selector */}
-                {settlements.some(s => s.capacity && s.ticket_price && s.vs_amount) && (
-                  <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: '16px 20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-                      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, textTransform: 'uppercase' }}>
-                        Capacity Scenario
-                      </div>
-                      <div style={{ fontFamily: 'monospace', fontSize: 10, color: accent }}>
-                        {scenario === 0 ? 'Worst case' : scenario === 100 ? 'Best case' : `${scenario}% capacity`}
-                        {' · '}
-                        <span style={{ color: green }}>
-                          {viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
-                            ? `AUD ${Math.round(totalFeesAUD).toLocaleString()}`
-                            : fmtAmount(totalFees, primaryCurrency)}
-                        </span>
-                        {' income'}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {[
-                        { pct: 0, label: 'Worst' },
-                        { pct: 25, label: '25%' },
-                        { pct: 50, label: '50%' },
-                        { pct: 75, label: '75%' },
-                        { pct: 100, label: 'Best' },
-                      ].map(({ pct, label }) => (
-                        <button key={pct} onClick={() => setScenario(pct)}
-                          style={{
-                            flex: 1, padding: '8px 4px',
-                            background: scenario === pct ? accent : (darkMode ? '#333' : '#F5F0E8'),
-                            color: scenario === pct ? '#fff' : muted,
-                            border: `1px solid ${scenario === pct ? accent : border}`,
-                            borderRadius: 8, cursor: 'pointer',
-                            fontFamily: 'monospace', fontSize: 9, letterSpacing: 1,
-                          }}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    {/* Range bar showing worst-best */}
-                    <div style={{ marginTop: 12, position: 'relative' }}>
-                      <div style={{ height: 6, borderRadius: 3, background: darkMode ? '#333' : '#F0EAE0', overflow: 'hidden' }}>
-                        <div style={{
-                          height: '100%', borderRadius: 3, background: `linear-gradient(to right, #e88, ${green})`,
-                          width: `${totalFeesBest > 0 ? (totalFees / totalFeesBest) * 100 : 0}%`,
-                          transition: 'width 0.3s ease',
-                        }} />
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                        <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>
-                          {viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
-                            ? `AUD ${Math.round(totalFeesWorstAUD).toLocaleString()}`
-                            : fmtAmount(totalFeesWorst, primaryCurrency)} floor
-                        </span>
-                        <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>
-                          {viewCurrency === 'AUD' && Object.keys(fxRates).length > 0
-                            ? `AUD ${Math.round(totalFeesBestAUD).toLocaleString()}`
-                            : fmtAmount(totalFeesBest, primaryCurrency)} ceiling
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {/* Nudge to calculator */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: darkMode ? '#1a1a1a' : '#F9F6F2', borderRadius: 8, border: `1px solid ${border}` }}>
+                  <span style={{ fontSize: 12, color: muted }}>Want to model different attendance scenarios?</span>
+                  <button onClick={() => setView('calculator')}
+                    style={{ padding: '5px 14px', background: accent, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, whiteSpace: 'nowrap' as const }}>
+                    ⚡ OPEN CALC
+                  </button>
+                </div>
 
                 {/* Summary cards */}
                 {(() => {
@@ -1455,7 +1400,7 @@ export default function BudgetPage() {
                         ? `AUD ${Math.round(totalFeesAUD + merchProfit).toLocaleString()}`
                         : fmtAmount(totalFees + merchProfitInPrimary, primaryCurrency),
                       color: green,
-                      sub: `${settlements.length} show${settlements.length !== 1 ? 's' : ''} · ${scenario}% capacity${merchProfit > 0 ? ` · +${fmtAmount(Math.round(merchProfitInPrimary), primaryCurrency)} merch` : ''}`,
+                      sub: `${settlements.length} show${settlements.length !== 1 ? 's' : ''}${merchProfit > 0 ? ` · +${fmtAmount(Math.round(merchProfitInPrimary), primaryCurrency)} merch` : ''}`,
                       progress: undefined,
                     },
                     {
@@ -1595,20 +1540,6 @@ export default function BudgetPage() {
         {/* ── SHOWS VIEW ── */}
         {view === 'shows' && (
           <div style={{ display: 'grid', gap: 12 }}>
-            {/* Scenario selector in shows view too */}
-            {settlements.some(s => s.capacity && s.ticket_price && s.vs_amount) && (
-              <div style={{ background: card, borderRadius: 10, border: `1px solid ${border}`, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted }}>SCENARIO</span>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[{ pct: 0, label: 'Worst' }, { pct: 25, label: '25%' }, { pct: 50, label: '50%' }, { pct: 75, label: '75%' }, { pct: 100, label: 'Best' }].map(({ pct, label }) => (
-                    <button key={pct} onClick={() => setScenario(pct)}
-                      style={{ padding: '5px 10px', background: scenario === pct ? accent : 'transparent', color: scenario === pct ? '#fff' : muted, border: `1px solid ${scenario === pct ? accent : border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
             {showsWithData.length === 0 ? (
               <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: 32, textAlign: 'center', color: muted }}>No shows in this tour yet</div>
             ) : showsWithData.map((show: any, i: number) => (
