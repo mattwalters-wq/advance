@@ -25,6 +25,7 @@ export default function ArtistPage() {
   const [documents, setDocuments] = useState<any[]>([])
   const [showPeople, setShowPeople] = useState<any[]>([])
   const [guestList, setGuestList] = useState<any[]>([])
+  const [expenses, setExpenses] = useState<any[]>([])
   const [darkMode, setDarkMode] = useState(false)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -139,7 +140,7 @@ export default function ArtistPage() {
   }
 
   async function loadTourData(tourId: string) {
-    const [s, t, a, c, p, sl, d, sp, gl] = await Promise.all([
+    const [s, t, a, c, p, sl, d, sp, gl, ex] = await Promise.all([
       supabase.from('shows').select('*').eq('tour_id', tourId).is('deleted_at', null).order('date'),
       supabase.from('travel').select('*').eq('tour_id', tourId).is('deleted_at', null).order('travel_date'),
       supabase.from('accommodation').select('*').eq('tour_id', tourId).is('deleted_at', null).order('check_in'),
@@ -149,6 +150,7 @@ export default function ArtistPage() {
       supabase.from('tour_documents').select('*').eq('tour_id', tourId).is('deleted_at', null).order('category'),
       supabase.from('show_people').select('*').eq('tour_id', tourId).is('deleted_at', null),
       supabase.from('guest_list').select('*').eq('tour_id', tourId).is('deleted_at', null).order('name'),
+      supabase.from('expenses').select('id, description, amount, currency, notes, show_id, status').eq('tour_id', tourId).not('show_id', 'is', null).is('deleted_at', null),
     ])
     const showsData = s.data || []
     const travelData = t.data || []
@@ -162,6 +164,7 @@ export default function ArtistPage() {
     setDocuments(d.data || [])
     setShowPeople(sp.data || [])
     setGuestList(gl.data || [])
+    setExpenses(ex.data || [])
     setWarnings(computeWarnings(showsData, travelData, accomData))
     // Auto-switch to import tab if tour is empty
     if (showsData.length === 0 && travelData.length === 0 && accomData.length === 0) {
@@ -859,6 +862,11 @@ export default function ArtistPage() {
                     <option value="confirmed">✓ Confirmed</option>
                     <option value="completed">— Completed</option>
                   </select>
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Budget spreadsheet link</label>
+                  <input style={inputStyle} value={form.budget_url || ''} onChange={e => setForm({ ...form, budget_url: e.target.value })} placeholder="https://docs.google.com/... or Dropbox link" />
+                  <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Google Sheets, Dropbox, OneDrive - paste any link</div>
                 </div>
               </>
             )}
@@ -1850,6 +1858,12 @@ export default function ArtistPage() {
                     style={{ padding: '6px 12px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
                     💰 Budget
                   </button>
+                  {selectedTour?.budget_url && (
+                    <a href={selectedTour.budget_url} target="_blank" rel="noreferrer"
+                      style={{ padding: '6px 12px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      📊 Spreadsheet ↗
+                    </a>
+                  )}
                 </div>
                 {shows.length > 0 && (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
@@ -2082,6 +2096,43 @@ export default function ArtistPage() {
                                       </button>
                                     )}
                                   </div>
+                                </div>
+                              )
+                            })()}
+                            {/* Per-show expenses */}
+                            {(() => {
+                              const showExpenses = expenses.filter((e: any) => e.show_id === show.id)
+                              return (
+                                <div style={{ marginBottom: 12 }}>
+                                  {showExpenses.length > 0 && (
+                                    <div style={{ marginBottom: 8 }}>
+                                      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 6, textTransform: 'uppercase' as const }}>
+                                        Show expenses · {showExpenses.reduce((s: number, e: any) => s + (parseFloat(e.amount) || 0), 0).toLocaleString()} {showExpenses[0]?.currency || 'AUD'}
+                                      </div>
+                                      {showExpenses.map((e: any) => (
+                                        <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: '#F9F6F2', borderRadius: 6, marginBottom: 4, fontSize: 12 }}>
+                                          <div style={{ flex: 1 }}>
+                                            <span style={{ fontWeight: 600 }}>{e.description}</span>
+                                            {e.notes && <span style={{ color: muted, marginLeft: 8, fontStyle: 'italic' }}>{e.notes}</span>}
+                                          </div>
+                                          <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#C00', fontWeight: 600 }}>{e.currency} {parseFloat(e.amount).toLocaleString()}</span>
+                                          <button onClick={async (ev) => {
+                                            ev.stopPropagation()
+                                            await supabase.from('expenses').update({ deleted_at: new Date().toISOString() }).eq('id', e.id)
+                                            if (selectedTour) await loadTourData(selectedTour.id)
+                                          }} style={{ background: 'transparent', border: 'none', color: muted, cursor: 'pointer', fontSize: 12, padding: '0 4px' }}>✕</button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <button onClick={(ev) => {
+                                    ev.stopPropagation()
+                                    // Open budget page pre-filtered to this show
+                                    router.push(`/dashboard/artists/${params.id}/budget?show_id=${show.id}`)
+                                  }}
+                                    style={{ background: 'transparent', border: `1px dashed ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
+                                    + ADD SHOW EXPENSE
+                                  </button>
                                 </div>
                               )
                             })()}
