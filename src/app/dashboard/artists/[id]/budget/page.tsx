@@ -1293,25 +1293,29 @@ export default function BudgetPage() {
                 {v === 'import' ? '+ Import' : v === 'calculator' ? '⚡ Calc' : v}
               </button>
             ))}
-            {hasBudget && (
-              <div style={{ display: 'flex', gap: 2, marginLeft: 8, borderLeft: `1px solid ${border}`, paddingLeft: 8, alignItems: 'center' }}>
-                {(['native', 'AUD'] as const).map(c => (
-                  <button key={c} onClick={() => setViewCurrency(c)}
-                    style={{ padding: '6px 10px', background: viewCurrency === c ? '#1A1714' : 'transparent', color: viewCurrency === c ? '#F4EFE6' : muted, border: `1px solid ${viewCurrency === c ? '#1A1714' : border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
-                    {c === 'native' ? 'EUR' : fxLoading ? '...' : 'AUD'}
+            {hasBudget && (() => {
+              const hasForeignCurrency = settlements.some((s: any) => s.currency && s.currency !== 'AUD') ||
+                expenses.some((e: any) => e.currency && e.currency !== 'AUD')
+              return hasForeignCurrency ? (
+                <div style={{ display: 'flex', gap: 2, marginLeft: 8, borderLeft: `1px solid ${border}`, paddingLeft: 8, alignItems: 'center' }}>
+                  {(['native', 'AUD'] as const).map(c => (
+                    <button key={c} onClick={() => setViewCurrency(c)}
+                      style={{ padding: '6px 10px', background: viewCurrency === c ? '#1A1714' : 'transparent', color: viewCurrency === c ? '#F4EFE6' : muted, border: `1px solid ${viewCurrency === c ? '#1A1714' : border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
+                      {c === 'native' ? (primaryCurrency || 'EUR') : fxLoading ? '...' : 'AUD'}
+                    </button>
+                  ))}
+                  {fxUpdated && Object.keys(fxRates).length > 0 && (
+                    <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted, marginLeft: 4 }}>
+                      {Object.entries(fxRates).filter(([c]) => c !== 'AUD').map(([c, r]) => `1 ${c} = ${r.toFixed(2)}`).join(' · ')}
+                    </span>
+                  )}
+                  <button onClick={fetchFx} disabled={fxLoading}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: muted, fontSize: 11, padding: '2px 4px' }} title="Refresh rates">
+                    ↻
                   </button>
-                ))}
-                {fxUpdated && Object.keys(fxRates).length > 0 && (
-                  <span style={{ fontFamily: 'monospace', fontSize: 9, color: muted, marginLeft: 4 }}>
-                    {Object.entries(fxRates).filter(([c]) => c !== 'AUD').map(([c, r]) => `1 ${c} = ${r.toFixed(2)}`).join(' · ')}
-                  </span>
-                )}
-                <button onClick={fetchFx} disabled={fxLoading}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: muted, fontSize: 11, padding: '2px 4px' }} title="Refresh rates">
-                  ↻
-                </button>
-              </div>
-            )}
+                </div>
+              ) : null
+            })()}
           </div>
         </div>
 
