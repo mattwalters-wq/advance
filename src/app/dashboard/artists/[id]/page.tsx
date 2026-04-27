@@ -478,18 +478,34 @@ export default function ArtistPage() {
     setSaving(true)
 
     if (modal === 'tour') {
-      // Create a new tour
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
-        if (profile) {
-          const { data: newTour } = await supabase.from('tours')
-            .insert({ name: form.name, start_date: form.start_date || null, end_date: form.end_date || null, artist_id: params.id, org_id: profile.org_id })
-            .select().single()
-          if (newTour) {
-            const { data: toursData } = await supabase.from('tours').select('*').eq('artist_id', params.id as string).order('start_date', { ascending: true })
-            setTours(toursData || [])
-            setSelectedTour(newTour)
+        const tourFields = {
+          name: form.name,
+          start_date: form.start_date || null,
+          end_date: form.end_date || null,
+          status: form.status || 'routing',
+          budget_url: form.budget_url || null,
+        }
+        if (editingId) {
+          // Edit existing tour
+          await supabase.from('tours').update(tourFields).eq('id', editingId)
+          const { data: toursData } = await supabase.from('tours').select('*').eq('artist_id', params.id as string).order('start_date', { ascending: true })
+          setTours(toursData || [])
+          const updated = (toursData || []).find((t: any) => t.id === editingId)
+          if (updated) setSelectedTour(updated)
+        } else {
+          // Create new tour
+          const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
+          if (profile) {
+            const { data: newTour } = await supabase.from('tours')
+              .insert({ ...tourFields, artist_id: params.id, org_id: profile.org_id })
+              .select().single()
+            if (newTour) {
+              const { data: toursData } = await supabase.from('tours').select('*').eq('artist_id', params.id as string).order('start_date', { ascending: true })
+              setTours(toursData || [])
+              setSelectedTour(newTour)
+            }
           }
         }
       }
@@ -1847,8 +1863,8 @@ export default function ArtistPage() {
                   )}
                 </div>
 
-                <button onClick={() => router.push(`/dashboard/artists/${params.id}/settings`)}
-                  style={{ padding: '7px 10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 7, cursor: 'pointer', fontSize: 13 }} title="Settings">
+                <button onClick={() => { openModal('tour', selectedTour) }}
+                  style={{ padding: '7px 10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 7, cursor: 'pointer', fontSize: 13 }} title="Edit tour settings">
                   ⚙
                 </button>
               </div>

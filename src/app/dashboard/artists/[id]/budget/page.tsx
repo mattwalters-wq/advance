@@ -1883,6 +1883,29 @@ export default function BudgetPage() {
             )}
           </div>
         )}
+
+        {/* Danger zone */}
+        {view === 'import' && hasBudget && (
+          <div style={{ background: card, borderRadius: 12, border: `1px solid #ffcccc`, padding: 20, marginTop: 8 }}>
+            <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#C00', marginBottom: 8 }}>DANGER ZONE</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' as const }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Wipe all budget data</div>
+                <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>Deletes all expenses and settlements for this tour. The tour, shows, travel and contacts are unaffected.</div>
+              </div>
+              <button onClick={async () => {
+                if (!confirm('Wipe all budget data for this tour? This cannot be undone.')) return
+                await supabase.from('expenses').delete().eq('tour_id', selectedTourId)
+                await supabase.from('settlements').delete().eq('tour_id', selectedTourId)
+                await loadBudget(selectedTourId)
+                setView('overview')
+              }}
+                style={{ padding: '8px 20px', background: '#fff0f0', color: '#C00', border: '1px solid #ffcccc', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, flexShrink: 0, whiteSpace: 'nowrap' as const }}>
+                WIPE BUDGET
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
