@@ -235,6 +235,230 @@ function AddIncomeModal({ shows, border, text, muted, accent, bg, card, green, o
   )
 }
 
+function TourCalculator({ card, border, text, muted, accent, green, red, bg, darkMode, tourId, supabase, artistName, tourName }: any) {
+  const [shows, setShows] = useState('5')
+  const [capacity, setCapacity] = useState('150')
+  const [ticketPrice, setTicketPrice] = useState('30')
+  const [dealType, setDealType] = useState<'door' | 'fixed' | 'mixed'>('door')
+  const [doorPct, setDoorPct] = useState('85')
+  const [fixedFee, setFixedFee] = useState('500')
+  const [fixedShows, setFixedShows] = useState('2')
+  const [totalCosts, setTotalCosts] = useState('5000')
+  const [currency, setCurrency] = useState('AUD')
+  const [saving, setSaving] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!tourId || !supabase) return
+    supabase.from('tours').select('calculator_settings').eq('id', tourId).single().then(({ data }: any) => {
+      if (data?.calculator_settings) {
+        const s = data.calculator_settings
+        if (s.shows) setShows(s.shows)
+        if (s.capacity) setCapacity(s.capacity)
+        if (s.ticketPrice) setTicketPrice(s.ticketPrice)
+        if (s.dealType) setDealType(s.dealType)
+        if (s.doorPct) setDoorPct(s.doorPct)
+        if (s.fixedFee) setFixedFee(s.fixedFee)
+        if (s.fixedShows) setFixedShows(s.fixedShows)
+        if (s.totalCosts) setTotalCosts(s.totalCosts)
+        if (s.currency) setCurrency(s.currency)
+      }
+      setLoaded(true)
+    })
+  }, [tourId])
+
+  const nShows = parseFloat(shows) || 0
+  const nCap = parseFloat(capacity) || 0
+  const nTicket = parseFloat(ticketPrice) || 0
+  const nPct = parseFloat(doorPct) / 100 || 0.85
+  const nFixed = parseFloat(fixedFee) || 0
+  const nFixedShows = parseFloat(fixedShows) || 0
+  const nCosts = parseFloat(totalCosts) || 0
+
+  function calcRevenue(attendancePct: number) {
+    const doorShows = dealType === 'door' ? nShows : dealType === 'mixed' ? nShows - nFixedShows : 0
+    const fxShows = dealType === 'fixed' ? nShows : dealType === 'mixed' ? nFixedShows : 0
+    const doorRevenue = doorShows * (nCap * attendancePct) * nTicket * nPct
+    const fixedRevenue = fxShows * nFixed
+    return doorRevenue + fixedRevenue
+  }
+
+  const scenarios = [
+    { label: 'Worst case', pct: 0.25, color: red },
+    { label: '50%', pct: 0.5, color: '#B8860B' },
+    { label: '75%', pct: 0.75, color: accent },
+    { label: 'Sold out', pct: 1.0, color: green },
+  ]
+
+  const inputStyle = {
+    width: '100%', padding: '9px 12px', border: `1px solid ${border}`, borderRadius: 8,
+    background: darkMode ? '#1a1a1a' : '#F9F6F2', color: text, fontSize: 14,
+    fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box' as const, textAlign: 'center' as const,
+  }
+  const labelStyle = { display: 'block', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 5, textTransform: 'uppercase' as const }
+
+  const fmt = (n: number) => `${currency} ${Math.round(n).toLocaleString()}`
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      {/* Header */}
+      <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
+        <div style={{ background: '#1A1714', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: '#F5F0E8' }}>⚡ TOUR CALCULATOR</span>
+          {tourName && <span style={{ fontFamily: 'monospace', fontSize: 9, color: '#4A4540', letterSpacing: 1 }}>{tourName?.toUpperCase()}</span>}
+        </div>
+        <div style={{ padding: 20 }}>
+          <p style={{ fontSize: 13, color: muted, margin: '0 0 20px', lineHeight: 1.6 }}>
+            Quick scenario modelling. Enter your tour details and see what you could make at different attendance levels.
+          </p>
+
+          {/* Inputs grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14, marginBottom: 20 }}>
+            <div>
+              <label style={labelStyle}>Shows</label>
+              <input type="number" value={shows} onChange={e => setShows(e.target.value)} style={inputStyle} min="1" />
+            </div>
+            <div>
+              <label style={labelStyle}>Avg capacity</label>
+              <input type="number" value={capacity} onChange={e => setCapacity(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Ticket price</label>
+              <input type="number" value={ticketPrice} onChange={e => setTicketPrice(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Currency</label>
+              <select value={currency} onChange={e => setCurrency(e.target.value)} style={{ ...inputStyle, textAlign: 'left' as const }}>
+                {['AUD', 'EUR', 'GBP', 'USD', 'NZD'].map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Deal type */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={labelStyle}>Deal type</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {([['door', 'All door deals'], ['fixed', 'All fixed fees'], ['mixed', 'Mix of both']] as const).map(([val, lbl]) => (
+                <button key={val} onClick={() => setDealType(val)}
+                  style={{ flex: 1, padding: '8px 12px', background: dealType === val ? accent : 'transparent', color: dealType === val ? '#fff' : muted, border: `1px solid ${dealType === val ? accent : border}`, borderRadius: 8, cursor: 'pointer', fontSize: 12, fontFamily: 'Georgia, serif' }}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Conditional inputs */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14, marginBottom: 20 }}>
+            {(dealType === 'door' || dealType === 'mixed') && (
+              <div>
+                <label style={labelStyle}>Door % (your cut)</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input type="number" value={doorPct} onChange={e => setDoorPct(e.target.value)} style={inputStyle} min="0" max="100" />
+                  <span style={{ color: muted, fontSize: 13 }}>%</span>
+                </div>
+              </div>
+            )}
+            {(dealType === 'fixed' || dealType === 'mixed') && (
+              <div>
+                <label style={labelStyle}>{dealType === 'mixed' ? 'Fixed fee each' : 'Fee per show'}</label>
+                <input type="number" value={fixedFee} onChange={e => setFixedFee(e.target.value)} style={inputStyle} />
+              </div>
+            )}
+            {dealType === 'mixed' && (
+              <div>
+                <label style={labelStyle}>Fixed fee shows</label>
+                <input type="number" value={fixedShows} onChange={e => setFixedShows(e.target.value)} style={inputStyle} min="0" />
+              </div>
+            )}
+            <div>
+              <label style={labelStyle}>Total tour costs</label>
+              <input type="number" value={totalCosts} onChange={e => setTotalCosts(e.target.value)} style={inputStyle} />
+            </div>
+          </div>
+
+          {/* Save button */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button onClick={async () => {
+              if (!tourId || !supabase) return
+              setSaving(true)
+              await supabase.from('tours').update({
+                calculator_settings: { shows, capacity, ticketPrice, dealType, doorPct, fixedFee, fixedShows, totalCosts, currency }
+              }).eq('id', tourId)
+              setSaving(false)
+            }} style={{ padding: '8px 20px', background: green, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2 }}>
+              {saving ? 'SAVING...' : 'SAVE'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Scenarios */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+        {scenarios.map(({ label, pct, color }) => {
+          const revenue = calcRevenue(pct)
+          const net = revenue - nCosts
+          const attendees = Math.round(nCap * pct)
+          return (
+            <div key={label} style={{ background: card, borderRadius: 12, border: `1px solid ${net >= 0 ? color + '44' : border}`, padding: 20, position: 'relative' as const, overflow: 'hidden' }}>
+              <div style={{ position: 'absolute' as const, top: 0, left: 0, right: 0, height: 3, background: color }} />
+              <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 12, textTransform: 'uppercase' as const }}>
+                {label} · {Math.round(pct * 100)}%
+              </div>
+              <div style={{ fontSize: 11, color: muted, marginBottom: 4 }}>~{attendees} people/show</div>
+              <div style={{ fontSize: 13, color: muted, marginBottom: 8 }}>Revenue: <span style={{ color: text, fontWeight: 600 }}>{fmt(revenue)}</span></div>
+              <div style={{ height: 1, background: border, margin: '10px 0' }} />
+              <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 1, color: muted, marginBottom: 6 }}>NET</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color, lineHeight: 1, marginBottom: 4 }}>
+                {net >= 0 ? '' : '-'}{fmt(Math.abs(net))}
+              </div>
+              <div style={{ fontSize: 11, color: muted, marginTop: 6 }}>
+                {net >= 0 ? `${fmt(nCosts)} costs covered + ${fmt(net)} profit` : `${fmt(Math.abs(net))} short of breakeven`}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Breakeven callout */}
+      {nCosts > 0 && (() => {
+        // Find breakeven attendance %
+        let beAttendance = null
+        for (let p = 0; p <= 100; p++) {
+          if (calcRevenue(p / 100) >= nCosts) { beAttendance = p; break }
+        }
+        const beAttendees = beAttendance !== null ? Math.round(nCap * beAttendance / 100) : null
+        return (
+          <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, padding: 20, display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' as const }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 6 }}>BREAKEVEN POINT</div>
+              {beAttendance !== null ? (
+                <>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: accent }}>
+                    {beAttendance}% capacity
+                  </div>
+                  <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>
+                    {beAttendees} people per show across {shows} shows · {fmt(nCosts)} total costs
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 15, color: red }}>Not achievable at 100% — review costs</div>
+              )}
+            </div>
+            {beAttendance !== null && (
+              <div style={{ flexShrink: 0 }}>
+                <div style={{ width: 80, height: 80, borderRadius: '50%', border: `6px solid ${beAttendance <= 50 ? green : beAttendance <= 75 ? '#B8860B' : red}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' as const }}>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: beAttendance <= 50 ? green : beAttendance <= 75 ? '#B8860B' : red, lineHeight: 1 }}>{beAttendance}%</span>
+                  <span style={{ fontSize: 9, color: muted, fontFamily: 'monospace' }}>BE</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+    </div>
+  )
+}
+
 function PerDiemEstimator({ card, border, text, muted, accent, green, red, bg, darkMode, tourId, supabase, onCostChange }: any) {
   const [people, setPeople] = useState('3')
   const [days, setDays] = useState('21')
@@ -583,7 +807,7 @@ export default function BudgetPage() {
   const [shows, setShows] = useState<any[]>([])
   const [settlements, setSettlements] = useState<any[]>([])
   const [expenses, setExpenses] = useState<any[]>([])
-  const [view, setView] = useState<'overview' | 'shows' | 'expenses' | 'merch' | 'import'>('overview')
+  const [view, setView] = useState<'overview' | 'shows' | 'expenses' | 'merch' | 'import' | 'calculator'>('overview')
   const [merchProfit, setMerchProfit] = useState(0)
   const [perDiemCost, setPerDiemCost] = useState({ cost: 0, currency: 'AUD' })
   const [scenario, setScenario] = useState(100)
@@ -1063,10 +1287,10 @@ export default function BudgetPage() {
             {tours.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-            {(['overview', 'shows', 'expenses', 'merch', 'import'] as const).map(v => (
+            {(['overview', 'shows', 'expenses', 'merch', 'calculator', 'import'] as const).map(v => (
               <button key={v} onClick={() => setView(v)}
                 style={{ padding: '8px 14px', background: view === v ? accent : card, color: view === v ? '#fff' : muted, border: `1px solid ${view === v ? accent : border}`, borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' }}>
-                {v === 'import' ? '+ Import' : v}
+                {v === 'import' ? '+ Import' : v === 'calculator' ? '⚡ Calc' : v}
               </button>
             ))}
             {hasBudget && (
@@ -1591,6 +1815,11 @@ export default function BudgetPage() {
               setAddIncomeShowId(null)
             }}
           />
+        )}
+
+        {/* ── CALCULATOR VIEW ── */}
+        {view === 'calculator' && (
+          <TourCalculator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} tourId={selectedTourId} supabase={supabase} artistName={artist?.name} tourName={tours.find((t: any) => t.id === selectedTourId)?.name} />
         )}
 
         {/* ── IMPORT VIEW ── */}
