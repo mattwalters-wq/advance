@@ -1531,6 +1531,17 @@ export default function BudgetPage() {
                     style={{ padding: '8px 16px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 8, cursor: 'pointer', fontSize: 12 }}>
                     Update budget data
                   </button>
+                  {hasBudget && (
+                    <button onClick={async () => {
+                      if (!confirm('Wipe all budget data for this tour? This cannot be undone.')) return
+                      await supabase.from('expenses').delete().eq('tour_id', selectedTourId)
+                      await supabase.from('settlements').delete().eq('tour_id', selectedTourId)
+                      await loadBudget(selectedTourId)
+                    }}
+                      style={{ padding: '8px 16px', background: 'transparent', color: '#C00', border: '1px solid #ffcccc', borderRadius: 8, cursor: 'pointer', fontSize: 12 }}>
+                      Wipe budget data
+                    </button>
+                  )}
                 </div>
               </>
             )}
