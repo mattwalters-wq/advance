@@ -1,161 +1,114 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 const ADMIN_EMAIL = 'mattwaltersconsulting@gmail.com'
 
-function getServiceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
-
 async function verifyAdmin(request: NextRequest) {
-  const anonClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-  const authHeader = request.headers.get('authorization')
-  if (!authHeader) return null
-  const token = authHeader.replace('Bearer ', '')
-  const { data: { user }, error } = await anonClient.auth.getUser(token)
-  if (error || !user || user.email !== ADMIN_EMAIL) return null
+  const token = request.headers.get('Authorization')?.replace('Bearer ', '')
+  if (!token) return null
+  const { data: { user } } = await supabase.auth.getUser(token)
+  if (!user || user.email !== ADMIN_EMAIL) return null
   return user
 }
 
 export async function GET(request: NextRequest) {
-  try {
-    const admin = await verifyAdmin(request)
-    if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const admin = await verifyAdmin(request)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const supabase = getServiceClient()
-    const url = new URL(request.url)
-    const drilldown = url.searchParams.get('user_id')
+  const { searchParams } = new URL(request.url)
+  const userId = searchParams.get('user_id')
 
-    if (drilldown) {
-      const [artistsRes, profileRes] = await Promise.all([
-        supabase.from('artists').select('*').eq('org_id', drilldown).order('created_at', { ascending: false }),
-        supabase.from('profiles').select('*').eq('id', drilldown).single(),
-      ])
-      const artists = artistsRes.data || []
-      const artistIds = artists.map((a: any) => a.id)
+  // Drilldown for a specific user
+  if (userId) {
+    const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', userId).single()
+    if (!profile) return NextResponse.json({ artists: [], tours: [], shows: [] })
+    const orgId = profile.org_id
 
-      // Fetch tours both by org_id AND by artist_id (in case org_id wasn't set on creation)
-      const [toursByOrg, toursByArtist] = await Promise.all([
-        supabase.from('tours').select('*, artists(name)').eq('org_id', drilldown),
-        artistIds.length > 0
-          ? supabase.from('tours').select('*, artists(name)').in('artist_id', artistIds)
-          : Promise.resolve({ data: [] }),
-      ])
-      // Merge and deduplicate
-      const allTours = [...(toursByOrg.data || []), ...(toursByArtist.data || [])]
-      const seen = new Set<string>()
-      const tours = allTours.filter((t: any) => { if (seen.has(t.id)) return false; seen.add(t.id); return true })
-        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-
-      const [showsRes, travelRes, accomRes, guestsRes, peopleRes] = await Promise.all([
-        supabase.from('shows').select('id, date, venue, city, tour_id, type').eq('org_id', drilldown).order('date', { ascending: false }),
-        supabase.from('travel').select('id, travel_date, from_location, to_location, tour_id').eq('org_id', drilldown),
-        supabase.from('accommodation').select('id, name, check_in, tour_id').eq('org_id', drilldown),
-        supabase.from('guest_list').select('id, name, plus_n, tour_id').eq('org_id', drilldown),
-        supabase.from('show_people').select('id, name, role, tour_id').eq('org_id', drilldown),
-      ])
-
-      return NextResponse.json({
-        profile: profileRes.data,
-        artists,
-        tours,
-        shows: showsRes.data || [],
-        travel: travelRes.data || [],
-        accommodation: accomRes.data || [],
-        guests: guestsRes.data || [],
-        showPeople: peopleRes.data || [],
-      })
-    }
-
-    const { data: { users: authUsers } } = await supabase.auth.admin.listUsers({ perPage: 1000 })
-    const emailMap: Record<string, string> = {}
-    const lastSignInMap: Record<string, string> = {}
-    authUsers?.forEach((u: any) => {
-      emailMap[u.id] = u.email
-      lastSignInMap[u.id] = u.last_sign_in_at
-    })
-
-    const [profilesRes, artistsRes, toursRes, showsRes, travelRes, accomRes, guestsRes, peopleRes, setlistsRes] = await Promise.all([
-      supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-      supabase.from('artists').select('*, profiles(full_name)').order('created_at', { ascending: false }),
-      supabase.from('tours').select('*, artists(name)').order('created_at', { ascending: false }),
-      supabase.from('shows').select('id, date, venue, city, tour_id, org_id').order('date', { ascending: false }),
-      supabase.from('travel').select('id, travel_date, from_location, to_location, tour_id, org_id').order('travel_date', { ascending: false }),
-      supabase.from('accommodation').select('id, name, check_in, tour_id, org_id'),
-      supabase.from('guest_list').select('id, name, plus_n, tour_id, org_id'),
-      supabase.from('show_people').select('id, name, role, tour_id, org_id'),
-      supabase.from('setlists').select('id, tour_id, org_id, songs'),
+    const [artists, tours, shows, travel, accommodation] = await Promise.all([
+      supabase.from('artists').select('*').eq('org_id', orgId),
+      supabase.from('tours').select('*, artists(name)').eq('org_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('shows').select('*').eq('org_id', orgId).is('deleted_at', null),
+      supabase.from('travel').select('*').eq('org_id', orgId).is('deleted_at', null),
+      supabase.from('accommodation').select('*').eq('org_id', orgId).is('deleted_at', null),
     ])
 
-    const usersWithMeta = (profilesRes.data || []).map((p: any) => ({
-      ...p,
-      email: emailMap[p.id] || null,
-      last_sign_in: lastSignInMap[p.id] || null,
-      artist_count: (artistsRes.data || []).filter((a: any) => a.org_id === p.id).length,
-      tour_count: (toursRes.data || []).filter((t: any) => {
-        if (t.org_id === p.id) return true
-        // fallback: check if the tour's artist belongs to this user
-        const artist = (artistsRes.data || []).find((a: any) => a.id === t.artist_id)
-        return artist?.org_id === p.id
-      }).length,
-      show_count: (showsRes.data || []).filter((s: any) => s.org_id === p.id).length,
-    }))
-
     return NextResponse.json({
-      users: usersWithMeta,
-      artists: artistsRes.data || [],
-      tours: toursRes.data || [],
-      shows: showsRes.data || [],
-      travel: travelRes.data || [],
-      accommodation: accomRes.data || [],
-      guests: guestsRes.data || [],
-      showPeople: peopleRes.data || [],
-      setlists: setlistsRes.data || [],
+      artists: artists.data || [],
+      tours: tours.data || [],
+      shows: shows.data || [],
+      travel: travel.data || [],
+      accommodation: accommodation.data || [],
     })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
   }
+
+  // Full admin load
+  const [authUsers, profiles, artists, tours, shows, travel, accommodation, guests, showPeople, setlists] = await Promise.all([
+    supabase.auth.admin.listUsers({ perPage: 200 }),
+    supabase.from('profiles').select('*'),
+    supabase.from('artists').select('*, profiles(full_name, org_id)').order('created_at', { ascending: false }),
+    supabase.from('tours').select('*, artists(name)').order('created_at', { ascending: false }),
+    supabase.from('shows').select('*').is('deleted_at', null),
+    supabase.from('travel').select('*').is('deleted_at', null),
+    supabase.from('accommodation').select('*').is('deleted_at', null),
+    supabase.from('guest_list').select('*').is('deleted_at', null),
+    supabase.from('show_people').select('*').is('deleted_at', null),
+    supabase.from('setlists').select('*').is('deleted_at', null),
+  ])
+
+  const profileMap = Object.fromEntries((profiles.data || []).map((p: any) => [p.id, p]))
+
+  // Build user list with correct counts via org_id
+  const users = (authUsers.data?.users || []).map((u: any) => {
+    const profile = profileMap[u.id]
+    const orgId = profile?.org_id
+    const userArtists = orgId ? (artists.data || []).filter((a: any) => a.org_id === orgId) : []
+    const userTours = orgId ? (tours.data || []).filter((t: any) => t.org_id === orgId) : []
+    const userShows = orgId ? (shows.data || []).filter((s: any) => s.org_id === orgId) : []
+
+    return {
+      id: u.id,
+      email: u.email,
+      full_name: profile?.full_name || u.user_metadata?.full_name || '',
+      org_id: orgId,
+      created_at: u.created_at,
+      last_sign_in: u.last_sign_in_at,
+      artist_count: userArtists.length,
+      tour_count: userTours.length,
+      show_count: userShows.length,
+    }
+  }).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+  return NextResponse.json({
+    users,
+    artists: artists.data || [],
+    tours: tours.data || [],
+    shows: shows.data || [],
+    travel: travel.data || [],
+    accommodation: accommodation.data || [],
+    guests: guests.data || [],
+    showPeople: showPeople.data || [],
+    setlists: setlists.data || [],
+  })
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const admin = await verifyAdmin(request)
-    if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const admin = await verifyAdmin(request)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { user_id, action } = await request.json()
-    if (!user_id) return NextResponse.json({ error: 'user_id required' }, { status: 400 })
+  const { user_id, action } = await request.json()
 
-    const supabase = getServiceClient()
-
-    if (action === 'impersonate') {
-      const { data: authUser } = await supabase.auth.admin.getUserById(user_id)
-      if (!authUser?.user?.email) return NextResponse.json({ error: 'User not found' }, { status: 404 })
-      const { data, error } = await supabase.auth.admin.generateLink({
-        type: 'magiclink',
-        email: authUser.user.email,
-        options: { redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/dashboard` }
-      })
-      if (error) throw error
-      return NextResponse.json({ link: data.properties?.action_link, email: authUser.user.email })
-    }
-
-    if (action === 'reset_password') {
-      const { data: authUser } = await supabase.auth.admin.getUserById(user_id)
-      if (!authUser?.user?.email) return NextResponse.json({ error: 'User not found' }, { status: 404 })
-      const { error } = await supabase.auth.resetPasswordForEmail(authUser.user.email)
-      if (error) throw error
-      return NextResponse.json({ success: true })
-    }
-
-    return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  if (action === 'reset_password') {
+    const { data: userData } = await supabase.auth.admin.getUserById(user_id)
+    if (!userData?.user?.email) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    const { error } = await supabase.auth.resetPasswordForEmail(userData.user.email)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
   }
+
+  return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 }
