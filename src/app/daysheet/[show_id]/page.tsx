@@ -27,15 +27,6 @@ function fmtDateMed(d: string) {
   })
 }
 
-function travelEmoji(type: string) {
-  const t = (type || '').toLowerCase()
-  if (t === 'drive') return '🚗'
-  if (t === 'train') return '🚂'
-  if (t === 'bus') return '🚌'
-  if (t === 'ferry') return '⛴'
-  return '✈️'
-}
-
 export default function DaySheetPage() {
   const params = useParams()
   const [show, setShow] = useState<any>(null)
@@ -375,7 +366,7 @@ export default function DaySheetPage() {
               <SectionHeader label="Travel Today" />
               <div style={{ padding: '4px 24px' }}>
                 {groupTravel(filteredTravel).map((t: any, i: number, arr: any[]) => (
-                  <TravelRow key={i} t={t} isLast={i === arr.length - 1} border={border} muted={muted} fmt={fmt} travelEmoji={travelEmoji} />
+                  <TravelRow key={i} t={t} isLast={i === arr.length - 1} border={border} muted={muted} fmt={fmt} />
                 ))}
               </div>
             </div>
@@ -400,7 +391,7 @@ export default function DaySheetPage() {
                       )}
                     </div>
                     {items.map((t: any, i: number) => (
-                      <TravelRow key={i} t={t} isLast={i === items.length - 1 && di === Object.keys(travelByDate).length - 1} border={border} muted={muted} fmt={fmt} travelEmoji={travelEmoji} />
+                      <TravelRow key={i} t={t} isLast={i === items.length - 1 && di === Object.keys(travelByDate).length - 1} border={border} muted={muted} fmt={fmt} />
                     ))}
                   </div>
                 ))}
@@ -558,6 +549,7 @@ export default function DaySheetPage() {
         {mode === 'day' && showPeople.length > 0 && (() => {
           const roleLabels: Record<string, string> = { support: 'Support', photographer: 'Photographer', videographer: 'Videographer', dj: 'DJ', mc: 'MC', other: 'Other' }
           const roleIcons: Record<string, string> = { support: '🎤', photographer: '📷', videographer: '🎥', dj: '🎧', mc: '🎙', other: '•' }
+          // Group by role category for better readability
           const sorted = [...showPeople].sort((a, b) => {
             const order = ['support', 'dj', 'mc', 'photographer', 'videographer', 'other']
             const aIdx = order.indexOf(a.role || 'other')
@@ -659,11 +651,11 @@ export default function DaySheetPage() {
   )
 }
 
-function TravelRow({ t, isLast, border, muted, fmt, travelEmoji }: any) {
+function TravelRow({ t, isLast, border, muted, fmt }: any) {
   return (
     <div style={{ padding: '14px 0', borderBottom: isLast ? 'none' : `1px solid ${border}` }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <span style={{ fontSize: 16 }}>{travelEmoji(t.travel_type)}</span>
+        <span style={{ fontSize: 16 }}>{(() => { const tt = (t.travel_type || '').toLowerCase(); if (tt === 'drive') return '🚗'; if (tt === 'train') return '🚂'; if (tt === 'bus') return '🚌'; if (tt === 'ferry') return '⛴'; return '✈️'; })()}</span>
         <span style={{ fontSize: 16, fontWeight: 700 }}>{t.from_location} → {t.to_location}</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
