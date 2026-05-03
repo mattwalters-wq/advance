@@ -1897,7 +1897,7 @@ export default function ArtistPage() {
                     </a>
                   )}
                 </div>
-                {shows.length > 0 && (
+                {(shows.length > 0 || travel.length > 0) && (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
                     <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>
                       {(() => {
@@ -1914,7 +1914,55 @@ export default function ArtistPage() {
                         return `Schedule — ${parts.join(' · ')}`
                       })()}
                     </div>
-                    {shows.map((show, i) => {
+                    {(() => {
+                      // Merge shows and travel into one sorted list
+                      const showItems = shows.map(s => ({ ...s, _type: 'show' as const }))
+                      const travelItems = travel.filter(t => t.travel_date).map(t => ({ ...t, _type: 'travel' as const, date: t.travel_date }))
+                      const allItems = [...showItems, ...travelItems].sort((a, b) => {
+                        if (a.date !== b.date) return a.date.localeCompare(b.date)
+                        // Shows before travel on same day
+                        return a._type === 'show' ? -1 : 1
+                      })
+                      return allItems.map((item, i) => {
+                      if (item._type === 'travel') {
+                        const t = item as any
+                        const travelEmoji = (type: string) => {
+                          const tt = (type || '').toLowerCase()
+                          if (tt === 'drive') return '🚗'
+                          if (tt === 'train') return '🚂'
+                          if (tt === 'bus') return '🚌'
+                          if (tt === 'ferry') return '⛴'
+                          return '✈️'
+                        }
+                        const d = new Date(t.date + 'T00:00:00')
+                        const dayName = d.toLocaleDateString('en-AU', { weekday: 'short' }).toUpperCase()
+                        const dayNum = d.getDate()
+                        const month = d.toLocaleDateString('en-AU', { month: 'short' }).toUpperCase()
+                        return (
+                          <div key={`travel-${t.id}`} style={{ display: 'flex', gap: 16, padding: '10px 0', borderBottom: `1px solid ${border}`, alignItems: 'center', opacity: 0.7 }}>
+                            <div style={{ width: 48, flexShrink: 0, textAlign: 'center' }}>
+                              <div style={{ fontFamily: 'monospace', fontSize: 9, color: muted, letterSpacing: 1 }}>{dayName}</div>
+                              <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: muted }}>{dayNum}</div>
+                              <div style={{ fontFamily: 'monospace', fontSize: 9, color: muted }}>{month}</div>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 14 }}>{travelEmoji(t.travel_type)}</span>
+                                <span style={{ fontSize: 14, fontWeight: 600, color: text }}>
+                                  {t.from_location} → {t.to_location}
+                                </span>
+                              </div>
+                              {t.notes && <div style={{ fontSize: 12, color: muted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{t.notes}</div>}
+                            </div>
+                            {t.departure_time && (
+                              <div style={{ fontFamily: 'monospace', fontSize: 11, color: muted, flexShrink: 0 }}>
+                                {formatTime(t.departure_time)}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                      const show = item as any
                       const v = show.venue || ''
                       const venueName = v.length > 55 ? v.split(/\s*[-–]\s*(?:Access|Park in|Contact|via\s|Turn|From\s)/i)[0].trim() : v
                       const hasDetail = v.length > venueName.length
@@ -2216,7 +2264,9 @@ export default function ArtistPage() {
                           </div>
                         )}
                       </div>
-                    )})}
+                    )
+                    })
+                  })()}
                   </div>
                 )}
                 {travel.length > 0 && (() => {
