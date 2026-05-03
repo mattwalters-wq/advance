@@ -46,10 +46,10 @@ export default function PublicTourPage() {
     setArtist(tourData.artists)
 
     const [showsRes, travelRes, accomRes, contactsRes] = await Promise.all([
-      supabase.from('shows').select('*').eq('tour_id', tourData.id).order('date'),
-      supabase.from('travel').select('*').eq('tour_id', tourData.id).order('travel_date'),
-      supabase.from('accommodation').select('*').eq('tour_id', tourData.id).order('check_in'),
-      supabase.from('contacts').select('*').eq('tour_id', tourData.id),
+      supabase.from('shows').select('*').eq('tour_id', tourData.id).is('deleted_at', null).order('date'),
+      supabase.from('travel').select('*').eq('tour_id', tourData.id).is('deleted_at', null).order('travel_date'),
+      supabase.from('accommodation').select('*').eq('tour_id', tourData.id).is('deleted_at', null).order('check_in'),
+      supabase.from('contacts').select('*').eq('tour_id', tourData.id).is('deleted_at', null),
     ])
 
     setShows(showsRes.data || [])
