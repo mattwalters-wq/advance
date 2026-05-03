@@ -285,8 +285,16 @@ export default function DaySheetPage() {
                   )
                 })()}
                 {show?.city && (
-                  <div style={{ fontSize: 14, color: muted, marginBottom: 16 }}>
+                  <div style={{ fontSize: 14, color: muted, marginBottom: show?.address ? 6 : 16 }}>
                     {show.city}{show.country && show.country !== 'AU' ? `, ${show.country}` : ''}
+                  </div>
+                )}
+                {show?.address && (
+                  <div style={{ marginBottom: 16 }}>
+                    <a href={`https://maps.google.com/?q=${encodeURIComponent(show.address)}`} target="_blank" rel="noreferrer"
+                      style={{ fontSize: 13, color: accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      📍 {show.address} ↗
+                    </a>
                   </div>
                 )}
                 {show?.stage && (

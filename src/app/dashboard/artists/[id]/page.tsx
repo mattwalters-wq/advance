@@ -2057,6 +2057,16 @@ export default function ArtistPage() {
                             {(v.length > venueName.length) && (
                               <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>📍 {v}</div>
                             )}
+                            {/* Address */}
+                            {show.address && (
+                              <div style={{ fontSize: 12, color: muted, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span>📍</span>
+                                <a href={`https://maps.google.com/?q=${encodeURIComponent(show.address)}`} target="_blank" rel="noreferrer"
+                                  style={{ color: accent, textDecoration: 'none' }} onClick={e => e.stopPropagation()}>
+                                  {show.address}
+                                </a>
+                              </div>
+                            )}
                             {/* Times row */}
                             {(show.doors_time || show.soundcheck_time || show.set_time || show.stage || show.catering || show.backline) && (
                               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
