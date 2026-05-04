@@ -119,12 +119,17 @@ export default function ArtistPage() {
       }
       const active = toursData.filter((t: any) => !isArchivedCheck(t))
       const future = active.filter((t: any) => !t.start_date || t.start_date >= today)
-      const past = active.filter((t: any) => t.start_date && t.start_date < today)
+      const recentPast = active.filter((t: any) => t.start_date && t.start_date < today)
+      // Prefer non-completed tours, then by date
+      const sortByStatus = (arr: any[]) => {
+        const nonCompleted = arr.filter((t: any) => t.status !== 'completed')
+        return nonCompleted.length > 0 ? nonCompleted : arr
+      }
       let picked
       if (future.length > 0) {
-        picked = future.sort((a: any, b: any) => (a.start_date || '').localeCompare(b.start_date || ''))[0]
-      } else if (past.length > 0) {
-        picked = past.sort((a: any, b: any) => (b.start_date || '').localeCompare(a.start_date || ''))[0]
+        picked = sortByStatus(future).sort((a: any, b: any) => (a.start_date || '9999').localeCompare(b.start_date || '9999'))[0]
+      } else if (recentPast.length > 0) {
+        picked = sortByStatus(recentPast).sort((a: any, b: any) => (b.start_date || '').localeCompare(a.start_date || ''))[0]
       } else {
         picked = toursData[toursData.length - 1]
       }
