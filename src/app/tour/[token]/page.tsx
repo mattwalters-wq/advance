@@ -160,8 +160,9 @@ export default function PublicTourPage() {
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
                         {(isNonShow ? show.soundcheck_time : show.set_time) && (
-                          <div style={{ background: accent, color: '#fff', borderRadius: 6, padding: '4px 10px', fontFamily: 'monospace', fontSize: 11, fontWeight: 700 }}>
+                          <div style={{ background: accent, color: '#fff', borderRadius: 6, padding: '4px 10px', fontFamily: 'monospace', fontSize: 11, fontWeight: 700, textAlign: 'center' as const }}>
                             {fmt(isNonShow ? show.soundcheck_time : show.set_time)}
+                            {!isNonShow && show.set_length && <div style={{ fontSize: 9, opacity: 0.8, marginTop: 1 }}>{show.set_length}</div>}
                           </div>
                         )}
                       </div>

@@ -308,6 +308,9 @@ export default function DaySheetPage() {
                       <div key={i} style={{ background: s.highlight ? accent : sectionBg, borderRadius: 8, padding: '14px 16px', textAlign: 'center' }}>
                         <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: s.highlight ? 'rgba(255,255,255,0.75)' : muted, textTransform: 'uppercase', marginBottom: 5 }}>{s.event}</div>
                         <div style={{ fontSize: 24, fontWeight: 700, color: s.highlight ? '#fff' : text, lineHeight: 1 }}>{s.time}</div>
+                        {s.highlight && show?.set_length && (
+                          <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.75)', marginTop: 5 }}>{show.set_length}</div>
+                        )}
                       </div>
                     ))}
                   </div>
