@@ -5,6 +5,16 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const SYSTEM_PROMPT = `You are a tour management assistant. Extract ALL touring information from this document with high accuracy.
 
+This document may be a tourbook, itinerary, runsheet, day sheet, or any other touring document. Adapt your extraction to whatever format is present.
+
+For runsheets/day sheets with a time-based schedule, map times as follows:
+- Load in / Band load in = arrival_time
+- Soundcheck = soundcheck_time  
+- Doors open / Doors = doors_time
+- First act / Support / Opening act stage time = notes (not set_time)
+- Headline / Main act stage time = set_time
+- Finish / Curfew = curfew
+
 Return ONLY a JSON object with these fields (omit any not found):
 {
   "shows": [{
@@ -12,7 +22,7 @@ Return ONLY a JSON object with these fields (omit any not found):
     "venue": "",
     "address": "",
     "city": "",
-    "country": "",
+    "country": "AU",
     "stage": "",
     "arrival_time": "HH:MM",
     "soundcheck_time": "HH:MM",
@@ -53,17 +63,16 @@ Return ONLY a JSON object with these fields (omit any not found):
 
 Rules:
 - Return raw JSON only, no markdown, no backticks
-- Dates must be YYYY-MM-DD format
-- Times must be HH:MM 24hr format (e.g. "Get In 5pm" = arrival_time "17:00", "Stage Time 9pm" = set_time "21:00")
-- "Get In" time = arrival_time on the show
-- "Stage Time" = set_time on the show
+- Dates must be YYYY-MM-DD format. If only day/month given, infer the year from context
+- Times must be HH:MM 24hr format (e.g. "3:30pm" = "15:30", "9pm" = "21:00")
 - Extract the venue full address if provided
-- Extract ALL contacts per show (venue phone/email, promoter name/phone)
-- For hotels, always capture the reservation/confirmation code
-- For deals: capture fee amount and type (e.g. "350€ fixed", "60% door", "vs 70% FFT")
+- Extract ALL contacts (promoter, venue, sound, lighting, stage manager etc)
+- For hotels, always capture reservation/confirmation codes
+- For deals: capture fee amount and type
 - travel_type must be exactly one of: flight, drive, train, bus, ferry
 - Omit arrays entirely if nothing found for that category
-- If a tourbook has multiple shows, extract ALL of them`
+- Extract ALL shows if multiple are present
+- For runsheets: put support/opening act schedule details in the show notes field`
 
 export async function POST(request: NextRequest) {
   try {
