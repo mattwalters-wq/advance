@@ -137,9 +137,10 @@ export default function PublicTourPage() {
             {shows.map((show, i) => {
               const isLast = i === shows.length - 1
               // Detect if venue name is very long (contains directions)
+              const isNonShow = ['rehearsal', 'recording', 'press'].includes(show.type || '')
               const venueName = show.venue && show.venue.length > 60
                 ? show.venue.split(/[-–]|via |Access /)[0].trim()
-                : show.venue
+                : show.venue || (isNonShow ? (show.type.charAt(0).toUpperCase() + show.type.slice(1)) : 'TBC')
               const venueDetail = show.venue && show.venue.length > 60
                 ? show.venue.substring(venueName.length).replace(/^[\s\-–]+/, '').trim()
                 : null
@@ -151,13 +152,16 @@ export default function PublicTourPage() {
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.1em', color: accent, marginBottom: 3 }}>{fmtDate(show.date)}</div>
+                        {isNonShow && (
+                          <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 3, textTransform: 'uppercase' as const }}>{show.type}</div>
+                        )}
                         <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.25, marginBottom: 2 }}>{venueName}</div>
                         {show.city && <div style={{ fontSize: 13, color: muted }}>{show.city}{show.country && show.country !== 'AU' ? `, ${show.country}` : ''}</div>}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                        {show.set_time && (
+                        {(isNonShow ? show.soundcheck_time : show.set_time) && (
                           <div style={{ background: accent, color: '#fff', borderRadius: 6, padding: '4px 10px', fontFamily: 'monospace', fontSize: 11, fontWeight: 700 }}>
-                            {fmt(show.set_time)}
+                            {fmt(isNonShow ? show.soundcheck_time : show.set_time)}
                           </div>
                         )}
                       </div>
@@ -169,9 +173,19 @@ export default function PublicTourPage() {
                     <div style={{ padding: '0 18px 16px', borderTop: `1px solid ${border}` }}>
                       {/* Times row */}
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 14, marginBottom: 12 }}>
-                        {show.doors_time && <TimePill label="Doors" time={fmt(show.doors_time)} />}
-                        {show.soundcheck_time && <TimePill label="Soundcheck" time={fmt(show.soundcheck_time)} />}
-                        {show.set_time && <TimePill label="Stage" time={fmt(show.set_time)} highlight accent={accent} />}
+                        {isNonShow ? (
+                          <>
+                            {show.soundcheck_time && <TimePill label="Start" time={fmt(show.soundcheck_time)} highlight accent={accent} />}
+                            {show.set_time && <TimePill label="Finish" time={fmt(show.set_time)} />}
+                          </>
+                        ) : (
+                          <>
+                            {show.arrival_time && <TimePill label="Arrive" time={fmt(show.arrival_time)} />}
+                            {show.doors_time && <TimePill label="Doors" time={fmt(show.doors_time)} />}
+                            {show.soundcheck_time && <TimePill label="Soundcheck" time={fmt(show.soundcheck_time)} />}
+                            {show.set_time && <TimePill label="Stage" time={fmt(show.set_time)} highlight accent={accent} />}
+                          </>
+                        )}
                       </div>
 
                       {/* Venue detail / directions if separated */}
