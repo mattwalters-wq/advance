@@ -378,7 +378,9 @@ export default function PublicTourPage() {
           </div>
         )}
 
-        <div style={{ textAlign: 'center', padding: '12px 0 4px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.15em', color: '#C8BFB0' }}>
+      </div>
+
+        <div style={{ textAlign: 'center', padding: '20px 0 4px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.15em', color: '#C8BFB0' }}>
           ADVANCE · {artist?.name?.toUpperCase()}
         </div>
       </div>
