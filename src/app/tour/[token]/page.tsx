@@ -131,209 +131,226 @@ export default function PublicTourPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 620, margin: '0 auto', padding: '20px 14px 48px', display: 'grid', gap: 12 }}>
+      <div style={{ maxWidth: 620, margin: '0 auto', padding: '20px 14px 48px', display: 'grid', gap: 0 }}>
 
-        {/* SHOWS */}
-        {shows.length > 0 && (
-          <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
-            <SectionHead label={`Shows — ${shows.length}`} accent={accent} />
-            {shows.map((show, i) => {
-              const isLast = i === shows.length - 1
-              // Detect if venue name is very long (contains directions)
-              const isNonShow = ['rehearsal', 'recording', 'press'].includes(show.type || '')
-              const venueName = show.venue && show.venue.length > 60
-                ? show.venue.split(/[-–]|via |Access /)[0].trim()
-                : show.venue || (isNonShow ? (show.type.charAt(0).toUpperCase() + show.type.slice(1)) : 'TBC')
-              const venueDetail = show.venue && show.venue.length > 60
-                ? show.venue.substring(venueName.length).replace(/^[\s\-–]+/, '').trim()
-                : null
+        {(() => {
+          const typeIcons: Record<string, string> = {
+            interview: '🎙', radio: '📻', tv: '📺', podcast: '🎧',
+            photo_shoot: '📷', press_conference: '🗞', other: '📣'
+          }
+          const travelEmoji = (type: string) => {
+            const tt = (type || '').toLowerCase()
+            if (tt === 'drive') return '🚗'
+            if (tt === 'train') return '🚂'
+            if (tt === 'bus') return '🚌'
+            if (tt === 'ferry') return '⛴'
+            return '✈️'
+          }
+          const showEmoji = (type: string) => {
+            if (type === 'rehearsal') return '🎸'
+            if (type === 'recording') return '🎙'
+            if (type === 'press') return '📣'
+            if (type === 'day_off') return '🌴'
+            return '🎵'
+          }
 
-              return (
-                <div key={i} style={{ borderBottom: isLast ? 'none' : `1px solid ${border}` }}>
-                  <div
-                    style={{ padding: '16px 18px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.1em', color: accent, marginBottom: 3 }}>{fmtDate(show.date)}</div>
-                        {isNonShow && (
-                          <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 3, textTransform: 'uppercase' as const }}>{show.type}</div>
-                        )}
-                        <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.25, marginBottom: 2 }}>{venueName}</div>
-                        {show.city && <div style={{ fontSize: 13, color: muted }}>{show.city}{show.country && show.country !== 'AU' ? `, ${show.country}` : ''}</div>}
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                        {(isNonShow ? show.soundcheck_time : show.set_time) && (
-                          <div style={{ background: accent, color: '#fff', borderRadius: 6, padding: '4px 10px', fontFamily: 'monospace', fontSize: 11, fontWeight: 700, textAlign: 'center' as const }}>
-                            {fmt(isNonShow ? show.soundcheck_time : show.set_time)}
-                            {!isNonShow && show.set_length && <div style={{ fontSize: 9, opacity: 0.8, marginTop: 1 }}>{show.set_length}</div>}
-                          </div>
-                        )}
-                      </div>
+          // Collect all dated items
+          const allItems: any[] = []
+
+          shows.forEach(s => allItems.push({
+            date: s.date, time: s.set_time || s.soundcheck_time || '00:00',
+            _kind: 'show', data: s
+          }))
+          travel.forEach(t => allItems.push({
+            date: t.travel_date, time: t.departure_time || '00:00',
+            _kind: 'travel', data: t
+          }))
+          press.forEach(p => allItems.push({
+            date: p.date, time: p.time || '00:00',
+            _kind: 'press', data: p
+          }))
+
+          // Group by date
+          const byDate: Record<string, any[]> = {}
+          allItems.forEach(item => {
+            const d = item.date || 'TBC'
+            if (!byDate[d]) byDate[d] = []
+            byDate[d].push(item)
+          })
+
+          // Add accommodation as a note on check-in date
+          accommodation.forEach(a => {
+            if (a.check_in && !byDate[a.check_in]) byDate[a.check_in] = []
+          })
+
+          const today = new Date().toISOString().split('T')[0]
+
+          return Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)).map(([date, items]) => {
+            const isToday = date === today
+            const isPast = date < today
+            const dayAccom = accommodation.filter(a => a.check_in <= date && (a.check_out || a.check_in) >= date)
+            const sortedItems = items.sort((a, b) => (a.time || '').localeCompare(b.time || ''))
+
+            return (
+              <div key={date} style={{ marginBottom: 24, opacity: isPast ? 0.6 : 1 }}>
+                {/* Date header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div style={{ background: isToday ? accent : '#1A1714', borderRadius: 8, padding: '6px 12px', minWidth: 56, textAlign: 'center', flexShrink: 0 }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, color: isToday ? 'rgba(255,255,255,0.8)' : '#5A5450' }}>
+                      {new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' }).toUpperCase()}
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#F5F0E8', lineHeight: 1 }}>
+                      {new Date(date + 'T00:00:00').getDate()}
+                    </div>
+                    <div style={{ fontFamily: 'monospace', fontSize: 9, color: isToday ? 'rgba(255,255,255,0.8)' : '#5A5450' }}>
+                      {new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { month: 'short' }).toUpperCase()}
                     </div>
                   </div>
-
-                  {/* Expanded detail */}
-                  {(
-                    <div style={{ padding: '0 18px 16px', borderTop: `1px solid ${border}` }}>
-                      {/* Times row */}
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 14, marginBottom: 12 }}>
-                        {isNonShow ? (
-                          <>
-                            {show.soundcheck_time && <TimePill label="Start" time={fmt(show.soundcheck_time)} highlight accent={accent} />}
-                            {show.set_time && <TimePill label="Finish" time={fmt(show.set_time)} />}
-                          </>
-                        ) : (
-                          <>
-                            {show.arrival_time && <TimePill label="Arrive" time={fmt(show.arrival_time)} />}
-                            {show.doors_time && <TimePill label="Doors" time={fmt(show.doors_time)} />}
-                            {show.soundcheck_time && <TimePill label="Soundcheck" time={fmt(show.soundcheck_time)} />}
-                            {show.set_time && <TimePill label="Stage" time={fmt(show.set_time)} highlight accent={accent} />}
-                          </>
-                        )}
-                      </div>
-
-                      {/* Venue detail / directions if separated */}
-                      {venueDetail && (
-                        <div style={{ fontSize: 13, color: muted, lineHeight: 1.65, marginBottom: 10, padding: '10px 12px', background: bg, borderRadius: 6 }}>
-                          {venueDetail}
-                        </div>
-                      )}
-
-                      {show.catering && (
-                        <div style={{ padding: '10px 12px', background: '#F0FFF4', borderLeft: '3px solid #3D6B50', borderRadius: 4, fontSize: 13, lineHeight: 1.65, marginBottom: 8 }}>
-                          <div style={{ fontFamily: 'monospace', fontSize: 9, color: '#3D6B50', letterSpacing: '0.1em', marginBottom: 3 }}>CATERING</div>
-                          {show.catering}
-                        </div>
-                      )}
-                      {show.backline && (
-                        <div style={{ padding: '10px 12px', background: '#F5F0FF', borderLeft: '3px solid #5B4B8A', borderRadius: 4, fontSize: 13, lineHeight: 1.65, marginBottom: 8 }}>
-                          <div style={{ fontFamily: 'monospace', fontSize: 9, color: '#5B4B8A', letterSpacing: '0.1em', marginBottom: 3 }}>BACKLINE</div>
-                          {show.backline}
-                        </div>
-                      )}
-                      {show.notes && (
-                        <div style={{ padding: '10px 12px', background: '#FFF8F2', borderLeft: `3px solid ${accent}`, borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.7 }}>
-                          {show.notes}
-                        </div>
-                      )}
-                      <a href={`/daysheet/${show.id}`} target="_blank" rel="noreferrer"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 12, fontSize: 12, color: accent, textDecoration: 'none', fontWeight: 600, fontFamily: 'monospace', letterSpacing: '0.05em' }}>
-                        VIEW DAY SHEET ↗
-                      </a>
-                    </div>
-                  )}
+                  <div style={{ flex: 1, height: 1, background: border }} />
+                  {isToday && <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: accent, flexShrink: 0 }}>TODAY</div>}
                 </div>
-              )
-            })}
-          </div>
-        )}
 
-        {/* TRAVEL */}
-        {travel.length > 0 && (
-          <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
-            <SectionHead label={`Travel — ${travel.length} legs`} accent={accent} />
-            {travel.map((t, i) => (
-              <div key={i} style={{ padding: '14px 18px', borderBottom: i < travel.length - 1 ? `1px solid ${border}` : 'none' }}>
-                <div style={{ fontFamily: 'monospace', fontSize: 10, color: accent, letterSpacing: '0.1em', marginBottom: 4 }}>{fmtDate(t.travel_date)}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <span style={{ fontSize: 15 }}>{t.travel_type === 'Drive' ? '🚗' : t.travel_type === 'Train' ? '🚂' : t.travel_type === 'Bus' ? '🚌' : '✈️'}</span>
-                  <span style={{ fontSize: 15, fontWeight: 700 }}>{t.from_location} → {t.to_location}</span>
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {t.carrier && <InfoPill label="Flight" value={t.carrier} />}
-                  {t.departure_time && <InfoPill label="Dep" value={fmt(t.departure_time)} />}
-                  {t.arrival_time && <InfoPill label="Arr" value={fmt(t.arrival_time)} />}
-                  {t.reference && <InfoPill label="Ref" value={t.reference} />}
-                </div>
-                {t.travellers && <div style={{ marginTop: 8, fontSize: 13, color: muted }}>👤 {t.travellers}</div>}
-                {t.notes && <div style={{ marginTop: 6, fontSize: 12, color: muted, fontStyle: 'italic' }}>{t.notes}</div>}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* PRESS */}
-        {press.length > 0 && (
-          <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
-            <SectionHead label={`Press — ${press.length}`} accent={accent} />
-            {(() => {
-              const typeIcons: Record<string, string> = {
-                interview: '🎙', radio: '📻', tv: '📺', podcast: '🎧',
-                photo_shoot: '📷', press_conference: '🗞', other: '📣'
-              }
-              const typeLabels: Record<string, string> = {
-                interview: 'Interview', radio: 'Radio', tv: 'TV', podcast: 'Podcast',
-                photo_shoot: 'Photo shoot', press_conference: 'Press conf.', other: 'Press'
-              }
-              // Group by date
-              const byDate: Record<string, any[]> = {}
-              press.forEach(p => {
-                const d = p.date || 'TBC'
-                if (!byDate[d]) byDate[d] = []
-                byDate[d].push(p)
-              })
-              return Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)).map(([date, items]) => (
-                <div key={date}>
-                  <div style={{ padding: '10px 18px', background: '#F9F6F2', borderBottom: `1px solid ${border}` }}>
-                    <span style={{ fontFamily: 'monospace', fontSize: 10, color: accent, letterSpacing: '0.1em' }}>{date !== 'TBC' ? fmtDateLong(date) : 'TBC'}</span>
+                {/* Hotel banner if staying */}
+                {dayAccom.length > 0 && (
+                  <div style={{ background: '#F0F8FF', border: '1px solid #C0D8F0', borderRadius: 8, padding: '8px 14px', marginBottom: 8, fontSize: 13, color: '#1A3A5C', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>🏨</span>
+                    <span style={{ fontWeight: 600 }}>{dayAccom[0].name}</span>
+                    {dayAccom[0].address && (
+                      <a href={`https://maps.google.com/?q=${encodeURIComponent(dayAccom[0].address)}`} target="_blank" rel="noreferrer"
+                        style={{ fontSize: 11, color: '#2266AA', textDecoration: 'none', marginLeft: 'auto', flexShrink: 0 }}>Map ↗</a>
+                    )}
                   </div>
-                  {items.map((p, i) => (
-                    <div key={i} style={{ padding: '14px 18px', borderBottom: i < items.length - 1 ? `1px solid ${border}` : 'none' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' as const }}>
-                        <span style={{ fontSize: 16 }}>{typeIcons[p.type] || '📣'}</span>
-                        <span style={{ fontSize: 15, fontWeight: 700 }}>{p.outlet || typeLabels[p.type] || 'Press'}</span>
-                        <span style={{ fontFamily: 'monospace', fontSize: 9, color: accent, background: '#FDF5EF', border: `1px solid ${accent}`, padding: '2px 6px', borderRadius: 3, letterSpacing: 1 }}>
-                          {(typeLabels[p.type] || 'PRESS').toUpperCase()}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginBottom: 8 }}>
-                        {p.time && <InfoPill label="Start" value={fmt(p.time)} />}
-                        {p.end_time && <InfoPill label="End" value={fmt(p.end_time)} />}
-                      </div>
-                      {p.location && (
-                        <div style={{ fontSize: 13, color: muted, marginBottom: 4 }}>📍 {p.location}</div>
-                      )}
-                      {p.contact_name && (
-                        <div style={{ fontSize: 13, color: muted, marginBottom: 4 }}>
-                          👤 {p.contact_name}
-                          {p.contact_phone && <a href={`tel:${p.contact_phone}`} style={{ color: accent, textDecoration: 'none', marginLeft: 8 }}>📞 {p.contact_phone}</a>}
-                        </div>
-                      )}
-                      {p.notes && <div style={{ fontSize: 12, color: muted, fontStyle: 'italic' }}>{p.notes}</div>}
-                    </div>
-                  ))}
-                </div>
-              ))
-            })()}
-          </div>
-        )}
-
-        {/* HOTELS */}
-        {accommodation.length > 0 && (
-          <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
-            <SectionHead label={`Hotels — ${accommodation.length}`} accent={accent} />
-            {accommodation.map((a, i) => (
-              <div key={i} style={{ padding: '14px 18px', borderBottom: i < accommodation.length - 1 ? `1px solid ${border}` : 'none' }}>
-                <div style={{ fontFamily: 'monospace', fontSize: 10, color: accent, letterSpacing: '0.1em', marginBottom: 4 }}>{fmtDate(a.check_in)}{a.check_out ? ` — ${fmtDate(a.check_out)}` : ''}</div>
-                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{a.name}</div>
-                {a.address && (
-                  <a href={`https://maps.google.com/?q=${encodeURIComponent(a.address)}`}
-                    target="_blank" rel="noreferrer"
-                    style={{ fontSize: 13, color: accent, display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 8, textDecoration: 'none' }}>
-                    📍 {a.address}
-                  </a>
                 )}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: a.travellers ? 8 : 0 }}>
-                  {a.check_in && <InfoPill label="Check in" value={fmtDate(a.check_in)} />}
-                  {a.check_out && <InfoPill label="Check out" value={fmtDate(a.check_out)} />}
-                  {a.confirmation && <InfoPill label="Ref" value={a.confirmation} />}
+
+                {/* Timeline items */}
+                <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
+                  {sortedItems.map((item, i) => {
+                    const isLast = i === sortedItems.length - 1
+
+                    if (item._kind === 'travel') {
+                      const t = item.data
+                      return (
+                        <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: isLast ? 'none' : `1px solid ${border}`, alignItems: 'flex-start' }}>
+                          <div style={{ width: 44, flexShrink: 0, textAlign: 'center', paddingTop: 2 }}>
+                            <div style={{ fontSize: 18 }}>{travelEmoji(t.travel_type)}</div>
+                            {t.departure_time && <div style={{ fontFamily: 'monospace', fontSize: 10, color: muted, marginTop: 2 }}>{fmt(t.departure_time)}</div>}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700 }}>{t.from_location} → {t.to_location}</div>
+                            {(t.carrier || t.reference) && (
+                              <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>
+                                {t.carrier}{t.carrier && t.reference ? ' · ' : ''}{t.reference}
+                              </div>
+                            )}
+                            {t.arrival_time && <div style={{ fontSize: 12, color: muted }}>Arr {fmt(t.arrival_time)}</div>}
+                            {t.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{t.notes}</div>}
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    if (item._kind === 'press') {
+                      const p = item.data
+                      return (
+                        <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: isLast ? 'none' : `1px solid ${border}`, alignItems: 'flex-start' }}>
+                          <div style={{ width: 44, flexShrink: 0, textAlign: 'center', paddingTop: 2 }}>
+                            <div style={{ fontSize: 18 }}>{typeIcons[p.type] || '📣'}</div>
+                            {p.time && <div style={{ fontFamily: 'monospace', fontSize: 10, color: muted, marginTop: 2 }}>{fmt(p.time)}</div>}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700 }}>{p.outlet || 'Press'}</div>
+                            {p.location && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>📍 {p.location}</div>}
+                            {p.contact_name && (
+                              <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>
+                                👤 {p.contact_name}
+                                {p.contact_phone && <a href={`tel:${p.contact_phone}`} style={{ color: accent, textDecoration: 'none', marginLeft: 6 }}>{p.contact_phone}</a>}
+                              </div>
+                            )}
+                            {p.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{p.notes}</div>}
+                          </div>
+                          {p.end_time && (
+                            <div style={{ fontFamily: 'monospace', fontSize: 10, color: muted, flexShrink: 0, paddingTop: 4 }}>until {fmt(p.end_time)}</div>
+                          )}
+                        </div>
+                      )
+                    }
+
+                    if (item._kind === 'show') {
+                      const s = item.data
+                      const isNonShow = ['rehearsal', 'recording', 'press'].includes(s.type || '')
+                      const mainTime = isNonShow ? s.soundcheck_time : s.set_time
+                      const venueName = s.venue && s.venue.length > 50
+                        ? s.venue.split(/[-–]|via |Access /)[0].trim()
+                        : s.venue || (isNonShow ? s.type : 'TBC')
+                      return (
+                        <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: isLast ? 'none' : `1px solid ${border}`, alignItems: 'flex-start' }}>
+                          <div style={{ width: 44, flexShrink: 0, textAlign: 'center', paddingTop: 2 }}>
+                            <div style={{ fontSize: 18 }}>{showEmoji(s.type)}</div>
+                            {mainTime && <div style={{ fontFamily: 'monospace', fontSize: 10, color: accent, fontWeight: 700, marginTop: 2 }}>{fmt(mainTime)}</div>}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const }}>
+                              <span style={{ fontSize: 14, fontWeight: 700 }}>{venueName}</span>
+                              {s.type && s.type !== 'show' && (
+                                <span style={{ fontFamily: 'monospace', fontSize: 8, letterSpacing: 1, color: accent, background: '#FDF5EF', border: `1px solid ${accent}`, padding: '1px 5px', borderRadius: 3 }}>
+                                  {s.type.toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            {s.city && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{s.city}{s.country && s.country !== 'AU' ? `, ${s.country}` : ''}</div>}
+                            {s.address && (
+                              <a href={`https://maps.google.com/?q=${encodeURIComponent(s.address)}`} target="_blank" rel="noreferrer"
+                                style={{ fontSize: 12, color: accent, textDecoration: 'none', display: 'block', marginTop: 2 }}>📍 {s.address} ↗</a>
+                            )}
+                            <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' as const }}>
+                              {s.arrival_time && <span style={{ fontSize: 11, color: muted }}>Arrive {fmt(s.arrival_time)}</span>}
+                              {!isNonShow && s.doors_time && <span style={{ fontSize: 11, color: muted }}>Doors {fmt(s.doors_time)}</span>}
+                              {!isNonShow && s.soundcheck_time && <span style={{ fontSize: 11, color: muted }}>SC {fmt(s.soundcheck_time)}</span>}
+                              {s.set_length && <span style={{ fontSize: 11, color: muted }}>Set: {s.set_length}</span>}
+                            </div>
+                          </div>
+                          {s.id && (
+                            <a href={`/daysheet/${s.id}`}
+                              style={{ flexShrink: 0, padding: '5px 10px', background: accent, color: '#fff', borderRadius: 6, fontSize: 10, fontFamily: 'monospace', letterSpacing: 1, textDecoration: 'none', alignSelf: 'center', whiteSpace: 'nowrap' as const }}>
+                              DAY SHEET ↗
+                            </a>
+                          )}
+                        </div>
+                      )
+                    }
+                    return null
+                  })}
                 </div>
-                {a.travellers && <div style={{ fontSize: 13, color: muted }}>👤 {a.travellers}</div>}
+              </div>
+            )
+          })
+        })()}
+
+        {/* CONTACTS */}
+        {contacts.length > 0 && (
+          <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginTop: 8 }}>
+            <SectionHead label="Key Contacts" accent={accent} />
+            {contacts.map((c, i) => (
+              <div key={i} style={{ padding: '14px 18px', borderBottom: i < contacts.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' as const }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 600 }}>{c.name}</div>
+                  {c.role && <div style={{ fontSize: 11, color: muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>{c.role}</div>}
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
+                  {c.phone && <a href={`tel:${c.phone}`} style={{ fontSize: 15, color: accent, textDecoration: 'none', fontWeight: 700 }}>{c.phone}</a>}
+                  {c.email && <a href={`mailto:${c.email}`} style={{ fontSize: 13, color: muted, textDecoration: 'none' }}>{c.email}</a>}
+                </div>
               </div>
             ))}
           </div>
         )}
 
+        <div style={{ textAlign: 'center', padding: '20px 0 4px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.15em', color: '#C8BFB0' }}>
+          ADVANCE · {artist?.name?.toUpperCase()}
+        </div>
+      </div>
+    </div>
+  )
         {/* CONTACTS */}
         {contacts.length > 0 && (
           <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
