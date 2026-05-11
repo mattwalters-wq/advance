@@ -430,7 +430,7 @@ export default function DaySheetPage() {
         {/* ── PRESS ── */}
         {(() => {
           const pressToShow = mode === 'day'
-            ? press.filter(p => p.date === showDate)
+            ? press.filter(p => p.date === showDate).sort((a, b) => (a.time || '').localeCompare(b.time || ''))
             : press
           if (pressToShow.length === 0) return null
 
