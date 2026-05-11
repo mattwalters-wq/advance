@@ -259,8 +259,20 @@ export default function DaySheetPage() {
           </div>
         </div>
 
-        {/* ── VENUE + SHOW DETAIL (day mode only) ── */}
-        {mode === 'day' && (
+        {/* ── PRESS DAY HEADER ── */}
+        {mode === 'day' && show?.type === 'press' && press.filter((p: any) => p.date === show.date).length > 0 && (
+          <div style={{ background: '#FDF5EF', borderRadius: 12, border: `1px solid #F5D9C4`, padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>📣</span>
+            <div>
+              <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: accent, marginBottom: 2 }}>PRESS DAY</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: text }}>{press.filter((p: any) => p.date === show.date).length} media commitments scheduled</div>
+              {show.city && <div style={{ fontSize: 13, color: muted, marginTop: 2 }}>{show.city}</div>}
+            </div>
+          </div>
+        )}
+
+        {/* ── VENUE + SHOW DETAIL (day mode only, not for press days) ── */}
+        {mode === 'day' && show?.type !== 'press' && (
           <>
             {/* ── VENUE ── */}
             <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
