@@ -31,6 +31,7 @@ export default function PublicTourPage() {
   const [travel, setTravel] = useState<any[]>([])
   const [accommodation, setAccommodation] = useState<any[]>([])
   const [contacts, setContacts] = useState<any[]>([])
+  const [press, setPress] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
@@ -45,17 +46,19 @@ export default function PublicTourPage() {
     setTour(tourData)
     setArtist(tourData.artists)
 
-    const [showsRes, travelRes, accomRes, contactsRes] = await Promise.all([
+    const [showsRes, travelRes, accomRes, contactsRes, pressRes] = await Promise.all([
       supabase.from('shows').select('*').eq('tour_id', tourData.id).is('deleted_at', null).order('date'),
       supabase.from('travel').select('*').eq('tour_id', tourData.id).is('deleted_at', null).order('travel_date'),
       supabase.from('accommodation').select('*').eq('tour_id', tourData.id).is('deleted_at', null).order('check_in'),
       supabase.from('contacts').select('*').eq('tour_id', tourData.id).is('deleted_at', null),
+      supabase.from('press').select('*').eq('tour_id', tourData.id).is('deleted_at', null).order('date').order('time'),
     ])
 
     setShows(showsRes.data || [])
     setTravel(travelRes.data || [])
     setAccommodation(accomRes.data || [])
     setContacts(contactsRes.data || [])
+    setPress(pressRes.data || [])
     setLoading(false)
   }
 
@@ -246,6 +249,62 @@ export default function PublicTourPage() {
                 {t.notes && <div style={{ marginTop: 6, fontSize: 12, color: muted, fontStyle: 'italic' }}>{t.notes}</div>}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* PRESS */}
+        {press.length > 0 && (
+          <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
+            <SectionHead label={`Press — ${press.length}`} accent={accent} />
+            {(() => {
+              const typeIcons: Record<string, string> = {
+                interview: '🎙', radio: '📻', tv: '📺', podcast: '🎧',
+                photo_shoot: '📷', press_conference: '🗞', other: '📣'
+              }
+              const typeLabels: Record<string, string> = {
+                interview: 'Interview', radio: 'Radio', tv: 'TV', podcast: 'Podcast',
+                photo_shoot: 'Photo shoot', press_conference: 'Press conf.', other: 'Press'
+              }
+              // Group by date
+              const byDate: Record<string, any[]> = {}
+              press.forEach(p => {
+                const d = p.date || 'TBC'
+                if (!byDate[d]) byDate[d] = []
+                byDate[d].push(p)
+              })
+              return Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)).map(([date, items]) => (
+                <div key={date}>
+                  <div style={{ padding: '10px 18px', background: '#F9F6F2', borderBottom: `1px solid ${border}` }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 10, color: accent, letterSpacing: '0.1em' }}>{date !== 'TBC' ? fmtDateLong(date) : 'TBC'}</span>
+                  </div>
+                  {items.map((p, i) => (
+                    <div key={i} style={{ padding: '14px 18px', borderBottom: i < items.length - 1 ? `1px solid ${border}` : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' as const }}>
+                        <span style={{ fontSize: 16 }}>{typeIcons[p.type] || '📣'}</span>
+                        <span style={{ fontSize: 15, fontWeight: 700 }}>{p.outlet || typeLabels[p.type] || 'Press'}</span>
+                        <span style={{ fontFamily: 'monospace', fontSize: 9, color: accent, background: '#FDF5EF', border: `1px solid ${accent}`, padding: '2px 6px', borderRadius: 3, letterSpacing: 1 }}>
+                          {(typeLabels[p.type] || 'PRESS').toUpperCase()}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginBottom: 8 }}>
+                        {p.time && <InfoPill label="Start" value={fmt(p.time)} />}
+                        {p.end_time && <InfoPill label="End" value={fmt(p.end_time)} />}
+                      </div>
+                      {p.location && (
+                        <div style={{ fontSize: 13, color: muted, marginBottom: 4 }}>📍 {p.location}</div>
+                      )}
+                      {p.contact_name && (
+                        <div style={{ fontSize: 13, color: muted, marginBottom: 4 }}>
+                          👤 {p.contact_name}
+                          {p.contact_phone && <a href={`tel:${p.contact_phone}`} style={{ color: accent, textDecoration: 'none', marginLeft: 8 }}>📞 {p.contact_phone}</a>}
+                        </div>
+                      )}
+                      {p.notes && <div style={{ fontSize: 12, color: muted, fontStyle: 'italic' }}>{p.notes}</div>}
+                    </div>
+                  ))}
+                </div>
+              ))
+            })()}
           </div>
         )}
 
