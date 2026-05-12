@@ -117,16 +117,32 @@ export default function ArtistPage() {
         const latestShow = allShows.filter((s: any) => s.tour_id === t.id).map((s: any) => s.date).filter(Boolean).sort().reverse()[0]
         return latestShow ? latestShow < today : false
       }
+      // For a tour, get its effective end date (end_date if set, else latest show date)
+      function tourEnd(t: any): string | null {
+        if (t.end_date) return t.end_date
+        const latest = allShows.filter((s: any) => s.tour_id === t.id).map((s: any) => s.date).filter(Boolean).sort().reverse()[0]
+        return latest || null
+      }
       const active = toursData.filter((t: any) => !isArchivedCheck(t))
-      const future = active.filter((t: any) => !t.start_date || t.start_date >= today)
-      const recentPast = active.filter((t: any) => t.start_date && t.start_date < today)
+      // Currently happening: started on/before today AND not yet ended
+      const happeningNow = active.filter((t: any) => {
+        if (!t.start_date) return false
+        if (t.start_date > today) return false
+        const end = tourEnd(t)
+        return !end || end >= today
+      })
+      const future = active.filter((t: any) => t.start_date && t.start_date > today)
+      const recentPast = active.filter((t: any) => t.start_date && t.start_date <= today && !happeningNow.includes(t))
       // Prefer non-completed tours, then by date
       const sortByStatus = (arr: any[]) => {
         const nonCompleted = arr.filter((t: any) => t.status !== 'completed')
         return nonCompleted.length > 0 ? nonCompleted : arr
       }
       let picked
-      if (future.length > 0) {
+      if (happeningNow.length > 0) {
+        // Tour currently happening wins — pick the one starting most recently
+        picked = sortByStatus(happeningNow).sort((a: any, b: any) => (b.start_date || '').localeCompare(a.start_date || ''))[0]
+      } else if (future.length > 0) {
         picked = sortByStatus(future).sort((a: any, b: any) => (a.start_date || '9999').localeCompare(b.start_date || '9999'))[0]
       } else if (recentPast.length > 0) {
         picked = sortByStatus(recentPast).sort((a: any, b: any) => (b.start_date || '').localeCompare(a.start_date || ''))[0]
@@ -1621,31 +1637,37 @@ export default function ArtistPage() {
           .toolbar-tabs button { padding: 7px 8px !important; font-size: 8px !important; letter-spacing: 0 !important; }
           .toolbar-tabs button span { display: none; }
           .toolbar-right { flex-wrap: nowrap !important; }
-          .add-row { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
-          .add-row button { font-size: 10px !important; padding: 8px 10px !important; text-align: center; }
+          .add-row { display: grid !important; grid-template-columns: repeat(4, 1fr) !important; gap: 5px !important; }
+          .add-row button, .add-row a { font-size: 9px !important; padding: 7px 4px !important; text-align: center !important; letter-spacing: 0 !important; }
           .show-actions { flex-direction: column !important; align-items: flex-end !important; gap: 4px !important; }
           .show-actions button { font-size: 9px !important; padding: 4px 6px !important; }
           .warnings-dropdown { right: -60px !important; width: 300px !important; }
           .tour-tabs { flex-wrap: wrap !important; }
-          .content-container { padding: 16px !important; }
+          .content-container { padding: 12px !important; }
+          .schedule-note { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; line-height: 1.4 !important; }
+          .header-bar { padding: 8px 12px !important; min-height: 0 !important; gap: 6px !important; }
+          .header-bar .header-left { gap: 10px !important; min-width: 0 !important; flex: 1 !important; }
+          .header-bar .header-divider { display: none !important; }
+          .header-bar .header-artist-name { font-size: 14px !important; }
+          .header-bar .header-artist-project { display: none !important; }
         }
       `}</style>
 
       {/* Header */}
-      <div style={{ background: darkMode ? '#111' : '#0F0E0C', borderBottom: `1px solid ${darkMode ? '#222' : '#1E1C18'}`, padding: '0 16px', minHeight: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+      <div className="header-bar" style={{ background: darkMode ? '#111' : '#0F0E0C', borderBottom: `1px solid ${darkMode ? '#222' : '#1E1C18'}`, padding: '0 16px', minHeight: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div className="header-left" style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <button onClick={() => router.push('/dashboard')}
             style={{ background: 'none', border: 'none', color: '#5A5450', cursor: 'pointer', fontSize: 13, fontFamily: '"Georgia", serif', display: 'flex', alignItems: 'center', gap: 6, padding: 0 }}>
             ← Roster
           </button>
-          <div style={{ width: 1, height: 20, background: '#2A2520' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: artist?.color || '#C4622D', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 700, fontFamily: '"Georgia", serif', fontStyle: 'italic' }}>
+          <div className="header-divider" style={{ width: 1, height: 20, background: '#2A2520' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: artist?.color || '#C4622D', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 700, fontFamily: '"Georgia", serif', fontStyle: 'italic', flexShrink: 0 }}>
               {artist?.name?.charAt(0)}
             </div>
-            <div>
-              <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 17, fontWeight: 700, color: '#F4EFE6', lineHeight: 1 }}>{artist?.name}</div>
-              {artist?.project && <div style={{ fontSize: 11, color: '#5A5450', fontStyle: 'italic', marginTop: 2 }}>{artist.project}</div>}
+            <div style={{ minWidth: 0 }}>
+              <div className="header-artist-name" style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 17, fontWeight: 700, color: '#F4EFE6', lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{artist?.name}</div>
+              {artist?.project && <div className="header-artist-project" style={{ fontSize: 11, color: '#5A5450', fontStyle: 'italic', marginTop: 2 }}>{artist.project}</div>}
             </div>
           </div>
         </div>
@@ -1957,7 +1979,7 @@ export default function ArtistPage() {
                                   {t.from_location} → {t.to_location}
                                 </span>
                               </div>
-                              {t.notes && <div style={{ fontSize: 12, color: muted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{t.notes}</div>}
+                              {t.notes && <div className="schedule-note" style={{ fontSize: 12, color: muted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{t.notes}</div>}
                             </div>
                             {t.departure_time && (
                               <div style={{ fontFamily: 'monospace', fontSize: 11, color: muted, flexShrink: 0 }}>
