@@ -1,10 +1,17 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUser, unauthorized } from '@/lib/api-auth'
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, email, fullName } = await request.json()
-    if (!userId) return NextResponse.json({ success: false, error: 'userId required' }, { status: 400 })
+    const { fullName } = await request.json()
+
+    // Only ever set up the calling user's own account — the user id comes
+    // from the session, never the request body.
+    const user = await getAuthUser()
+    if (!user) return unauthorized()
+    const userId = user.id
+    const email = user.email
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,

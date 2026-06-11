@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 const supabase = createClient()
-const ADMIN_EMAIL = 'mattwaltersconsulting@gmail.com'
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'mattwaltersconsulting@gmail.com'
 
 function DashboardInner() {
   const [artists, setArtists] = useState<any[]>([])

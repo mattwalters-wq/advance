@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
 const supabase = createClient()
-const ADMIN_EMAIL = 'mattwaltersconsulting@gmail.com'
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'mattwaltersconsulting@gmail.com'
 
 export default function AdminPage() {
   const router = useRouter()

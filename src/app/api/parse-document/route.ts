@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUser, unauthorized } from '@/lib/api-auth'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -76,6 +77,8 @@ Rules:
 
 export async function POST(request: NextRequest) {
   try {
+    if (!(await getAuthUser())) return unauthorized()
+
     const body = await request.json()
     const { text, pdf_base64, filename } = body
 

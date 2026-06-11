@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getAuthUser, userCanAccessTour, unauthorized, forbidden } from '@/lib/api-auth'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -92,11 +93,16 @@ export async function POST(request: NextRequest) {
   try {
     const { tourId, text, pdf_base64, filename } = await request.json()
 
+    const user = await getAuthUser()
+    if (!user) return unauthorized()
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
+
+    if (!(await userCanAccessTour(supabase, user.id, tourId))) return forbidden()
 
     // 1. Load existing tour data
     const [showsRes, travelRes, accomRes, contactsRes] = await Promise.all([
