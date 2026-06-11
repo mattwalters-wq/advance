@@ -24,17 +24,25 @@ export async function getAuthUser() {
   }
 }
 
-// A user may act on a tour if it belongs to their org, or they have an
-// explicit tour_access grant (invited TMs / crew).
+// A user may act on a tour if it belongs to their org, its artist belongs
+// to their org (covers older tours with no org_id of their own), or they
+// have an explicit tour_access grant (invited TMs / crew).
 export async function userCanAccessTour(service: SupabaseClient, userId: string, tourId: string) {
   if (!tourId || typeof tourId !== 'string') return false
 
   const [{ data: tour }, { data: profile }] = await Promise.all([
-    service.from('tours').select('id, org_id').eq('id', tourId).single(),
+    service.from('tours').select('id, org_id, artist_id').eq('id', tourId).single(),
     service.from('profiles').select('org_id').eq('id', userId).single(),
   ])
   if (!tour) return false
-  if (tour.org_id && profile?.org_id && tour.org_id === profile.org_id) return true
+
+  if (profile?.org_id) {
+    if (tour.org_id && tour.org_id === profile.org_id) return true
+    if (tour.artist_id) {
+      const { data: artist } = await service.from('artists').select('org_id').eq('id', tour.artist_id).single()
+      if (artist?.org_id && artist.org_id === profile.org_id) return true
+    }
+  }
 
   const { data: access } = await service
     .from('tour_access')
