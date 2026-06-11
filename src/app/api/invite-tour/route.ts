@@ -1,11 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendInviteEmail } from '@/lib/email'
+import { getAuthUser, unauthorized, forbidden } from '@/lib/api-auth'
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, name, role, tourIds, artistId, invitedByName, invitedByEmail } = await request.json()
+    const { email, name, role, tourIds, artistId, invitedByName } = await request.json()
     if (!email) return NextResponse.json({ success: false, error: 'Email required' }, { status: 400 })
+
+    const inviter = await getAuthUser()
+    if (!inviter) return unauthorized()
+    const invitedByEmail = inviter.email
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,15 +18,21 @@ export async function POST(request: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    // Get org_id and artist name
+    // Get org_id and artist name, and verify the inviter belongs to that org
     const { data: artist } = await supabase.from('artists').select('org_id, name').eq('id', artistId).single()
-    const org_id = artist?.org_id
-    const artistName = artist?.name
+    if (!artist) return NextResponse.json({ success: false, error: 'Artist not found' }, { status: 404 })
+    const org_id = artist.org_id
+    const artistName = artist.name
 
-    // Get tour names for context
+    const { data: inviterProfile } = await supabase.from('profiles').select('org_id').eq('id', inviter.id).single()
+    if (!inviterProfile?.org_id || inviterProfile.org_id !== org_id) return forbidden()
+
+    // Only grant access to tours that actually belong to this org
+    let allowedTourIds: string[] = []
     let tourNames: string[] = []
     if (tourIds?.length) {
-      const { data: tours } = await supabase.from('tours').select('name').in('id', tourIds)
+      const { data: tours } = await supabase.from('tours').select('id, name').in('id', tourIds).eq('org_id', org_id)
+      allowedTourIds = (tours || []).map((t: any) => t.id)
       tourNames = (tours || []).map((t: any) => t.name).filter(Boolean)
     }
 
@@ -51,7 +62,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Create tour_access records
-      for (const tourId of (tourIds || [])) {
+      for (const tourId of allowedTourIds) {
         await supabase.from('tour_access').upsert({
           user_id: userId,
           tour_id: tourId,

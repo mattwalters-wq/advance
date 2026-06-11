@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUser, unauthorized } from '@/lib/api-auth'
 
 export async function GET(request: NextRequest) {
+  if (!(await getAuthUser())) return unauthorized()
+
   const { searchParams } = new URL(request.url)
   const artistName = searchParams.get('artist')
   const appId = searchParams.get('app_id')

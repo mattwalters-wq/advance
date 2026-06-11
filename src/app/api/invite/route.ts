@@ -1,11 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendInviteEmail } from '@/lib/email'
+import { getAuthUser, unauthorized } from '@/lib/api-auth'
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, name, invitedByName, invitedByEmail } = await request.json()
+    const { email, name, invitedByName } = await request.json()
     if (!email) return NextResponse.json({ success: false, error: 'Email required' }, { status: 400 })
+
+    const inviter = await getAuthUser()
+    if (!inviter) return unauthorized()
+    const invitedByEmail = inviter.email
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
