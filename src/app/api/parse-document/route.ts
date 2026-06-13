@@ -1,8 +1,46 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser, unauthorized } from '@/lib/api-auth'
+import { extractStructured } from '@/lib/extract'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const str = { type: 'string' }
+const EXTRACT_SCHEMA = {
+  type: 'object',
+  properties: {
+    shows: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          date: str, venue: str, address: str, city: str, country: str, stage: str,
+          arrival_time: str, soundcheck_time: str, doors_time: str, set_time: str,
+          set_length: str, curfew: str, notes: str, catering: str, backline: str,
+          parking: str, fee: str, deal_type: str, ticket_url: str, pa: str,
+        },
+      },
+    },
+    travel: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          travel_date: str, travel_type: str, departure_time: str, arrival_time: str,
+          from_location: str, to_location: str, carrier: str, reference: str, notes: str,
+        },
+      },
+    },
+    accommodation: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { check_in: str, check_out: str, name: str, address: str, confirmation: str, notes: str },
+      },
+    },
+    contacts: {
+      type: 'array',
+      items: { type: 'object', properties: { name: str, role: str, phone: str, email: str } },
+    },
+  },
+}
 
 const SYSTEM_PROMPT = `You are a tour management assistant. Extract ALL touring information from this document with high accuracy.
 
@@ -108,19 +146,18 @@ export async function POST(request: NextRequest) {
       ]
     }
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 8000,
-      messages: [{ role: 'user', content: messageContent }],
+    const parsed = await extractStructured({
+      content: messageContent,
+      toolName: 'save_tour_data',
+      toolDescription: 'Save the touring information extracted from the document.',
+      schema: EXTRACT_SCHEMA,
+      maxTokens: 8000,
     })
 
-    const content = message.content[0]
-    if (content.type !== 'text') throw new Error('Unexpected response type')
+    if (!parsed) {
+      return NextResponse.json({ success: false, error: 'Could not extract data from this document. Try a different format or paste the text instead.' }, { status: 422 })
+    }
 
-    let jsonText = content.text.trim()
-    jsonText = jsonText.replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/\n?```$/, '').trim()
-
-    const parsed = JSON.parse(jsonText)
     return NextResponse.json({ success: true, data: parsed })
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
