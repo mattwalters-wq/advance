@@ -127,7 +127,7 @@ function mergeFields(existing: any, incoming: any, fields: string[]): { updates:
 
 export async function POST(request: NextRequest) {
   try {
-    const { tourId, text, pdf_base64, filename } = await request.json()
+    const { tourId, text, pdf_base64, image_base64, image_type, filename } = await request.json()
 
     const user = await getAuthUser()
     if (!user) return unauthorized()
@@ -179,7 +179,12 @@ Rules:
 - Omit arrays entirely if nothing found for that category`
 
     let messageContent: any[]
-    if (pdf_base64) {
+    if (image_base64) {
+      messageContent = [
+        { type: 'image', source: { type: 'base64', media_type: image_type || 'image/png', data: image_base64 } },
+        { type: 'text', text: `Extract all touring information from this image${filename ? ` (${filename})` : ''}. ${SYSTEM_PROMPT}` },
+      ]
+    } else if (pdf_base64) {
       messageContent = [
         { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf_base64 } },
         { type: 'text', text: `Extract all touring information from this document${filename ? ` (${filename})` : ''}. ${SYSTEM_PROMPT}` },

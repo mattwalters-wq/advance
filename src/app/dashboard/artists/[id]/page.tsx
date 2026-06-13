@@ -327,7 +327,16 @@ export default function ArtistPage() {
       const ext = file.name.split('.').pop()?.toLowerCase()
       let body: any = { tourId: selectedTour.id, filename: file.name }
 
-      if (ext === 'pdf') {
+      if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'].includes(ext || '') || file.type.startsWith('image/')) {
+        const base64 = await new Promise<string>((res, rej) => {
+          const reader = new FileReader()
+          reader.onload = () => res((reader.result as string).split(',')[1])
+          reader.onerror = rej
+          reader.readAsDataURL(file)
+        })
+        body.image_base64 = base64
+        body.image_type = file.type || 'image/png'
+      } else if (ext === 'pdf') {
         const base64 = await new Promise<string>((res, rej) => {
           const reader = new FileReader()
           reader.onload = () => res((reader.result as string).split(',')[1])
@@ -2806,7 +2815,7 @@ export default function ArtistPage() {
                       onClick={() => {
                         const inp = document.createElement('input')
                         inp.type = 'file'; inp.multiple = true
-                        inp.accept = '.pdf,.doc,.docx,.txt,.csv,.xlsx,.xls'
+                        inp.accept = '.pdf,.doc,.docx,.txt,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.webp,.heic,image/*'
                         inp.onchange = (e: any) => {
                           const newFiles = Array.from(e.target.files || []) as File[]
                           setImportJobs(prev => [...prev, ...newFiles.map(f => ({

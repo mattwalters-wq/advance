@@ -108,7 +108,11 @@ export default function ImportPage() {
       const ext = job.file.name.split('.').pop()?.toLowerCase()
       let body: any = { filename: job.file.name }
 
-      if (ext === 'pdf') {
+      if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'].includes(ext || '') || job.file.type.startsWith('image/')) {
+        const base64 = await fileToBase64(job.file)
+        body.image_base64 = base64
+        body.image_type = job.file.type || 'image/png'
+      } else if (ext === 'pdf') {
         const base64 = await fileToBase64(job.file)
         body.pdf_base64 = base64
       } else if (ext === 'docx' || ext === 'doc') {
@@ -142,7 +146,8 @@ export default function ImportPage() {
   async function addFiles(files: File[]) {
     const allowed = files.filter(f => {
       const ext = f.name.split('.').pop()?.toLowerCase()
-      return ['pdf', 'doc', 'docx', 'txt', 'md', 'csv', 'xlsx', 'xls'].includes(ext || '')
+      return ['pdf', 'doc', 'docx', 'txt', 'md', 'csv', 'xlsx', 'xls', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'].includes(ext || '')
+        || f.type.startsWith('image/')
     })
     if (!allowed.length) return
 
@@ -294,7 +299,7 @@ export default function ImportPage() {
             cursor: 'pointer', background: dragging ? (darkMode ? '#2a1f18' : '#FDF5EF') : card,
             transition: 'all 0.15s', marginBottom: 28,
           }}>
-          <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.txt,.md,.csv,.xlsx,.xls"
+          <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.txt,.md,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.webp,.heic,image/*"
             style={{ display: 'none' }} onChange={e => addFiles(Array.from(e.target.files || []))} />
           <div style={{ fontSize: 36, marginBottom: 12 }}>📂</div>
           <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
@@ -302,7 +307,7 @@ export default function ImportPage() {
           </div>
           <div style={{ fontSize: 13, color: muted, marginBottom: 4 }}>or click to browse</div>
           <div style={{ fontFamily: 'monospace', fontSize: 10, color: muted, letterSpacing: 2, marginTop: 12 }}>
-            PDF · DOCX · XLSX · CSV · TXT · Multiple files OK
+            PDF · DOCX · XLSX · CSV · TXT · PNG · JPG · Multiple files OK
           </div>
         </div>
 
