@@ -1,9 +1,45 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthUser, userCanAccessTour, unauthorized, forbidden } from '@/lib/api-auth'
+import { extractStructured } from '@/lib/extract'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const str = { type: 'string' }
+const MERGE_SCHEMA = {
+  type: 'object',
+  properties: {
+    shows: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          date: str, venue: str, city: str, country: str, stage: str,
+          set_time: str, doors_time: str, soundcheck_time: str, notes: str, catering: str, backline: str,
+        },
+      },
+    },
+    travel: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          travel_date: str, travel_type: str, departure_time: str, arrival_time: str,
+          from_location: str, to_location: str, carrier: str, reference: str, travellers: str, notes: str,
+        },
+      },
+    },
+    accommodation: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { check_in: str, check_out: str, name: str, address: str, confirmation: str, notes: str },
+      },
+    },
+    contacts: {
+      type: 'array',
+      items: { type: 'object', properties: { name: str, role: str, phone: str, email: str } },
+    },
+  },
+}
 
 // Similarity score between two strings (0-1)
 function stringSimilarity(a: string, b: string): number {
@@ -152,20 +188,15 @@ Rules:
       messageContent = [{ type: 'text', text: `${SYSTEM_PROMPT}\n\nDocument${filename ? ` (${filename})` : ''}:\n${(text || '').slice(0, 20000)}` }]
     }
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: messageContent }],
+    const extracted: any = await extractStructured({
+      content: messageContent,
+      toolName: 'save_tour_data',
+      toolDescription: 'Save the touring information extracted from the document, to be merged into the existing tour.',
+      schema: MERGE_SCHEMA,
+      maxTokens: 8000,
     })
 
-    let jsonText = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
-    jsonText = jsonText.replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/\n?```$/, '').trim()
-    let extracted: any = {}
-    try {
-      extracted = JSON.parse(jsonText)
-    } catch (parseErr) {
-      // Claude didn't return valid JSON — likely an error or empty response
-      console.error('JSON parse failed:', jsonText.slice(0, 200))
+    if (!extracted) {
       return NextResponse.json({ success: false, error: 'Could not extract data from this document. Try a different format or paste the text instead.' }, { status: 422 })
     }
 

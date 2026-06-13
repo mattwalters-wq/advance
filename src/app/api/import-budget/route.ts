@@ -1,9 +1,35 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthUser, userCanAccessTour, unauthorized, forbidden } from '@/lib/api-auth'
+import { extractStructured } from '@/lib/extract'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const str = { type: 'string' }
+const num = { type: 'number' }
+const BUDGET_SCHEMA = {
+  type: 'object',
+  properties: {
+    settlements: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          show_id: str, venue: str, date: str, deal_type: str,
+          agreed_amount: num, currency: str, notes: str,
+        },
+      },
+    },
+    expenses: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          category: str, description: str, amount: num, currency: str, show_id: str, notes: str,
+        },
+      },
+    },
+    summary: str,
+  },
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -82,15 +108,17 @@ Rules:
       messageContent = [{ type: 'text', text: `${prompt}\n\nDocument:\n${(text || '').slice(0, 16000)}` }]
     }
 
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4000,
-      messages: [{ role: 'user', content: messageContent }],
+    const parsed = await extractStructured({
+      content: messageContent,
+      toolName: 'save_budget',
+      toolDescription: 'Save the settlements and expenses extracted from the budget document.',
+      schema: BUDGET_SCHEMA,
+      maxTokens: 4000,
     })
 
-    const raw = response.content[0].type === 'text' ? response.content[0].text : ''
-    const clean = raw.replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/\n?```$/, '').trim()
-    const parsed = JSON.parse(clean)
+    if (!parsed) {
+      return NextResponse.json({ success: false, error: 'Could not extract budget data from this document. Try a different format or paste the text instead.' }, { status: 422 })
+    }
 
     return NextResponse.json({ success: true, data: parsed })
   } catch (err: any) {

@@ -1,8 +1,23 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser, unauthorized } from '@/lib/api-auth'
+import { extractStructured } from '@/lib/extract'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const str = { type: 'string' }
+const TRAVEL_SCHEMA = {
+  type: 'object',
+  properties: {
+    travel: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          travel_date: str, travel_type: str, from_location: str, to_location: str,
+          carrier: str, departure_time: str, arrival_time: str, reference: str, notes: str,
+        },
+      },
+    },
+  },
+}
 
 const PROMPT = `Extract all flight/travel details from this image or document.
 
@@ -57,27 +72,16 @@ export async function POST(request: NextRequest) {
       messageContent = [{ type: 'text', text: `${PROMPT}\n\nDocument:\n${(text || '').slice(0, 6000)}` }]
     }
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      messages: [{ role: 'user', content: messageContent }],
+    const result = await extractStructured<{ travel?: unknown }>({
+      content: messageContent,
+      toolName: 'save_travel',
+      toolDescription: 'Save the flight/travel details extracted from the image or document.',
+      schema: TRAVEL_SCHEMA,
+      maxTokens: 2000,
     })
 
-    const raw = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
-    const clean = raw.replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/\n?```$/, '').trim()
-
-    if (!clean || clean === 'null' || clean === '[]') {
-      return NextResponse.json({ success: true, travel: [] })
-    }
-
-    let travel
-    try {
-      travel = JSON.parse(clean)
-    } catch {
-      return NextResponse.json({ success: true, travel: [] })
-    }
-
-    return NextResponse.json({ success: true, travel: Array.isArray(travel) ? travel : [travel] })
+    const travel = result?.travel
+    return NextResponse.json({ success: true, travel: Array.isArray(travel) ? travel : [] })
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 })
   }
