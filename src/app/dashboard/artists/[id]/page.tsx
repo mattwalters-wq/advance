@@ -2804,7 +2804,14 @@ export default function ArtistPage() {
                     <div
                       onDrop={e => {
                         e.preventDefault(); setImportDragging(false)
-                        const newFiles = Array.from(e.dataTransfer.files) as File[]
+                        const dt = e.dataTransfer
+                        let newFiles: File[] = []
+                        if (dt.items && dt.items.length) {
+                          for (const it of Array.from(dt.items)) {
+                            if (it.kind === 'file') { const f = it.getAsFile(); if (f) newFiles.push(f) }
+                          }
+                        }
+                        if (newFiles.length === 0) newFiles = Array.from(dt.files) as File[]
                         setImportJobs(prev => [...prev, ...newFiles.map(f => ({
                           id: Math.random().toString(36).slice(2), name: f.name, file: f,
                           status: 'queued' as const, result: null, error: null

@@ -38,6 +38,25 @@ function fileToText(file: File): Promise<string> {
   })
 }
 
+// Gather dropped files robustly. Screenshots and images dragged from apps or
+// browsers often arrive via DataTransfer.items (kind: 'file'), not .files —
+// so read items first and fall back to .files.
+function collectFiles(dt: DataTransfer): File[] {
+  const out: File[] = []
+  if (dt.items && dt.items.length) {
+    for (const it of Array.from(dt.items)) {
+      if (it.kind === 'file') {
+        const f = it.getAsFile()
+        if (f) out.push(f)
+      }
+    }
+  }
+  if (out.length === 0 && dt.files && dt.files.length) {
+    out.push(...Array.from(dt.files))
+  }
+  return out
+}
+
 async function extractWordText(file: File): Promise<string> {
   // Dynamic import mammoth only when needed
   const mammoth = await import('mammoth')
@@ -170,7 +189,28 @@ export default function ImportPage() {
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
-    addFiles(Array.from(e.dataTransfer.files))
+    addFiles(collectFiles(e.dataTransfer))
+  }, [])
+
+  // Paste a screenshot (Cmd/Ctrl+V) anywhere on the page
+  useEffect(() => {
+    function onPaste(e: ClipboardEvent) {
+      const items = e.clipboardData?.items
+      if (!items) return
+      const files: File[] = []
+      for (const it of Array.from(items)) {
+        if (it.kind === 'file') {
+          const f = it.getAsFile()
+          if (f) files.push(f)
+        }
+      }
+      if (files.length) {
+        e.preventDefault()
+        addFiles(files)
+      }
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
   }, [])
 
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -305,7 +345,7 @@ export default function ImportPage() {
           <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
             {dragging ? 'Drop files here' : 'Drop documents here'}
           </div>
-          <div style={{ fontSize: 13, color: muted, marginBottom: 4 }}>or click to browse</div>
+          <div style={{ fontSize: 13, color: muted, marginBottom: 4 }}>click to browse, or paste a screenshot</div>
           <div style={{ fontFamily: 'monospace', fontSize: 10, color: muted, letterSpacing: 2, marginTop: 12 }}>
             PDF · DOCX · XLSX · CSV · TXT · PNG · JPG · Multiple files OK
           </div>
