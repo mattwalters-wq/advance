@@ -163,11 +163,9 @@ export default function ImportPage() {
   }
 
   async function addFiles(files: File[]) {
-    const allowed = files.filter(f => {
-      const ext = f.name.split('.').pop()?.toLowerCase()
-      return ['pdf', 'doc', 'docx', 'txt', 'md', 'csv', 'xlsx', 'xls', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'].includes(ext || '')
-        || f.type.startsWith('image/')
-    })
+    // Accept anything droppable — processFile routes by type (image/PDF/Office)
+    // and falls back to reading as text for everything else.
+    const allowed = files
     if (!allowed.length) return
 
     const newJobs: FileJob[] = allowed.map(file => ({

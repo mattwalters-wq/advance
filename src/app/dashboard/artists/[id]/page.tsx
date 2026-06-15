@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { fileToAttachment, collectFiles } from '@/lib/attach'
 
 const supabase = createClient()
 
@@ -74,6 +75,7 @@ export default function ArtistPage() {
   const [aiInput, setAiInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiAttachments, setAiAttachments] = useState<any[]>([])
+  const [aiDragging, setAiDragging] = useState(false)
   const [newNote, setNewNote] = useState('')
   const [postingNote, setPostingNote] = useState(false)
   const [userName, setUserName] = useState('Manager')
@@ -433,8 +435,9 @@ export default function ArtistPage() {
   }
 
   async function sendAiMessage(text?: string) {
-    const msg = text || aiInput.trim()
+    let msg = text || aiInput.trim()
     if ((!msg && aiAttachments.length === 0) || aiLoading || !selectedTour) return
+    if (!msg && aiAttachments.length > 0) msg = 'Add everything from the attached file(s) to this tour — extract all shows, travel days, hotels and contacts and apply the changes.'
     const displayMsg = msg + (aiAttachments.length > 0 ? `\n📎 ${aiAttachments.map((a: any) => a.name).join(', ')}` : '')
     const userMsg = { role: 'user', content: displayMsg }
     const newMessages = [...aiMessages, userMsg]
@@ -2756,15 +2759,22 @@ export default function ArtistPage() {
                 )}
 
                 {/* Input */}
-                <div style={{ borderTop: `1px solid ${border}`, paddingTop: 12, display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-                  <input type="file" id="ai-file-input" multiple accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx"
+                <div
+                  onDragOver={e => { e.preventDefault(); setAiDragging(true) }}
+                  onDragLeave={e => { e.preventDefault(); setAiDragging(false) }}
+                  onDrop={async e => {
+                    e.preventDefault(); setAiDragging(false)
+                    const files = collectFiles(e.dataTransfer)
+                    if (!files.length) return
+                    const atts = await Promise.all(files.map(fileToAttachment))
+                    setAiAttachments(prev => [...prev, ...atts])
+                  }}
+                  style={{ borderTop: `1px solid ${border}`, paddingTop: 12, display: 'flex', gap: 8, alignItems: 'flex-end', outline: aiDragging ? `2px dashed ${accent}` : 'none', outlineOffset: 4, borderRadius: 8 }}>
+                  <input type="file" id="ai-file-input" multiple accept="image/*,.pdf,.doc,.docx,.txt,.md,.csv,.xlsx,.xls"
                     style={{ display: 'none' }}
                     onChange={async e => {
                       const files = Array.from(e.target.files || []) as File[]
-                      const atts = await Promise.all(files.map(async f => {
-                        const base64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res((r.result as string).split(',')[1]); r.onerror = rej; r.readAsDataURL(f) })
-                        return { name: f.name, base64, type: f.type || 'application/octet-stream' }
-                      }))
+                      const atts = await Promise.all(files.map(fileToAttachment))
                       setAiAttachments(prev => [...prev, ...atts])
                     }} />
                   <button onClick={() => document.getElementById('ai-file-input')?.click()}
