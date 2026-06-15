@@ -355,11 +355,11 @@ export default function ImportPage() {
             style={{ display: 'none' }} onChange={e => addFiles(Array.from(e.target.files || []))} />
           <div style={{ fontSize: 36, marginBottom: 12 }}>📂</div>
           <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
-            {dragging ? 'Drop files here' : 'Drop documents here'}
+            {dragging ? 'Drop to build the tour' : 'Drop anything to build your tour'}
           </div>
-          <div style={{ fontSize: 13, color: muted, marginBottom: 4 }}>click to browse, or paste a screenshot</div>
+          <div style={{ fontSize: 13, color: muted, marginBottom: 4 }}>Images, screenshots, PDFs — anything. Click to browse or paste a screenshot.</div>
           <div style={{ fontFamily: 'monospace', fontSize: 10, color: muted, letterSpacing: 2, marginTop: 12 }}>
-            PDF · DOCX · XLSX · CSV · TXT · PNG · JPG · Multiple files OK
+            IMAGES · PDF · WORD · EXCEL · CSV · TEXT — DROP, PASTE OR BROWSE
           </div>
         </div>
 
