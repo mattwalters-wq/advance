@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { fileToAttachment, collectFiles } from '@/lib/attach'
 
 const supabase = createClient()
 
@@ -36,6 +37,7 @@ export default function FloatingAssistant() {
   const [tours, setTours] = useState<any[]>([])
   const [showTourPicker, setShowTourPicker] = useState(false)
   const [attachments, setAttachments] = useState<{ name: string, base64: string, type: string }[]>([])
+  const [dragging, setDragging] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -110,23 +112,30 @@ export default function FloatingAssistant() {
     if ((!content && attachments.length === 0) || loading) return
     if (!tourId) { setShowTourPicker(true); return }
 
-    const displayContent = content + (attachments.length > 0 ? `\n📎 ${attachments.map(a => a.name).join(', ')}` : '')
+    const hasAtt = attachments.length > 0
+    // If files were dropped/attached with no typed message, instruct the model to build the tour from them.
+    const effectiveContent = content || 'Add everything from the attached file(s) to this tour — extract all shows, travel days, hotels and contacts and apply the changes.'
+    const displayContent = (content || 'Build the tour from the attached file(s)') + (hasAtt ? `\n📎 ${attachments.map(a => a.name).join(', ')}` : '')
     const userMsg: Message = { role: 'user', content: displayContent }
-    const newMessages = [...messages, userMsg]
-    setMessages(newMessages)
+    setMessages([...messages, userMsg])
     setInput('')
+    const sentAttachments = attachments
     setAttachments([])
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
     setLoading(true)
 
     try {
+      const apiMessages = [
+        ...messages.map(m => ({ role: m.role, content: m.content })),
+        { role: 'user', content: effectiveContent },
+      ]
       const res = await fetch('/api/tour-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tourId,
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          attachments,
+          messages: apiMessages,
+          attachments: sentAttachments,
         }),
       })
       const data = await res.json()
@@ -140,57 +149,29 @@ export default function FloatingAssistant() {
     setLoading(false)
   }
 
-  async function handleFileAttach(files: FileList | null) {
+  async function handleFileAttach(files: FileList | File[] | null) {
     if (!files) return
-    const newAtts = await Promise.all(Array.from(files).map(async file => {
-      const ext = file.name.split('.').pop()?.toLowerCase()
-
-      // Excel files - parse to text via SheetJS then send as plain text attachment
-      if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
-        let text = ''
-        if (ext === 'csv') {
-          text = await file.text()
-        } else {
-          // Load SheetJS
-          if (!(window as any).XLSX) {
-            await new Promise<void>((res, rej) => {
-              const s = document.createElement('script')
-              s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
-              s.onload = () => res(); s.onerror = rej
-              document.head.appendChild(s)
-            })
-          }
-          const XLSX = (window as any).XLSX
-          const buffer = await file.arrayBuffer()
-          const wb = XLSX.read(buffer, { type: 'array' })
-          const parts: string[] = []
-          for (const sheetName of wb.SheetNames) {
-            const ws = wb.Sheets[sheetName]
-            const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
-            parts.push(`=== ${sheetName} ===`)
-            for (const row of data) {
-              const cells = row.map((c: any) => String(c ?? '').trim()).filter(Boolean)
-              if (cells.length >= 2) parts.push(cells.slice(0, 10).join(' | '))
-            }
-          }
-          text = parts.join('\n')
-        }
-        // Encode as base64 text so the API can read it as a document
-        const base64 = btoa(unescape(encodeURIComponent(text)))
-        return { name: file.name, base64, type: 'text/plain' }
-      }
-
-      // All other files (PDF, images, docx etc) - send as-is
-      const base64 = await new Promise<string>((res, rej) => {
-        const reader = new FileReader()
-        reader.onload = () => res((reader.result as string).split(',')[1])
-        reader.onerror = rej
-        reader.readAsDataURL(file)
-      })
-      return { name: file.name, base64, type: file.type || 'application/octet-stream' }
-    }))
+    const arr = Array.from(files as any) as File[]
+    if (!arr.length) return
+    const newAtts = await Promise.all(arr.map(fileToAttachment))
     setAttachments(prev => [...prev, ...newAtts])
   }
+
+  // Paste a screenshot/file (Cmd/Ctrl+V) while the panel is open
+  useEffect(() => {
+    if (!open) return
+    function onPaste(e: ClipboardEvent) {
+      const items = e.clipboardData?.items
+      if (!items) return
+      const files: File[] = []
+      for (const it of Array.from(items)) {
+        if (it.kind === 'file') { const f = it.getAsFile(); if (f) files.push(f) }
+      }
+      if (files.length) { e.preventDefault(); handleFileAttach(files) }
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [open])
 
   function formatMessage(text: string) {
     return text
@@ -236,17 +217,30 @@ export default function FloatingAssistant() {
 
       {/* Chat panel */}
       {open && (
-        <div style={{
+        <div
+          onDragOver={e => { e.preventDefault(); if (tourId) setDragging(true) }}
+          onDragLeave={e => { e.preventDefault(); setDragging(false) }}
+          onDrop={e => { e.preventDefault(); setDragging(false); if (tourId) handleFileAttach(collectFiles(e.dataTransfer)) }}
+          style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 1000,
           width: 380, height: 560,
           background: bg, borderRadius: 16,
-          border: `1px solid ${border}`,
+          border: `1px solid ${dragging ? accent : border}`,
           boxShadow: '0 16px 60px rgba(0,0,0,0.5)',
           display: 'flex', flexDirection: 'column',
           fontFamily: 'Georgia, serif',
           animation: 'ai-pop 0.2s ease',
           overflow: 'hidden',
         }}>
+
+          {/* Drag overlay */}
+          {dragging && (
+            <div style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'rgba(26,23,20,0.92)', border: `2px dashed ${accent}`, borderRadius: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, pointerEvents: 'none' }}>
+              <div style={{ fontSize: 30 }}>📥</div>
+              <div style={{ color: textCol, fontSize: 14 }}>Drop to add to the tour</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: muted }}>PDF · IMAGE · WORD · EXCEL · CSV · TEXT</div>
+            </div>
+          )}
 
           {/* Header */}
           <div style={{ padding: '14px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
@@ -355,7 +349,7 @@ export default function FloatingAssistant() {
 
           {/* Input */}
           <div style={{ padding: '10px 12px 12px', borderTop: `1px solid ${border}`, flexShrink: 0 }}>
-            <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx,.xls" style={{ display: 'none' }}
+            <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.txt,.md,.csv,.xlsx,.xls" style={{ display: 'none' }}
               onChange={e => handleFileAttach(e.target.files)} />
 
             {/* Attachment chips */}

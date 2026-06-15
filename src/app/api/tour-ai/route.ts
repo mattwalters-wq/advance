@@ -627,8 +627,13 @@ Be direct. Act first, explain briefly after. If you're unsure which record to up
         for (const att of attachments) {
           if (att.type?.startsWith('image/')) {
             parts.push({ type: 'image', source: { type: 'base64', media_type: att.type, data: att.base64 } })
-          } else {
+          } else if (att.type === 'application/pdf') {
             parts.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: att.base64 } })
+          } else {
+            // Text-ish document (Word/Excel/CSV/text/unknown) — decode and inline as text
+            let text = ''
+            try { text = Buffer.from(att.base64, 'base64').toString('utf-8') } catch {}
+            parts.push({ type: 'text', text: `Attached file "${att.name}":\n${text}` })
           }
         }
         parts.push({ type: 'text', text: m.content })
