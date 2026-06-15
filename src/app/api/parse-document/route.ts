@@ -11,7 +11,7 @@ const EXTRACT_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          date: str, venue: str, address: str, city: str, country: str, stage: str,
+          type: str, date: str, venue: str, address: str, city: str, country: str, stage: str,
           arrival_time: str, soundcheck_time: str, doors_time: str, set_time: str,
           set_length: str, curfew: str, notes: str, catering: str, backline: str,
           parking: str, fee: str, deal_type: str, ticket_url: str, pa: str,
@@ -103,15 +103,17 @@ Return ONLY a JSON object with these fields (omit any not found):
 Rules:
 - Return raw JSON only, no markdown, no backticks
 - Dates must be YYYY-MM-DD format. If only day/month given, infer the year from context
-- Times must be HH:MM 24hr format (e.g. "3:30pm" = "15:30", "9pm" = "21:00")
+- If NO date appears anywhere in the document, set "date" to null — do NOT invent one. Never drop the show or the contacts just because the date or venue is missing.
+- This may be a single-day RUNSHEET / DAY SHEET / studio session (e.g. "Like A Version") with no city or venue. Still extract it as ONE show: set "type" to "recording" for studio/Like A Version sessions, "rehearsal" for rehearsals, "press" for press/interview days, otherwise "show". If there's no venue but the sheet has a session/show name or branding, use that as the venue.
+- Map the schedule: first arrival/load-in → arrival_time, soundcheck → soundcheck_time, doors → doors_time, the performance/record/set → set_time. Put the FULL list of timestamped schedule lines into notes so nothing is lost.
+- Extract EVERY named person as a contact with their exact role as labelled — crew and studio staff count too (engineer, monitors, director, camera operator, producer, promoter, venue, sound, lighting, stage manager, tour manager, etc.)
+- Times must be HH:MM 24hr format (e.g. "3:30pm" = "15:30", "9pm" = "21:00", "1130" = "11:30")
 - Extract the venue full address if provided
-- Extract ALL contacts (promoter, venue, sound, lighting, stage manager etc)
 - For hotels, always capture reservation/confirmation codes
 - For deals: capture fee amount and type
 - travel_type must be exactly one of: flight, drive, train, bus, ferry
 - Omit arrays entirely if nothing found for that category
-- Extract ALL shows if multiple are present
-- For runsheets: put support/opening act schedule details in the show notes field`
+- Extract ALL shows if multiple are present`
 
 export async function POST(request: NextRequest) {
   try {
