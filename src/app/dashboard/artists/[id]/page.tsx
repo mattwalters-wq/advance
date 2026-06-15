@@ -630,11 +630,25 @@ export default function ArtistPage() {
     const table = tableMap[modal as string]
     if (!table) { setSaving(false); return }
 
+    // Strip client-only keys (e.g. _type added by the schedule view) and the
+    // immutable ones, and turn blank strings into null so typed columns
+    // (date/time) don't reject the write.
+    const clean = (src: any) => {
+      const { id, tour_id, org_id, created_at, ...rest } = src
+      const out: any = {}
+      for (const [k, v] of Object.entries(rest)) {
+        if (k.startsWith('_')) continue
+        out[k] = v === '' ? null : v
+      }
+      return out
+    }
+
     if (editingId) {
-      const { id, tour_id, org_id, created_at, ...updates } = form
-      await supabase.from(table).update(updates).eq('id', editingId)
+      const { error } = await supabase.from(table).update(clean(form)).eq('id', editingId)
+      if (error) { setSaving(false); alert('Could not save changes: ' + error.message); return }
     } else {
-      await supabase.from(table).insert({ ...base, ...form })
+      const { error } = await supabase.from(table).insert({ ...base, ...clean(form) })
+      if (error) { setSaving(false); alert('Could not save: ' + error.message); return }
     }
 
     await loadTourData(selectedTour.id)
@@ -2845,10 +2859,10 @@ export default function ArtistPage() {
                       style={{ border: `2px dashed ${importDragging ? accent : border}`, borderRadius: 14, padding: '28px 24px', textAlign: 'center', cursor: 'pointer', background: importDragging ? (darkMode ? '#2a1f18' : '#FDF5EF') : card, transition: 'all 0.15s' }}>
                       <div style={{ fontSize: 26, marginBottom: 8 }}>⊕</div>
                       <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: text }}>
-                        {importDragging ? 'Drop to add to queue' : 'Drop documents here'}
+                        {importDragging ? 'Drop to add to queue' : 'Drop anything here'}
                       </div>
-                      <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>Click to browse · Add more any time</div>
-                      <div style={{ fontFamily: 'monospace', fontSize: 9, color: muted, letterSpacing: 2 }}>PDF · DOCX · XLSX · CSV · TXT</div>
+                      <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>Images, screenshots, PDFs — anything. Click to browse · Add more any time</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 9, color: muted, letterSpacing: 2 }}>IMAGES · PDF · WORD · EXCEL · CSV · TEXT</div>
                     </div>
                   </>
                 )}
