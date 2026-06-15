@@ -99,6 +99,7 @@ export default function ImportPage() {
   const [importMode, setImportMode] = useState<'new' | 'existing'>('new')
   const [tours, setTours] = useState<any[]>([])
   const [selectedTourId, setSelectedTourId] = useState('')
+  const [runsheetDate, setRunsheetDate] = useState('')
 
   useEffect(() => {
     supabase.from('artists').select('*').order('name').then(({ data }) => setArtists(data || []))
@@ -257,7 +258,20 @@ export default function ImportPage() {
         tourId = tour.id
       }
 
-      if (merged.shows?.length) await supabase.from('shows').insert(merged.shows.map((s: any) => ({ ...s, tour_id: tourId, org_id })))
+      // Only insert columns that exist on `shows`, and ensure a date (NOT NULL).
+      // Undated entries (e.g. studio runsheets) use the fallback date, else are skipped.
+      const SHOW_COLS = ['venue', 'city', 'country', 'stage', 'set_time', 'doors_time', 'soundcheck_time', 'notes', 'catering', 'backline', 'type', 'arrival_time', 'address', 'parking', 'fee', 'set_length']
+      const showRows = (merged.shows || []).map((s: any) => {
+        const date = s.date || runsheetDate
+        if (!date) return null
+        const row: any = { tour_id: tourId, org_id, date }
+        for (const c of SHOW_COLS) {
+          const v = s[c]
+          if (v !== undefined && v !== null && v !== '') row[c] = v
+        }
+        return row
+      }).filter(Boolean)
+      if (showRows.length) await supabase.from('shows').insert(showRows)
       if (merged.travel?.length) await supabase.from('travel').insert(merged.travel.map((t: any) => ({ ...t, tour_id: tourId, org_id })))
       if (merged.accommodation?.length) await supabase.from('accommodation').insert(merged.accommodation.map((a: any) => ({ ...a, tour_id: tourId, org_id })))
       if (merged.contacts?.length) await supabase.from('contacts').insert(merged.contacts.map((c: any) => ({ ...c, tour_id: tourId, org_id })))
@@ -448,6 +462,14 @@ export default function ImportPage() {
                   </div>
                 )}
               </>
+            )}
+
+            {merged.shows?.some((s: any) => !s.date) && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 6 }}>DATE FOR UNDATED ENTRIES</div>
+                <input type="date" value={runsheetDate} onChange={e => setRunsheetDate(e.target.value)} style={inputStyle} />
+                <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>This document has no date (e.g. a runsheet) — set the show date. You can change it later.</div>
+              </div>
             )}
 
             {importError && <div style={{ background: '#FEE', borderRadius: 6, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#C00', fontFamily: 'monospace' }}>{importError}</div>}

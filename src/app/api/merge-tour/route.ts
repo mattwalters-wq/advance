@@ -12,7 +12,7 @@ const MERGE_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          date: str, venue: str, city: str, country: str, stage: str,
+          type: str, date: str, venue: str, city: str, country: str, stage: str,
           set_time: str, doors_time: str, soundcheck_time: str, notes: str, catering: str, backline: str,
         },
       },
@@ -173,7 +173,9 @@ Return ONLY a JSON object with these fields (omit any not found):
 
 Rules:
 - Return raw JSON only, no markdown, no backticks
-- Dates must be YYYY-MM-DD format
+- Dates must be YYYY-MM-DD format. If NO date appears anywhere, set "date" to null — do NOT invent one, but still extract all contacts and schedule.
+- This may be a single-day RUNSHEET / DAY SHEET / studio session (e.g. "Like A Version"). Extract it as ONE show: set "type" to "recording"/"rehearsal"/"press"/"show" as appropriate, map the schedule (load-in → not stored, soundcheck → soundcheck_time, doors → doors_time, performance/record/set → set_time) and put the FULL timestamped schedule into notes.
+- Extract EVERY named person as a contact with their role — crew and studio staff count (engineer, monitors, director, camera operator, producer, promoter, sound, lighting, stage/tour manager, etc.)
 - Times must be HH:MM 24hr format
 - All values must be plain strings
 - Omit arrays entirely if nothing found for that category`
@@ -219,6 +221,12 @@ Rules:
 
     // Shows
     for (const newShow of extracted.shows || []) {
+      // shows.date is NOT NULL — a dateless runsheet can't be inserted as a show.
+      // Skip it (contacts/travel/etc. below still merge) and report it.
+      if (!newShow.date) {
+        result.shows.details.push({ action: 'skipped_no_date', venue: newShow.venue || '', fields: [] })
+        continue
+      }
       const match = findMatchingShow(newShow, existingShows)
       if (match) {
         const { updates, changed } = mergeFields(match, newShow, ['venue', 'city', 'country', 'stage', 'set_time', 'doors_time', 'soundcheck_time', 'notes', 'catering', 'backline'])
