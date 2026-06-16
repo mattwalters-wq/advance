@@ -13,6 +13,34 @@ function fmt(t: string) {
   return `${hour % 12 || 12}:${m}${hour >= 12 ? 'pm' : 'am'}`
 }
 
+// Render freeform text with any URLs turned into clickable links and line breaks preserved.
+function linkify(input: string, linkColor: string) {
+  if (!input) return null
+  const urlRx = /(https?:\/\/[^\s]+)/g
+  return input.split('\n').map((line, li, lines) => {
+    const parts = line.split(urlRx)
+    return (
+      <span key={li}>
+        {parts.map((part, pi) => {
+          if (urlRx.test(part)) {
+            urlRx.lastIndex = 0
+            const href = part.replace(/[.,;:)]+$/, '')
+            const trailing = part.slice(href.length)
+            return (
+              <span key={pi}>
+                <a href={href} target="_blank" rel="noreferrer" style={{ color: linkColor, textDecoration: 'underline', wordBreak: 'break-word' }}>{href} ↗</a>
+                {trailing}
+              </span>
+            )
+          }
+          return <span key={pi}>{part}</span>
+        })}
+        {li < lines.length - 1 && <br />}
+      </span>
+    )
+  })
+}
+
 function fmtDate(d: string) {
   if (!d) return ''
   return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', {
@@ -339,6 +367,12 @@ export default function DaySheetPage() {
                     {show.backline}
                   </div>
                 )}
+                {show?.parking && (
+                  <div style={{ padding: '12px 14px', background: '#EFF5FF', borderLeft: '3px solid #2D5B8A', borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.7, marginTop: 10 }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: '#2D5B8A', marginBottom: 4 }}>🅿️ PARKING</div>
+                    {linkify(show.parking, '#2D5B8A')}
+                  </div>
+                )}
                 {show?.notes && (() => {
                   const noteLines = show.notes.split('\n')
                   const timeRx = /^(\d{1,2}:\d{2}\s*(?:am|pm)?)\s*[-:]?\s*/i
@@ -373,7 +407,7 @@ export default function DaySheetPage() {
                   return (
                     <div style={{ padding: '12px 14px', background: accentLight, borderLeft: `3px solid ${accent}`, borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.75, marginTop: 10 }}>
                       <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: accent, marginBottom: 4 }}>NOTES</div>
-                      {show.notes}
+                      {linkify(show.notes, accent)}
                     </div>
                   )
                 })()}
