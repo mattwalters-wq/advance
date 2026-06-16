@@ -13,6 +13,59 @@ function fmt(t: string) {
   return `${hour % 12 || 12}:${m}${hour >= 12 ? 'pm' : 'am'}`
 }
 
+const cap = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+
+// Pull structured facts out of a freeform notes paragraph so the day sheet can
+// surface them as proper fields instead of one buried blob. Heuristic by design:
+// anything it can't confidently classify is returned as `prose` and shown as-is,
+// so the result is never worse than rendering the raw notes. Returns null when
+// nothing useful was extracted (caller falls back to the plain notes block).
+type NoteRow = { icon: string; label: string; value: string; href?: string }
+function parseNotes(raw: string): { times: { label: string; time: string }[]; rows: NoteRow[]; prose: string } | null {
+  if (!raw || raw.includes('\n')) return null // multi-line notes are handled elsewhere
+  // URLs never contain whitespace, so splitting on sentence boundaries is URL-safe.
+  const urlRx = /https?:\/\/[^\s]+/g
+
+  const sentences = raw.split(/(?<=[.!?])\s+/).map((s) => s.replace(/\s+/g, ' ').trim()).filter(Boolean)
+  const times: { label: string; time: string }[] = []
+  const rows: NoteRow[] = []
+  const prose: string[] = []
+
+  sentences.forEach((clean) => {
+    const lower = clean.toLowerCase()
+
+    // Sentence containing a link → link row, label derived from surrounding text.
+    const links = (clean.match(urlRx) || []).map((u) => u.replace(/[.,;:)\]]+$/, ''))
+    if (links.length) {
+      let label = clean.replace(urlRx, '').trim()
+      label = (label.split(/\s[-–]\s/).pop() || label).replace(/^see\s+/i, '').replace(/[:\s.,]+$/, '').trim()
+      links.forEach((href) => rows.push({ icon: '🔗', label: 'Link', value: cap(label) || href, href }))
+      return
+    }
+    // Address → Maps pin.
+    const addr = clean.match(/(?:(\w+)\s+)?address[:\s]+(.+)/i)
+    if (addr) {
+      const value = addr[2].replace(/\.$/, '').trim()
+      const qualifier = addr[1] && /studio|venue|rehearsal|load/i.test(addr[1]) ? `${cap(addr[1])} address` : 'Address'
+      rows.push({ icon: '📍', label: qualifier, value, href: `https://maps.google.com/?q=${encodeURIComponent(value)}` })
+      return
+    }
+    if (/parking/.test(lower)) { rows.push({ icon: '🅿️', label: 'Parking', value: clean.replace(/\.$/, '') }); return }
+    if (/transport|pick.?up|driver|chauffeur|shuttle/.test(lower)) { rows.push({ icon: '🚗', label: 'Transport', value: clean.replace(/\.$/, '') }); return }
+    // Call time.
+    const call = clean.match(/call\s*(?:time)?\s*(?:is\s*)?(\d{1,2}:\d{2})/i)
+    if (call) { times.push({ label: 'Call', time: fmt(call[1]) }); return }
+    // Other labeled times (rehearsal, load-in, doors, etc.).
+    const lt = clean.match(/(rehearsals?|load.?in|doors?|set|stage|start|finish|wrap|depart|arrive)\b[^\d]*(\d{1,2}:\d{2})/i)
+    if (lt) { times.push({ label: cap(lt[1].replace(/s$/, '')), time: fmt(lt[2]) }); return }
+
+    prose.push(clean)
+  })
+
+  if (!rows.length && !times.length) return null
+  return { times, rows, prose: prose.join(' ') }
+}
+
 // Render freeform text with any URLs turned into clickable links and line breaks preserved.
 function linkify(input: string, linkColor: string) {
   if (!input) return null
@@ -401,6 +454,46 @@ export default function DaySheetPage() {
                             </div>
                           ))}
                         </div>
+                      </div>
+                    )
+                  }
+                  const struct = parseNotes(show.notes)
+                  if (struct) {
+                    return (
+                      <div style={{ marginTop: 14 }}>
+                        {struct.times.length > 0 && (
+                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: (struct.rows.length || struct.prose) ? 14 : 0 }}>
+                            {struct.times.map((t, i) => (
+                              <div key={i} style={{ background: sectionBg, borderRadius: 8, padding: '12px 18px', textAlign: 'center', minWidth: 96 }}>
+                                <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: muted, textTransform: 'uppercase', marginBottom: 5 }}>{t.label}</div>
+                                <div style={{ fontSize: 22, fontWeight: 700, color: text, lineHeight: 1 }}>{t.time}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {struct.rows.length > 0 && (
+                          <div style={{ border: `1px solid ${border}`, borderRadius: 8, padding: '2px 16px', marginBottom: struct.prose ? 12 : 0 }}>
+                            {struct.rows.map((r, i) => (
+                              <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 0', borderTop: i === 0 ? 'none' : `1px solid ${border}` }}>
+                                <span style={{ fontSize: 15, lineHeight: 1.4, flexShrink: 0 }}>{r.icon}</span>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: muted, textTransform: 'uppercase', marginBottom: 3 }}>{r.label}</div>
+                                  {r.href ? (
+                                    <a href={r.href} target="_blank" rel="noreferrer" style={{ fontSize: 14, color: accent, textDecoration: 'none', wordBreak: 'break-word' }}>{r.value} ↗</a>
+                                  ) : (
+                                    <div style={{ fontSize: 14, color: text, lineHeight: 1.5 }}>{r.value}</div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {struct.prose && (
+                          <div style={{ padding: '12px 14px', background: accentLight, borderLeft: `3px solid ${accent}`, borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.75 }}>
+                            <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: accent, marginBottom: 4 }}>NOTES</div>
+                            {linkify(struct.prose, accent)}
+                          </div>
+                        )}
                       </div>
                     )
                   }
