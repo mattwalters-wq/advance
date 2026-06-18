@@ -427,28 +427,38 @@ export default function DaySheetPage() {
                   </div>
                 )}
                 {show?.notes && (() => {
-                  const noteLines = show.notes.split('\n')
-                  // Match a time or time-range at the start of a line, in many formats:
-                  // "9:00", "9am", "8.30am", "9am-10am", "1.30pm-3pm", with - – — or : before the text.
-                  const T = String.raw`\d{1,2}(?:[:.]\d{2}\s*(?:am|pm)?|\s*(?:am|pm))`
-                  const timeRx = new RegExp(`^(${T}(?:\\s*[-–—]\\s*${T})?)\\s*[-–—:]?\\s+(.+)$`, 'i')
+                  // Build a run-of-show from the notes. Handles both one-item-per-line
+                  // and a single flattened paragraph (e.g. an imported runsheet table)
+                  // by splitting on inline time tokens: "14:00", "8.30am", "6:30-7:15", etc.
+                  const T = String.raw`\d{1,2}(?:[:.]\d{2}(?:\s*(?:am|pm))?|\s*(?:am|pm))`
+                  const tokRx = new RegExp(`${T}(?:\\s*[-–—]\\s*${T})?`, 'ig')
+                  const noteText = show.notes.replace(/\r/g, '')
+                  const boldRx = /performance|stage|soundcheck|show call|headline/i
+                  const tokens: { index: number; len: number; time: string }[] = []
+                  let mm: RegExpExecArray | null
+                  while ((mm = tokRx.exec(noteText)) !== null) {
+                    tokens.push({ index: mm.index, len: mm[0].length, time: mm[0].replace(/\s+/g, ' ') })
+                    if (mm.index === tokRx.lastIndex) tokRx.lastIndex++
+                  }
                   const parsed: {time: string, text: string, bold: boolean}[] = []
-                  noteLines.forEach((line: string) => {
-                    const l = line.trim()
-                    if (!l) return
-                    const m = l.match(timeRx)
-                    if (m) {
-                      const rest = m[2].trim()
-                      if (!rest) return
-                      const lower = rest.toLowerCase()
-                      const bold = lower.includes('performance') || lower.includes('stage') || lower.includes('soundcheck') || lower.includes('show call')
-                      parsed.push({ time: m[1].replace(/\s+/g, ' '), text: rest, bold })
-                    }
-                  })
+                  let preamble = ''
+                  if (tokens.length >= 3) {
+                    preamble = noteText.slice(0, tokens[0].index).replace(/\s+/g, ' ').trim()
+                    tokens.forEach((tk, i) => {
+                      const start = tk.index + tk.len
+                      const end = i + 1 < tokens.length ? tokens[i + 1].index : noteText.length
+                      const seg = noteText.slice(start, end).replace(/^[\s\-–—:.]+/, '').replace(/[\s.;,]+$/, '').replace(/\s+/g, ' ').trim()
+                      if (!seg) return
+                      parsed.push({ time: tk.time, text: seg, bold: boldRx.test(seg) })
+                    })
+                  }
                   if (parsed.length >= 3) {
                     return (
                       <div style={{ marginTop: 14 }}>
                         <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: accent, marginBottom: 10 }}>DETAILED SCHEDULE</div>
+                        {preamble && (
+                          <div style={{ fontSize: 12, color: muted, lineHeight: 1.6, marginBottom: 10 }}>{preamble}</div>
+                        )}
                         <div style={{ borderRadius: 6, overflow: 'hidden', border: `1px solid ${border}` }}>
                           {parsed.map((entry, i) => (
                             <div key={i} style={{ display: 'flex', borderBottom: i < parsed.length - 1 ? `1px solid ${border}` : 'none', background: entry.bold ? accentLight : (i % 2 === 0 ? '#fff' : '#FAFAF8') }}>
