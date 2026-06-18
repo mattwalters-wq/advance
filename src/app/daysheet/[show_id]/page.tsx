@@ -428,18 +428,21 @@ export default function DaySheetPage() {
                 )}
                 {show?.notes && (() => {
                   const noteLines = show.notes.split('\n')
-                  const timeRx = /^(\d{1,2}:\d{2}\s*(?:am|pm)?)\s*[-:]?\s*/i
+                  // Match a time or time-range at the start of a line, in many formats:
+                  // "9:00", "9am", "8.30am", "9am-10am", "1.30pm-3pm", with - – — or : before the text.
+                  const T = String.raw`\d{1,2}(?:[:.]\d{2}\s*(?:am|pm)?|\s*(?:am|pm))`
+                  const timeRx = new RegExp(`^(${T}(?:\\s*[-–—]\\s*${T})?)\\s*[-–—:]?\\s+(.+)$`, 'i')
                   const parsed: {time: string, text: string, bold: boolean}[] = []
                   noteLines.forEach((line: string) => {
                     const l = line.trim()
                     if (!l) return
                     const m = l.match(timeRx)
                     if (m) {
-                      const rest = l.slice(m[0].length).trim()
+                      const rest = m[2].trim()
                       if (!rest) return
                       const lower = rest.toLowerCase()
                       const bold = lower.includes('performance') || lower.includes('stage') || lower.includes('soundcheck') || lower.includes('show call')
-                      parsed.push({ time: m[1], text: rest, bold })
+                      parsed.push({ time: m[1].replace(/\s+/g, ' '), text: rest, bold })
                     }
                   })
                   if (parsed.length >= 3) {
@@ -449,7 +452,7 @@ export default function DaySheetPage() {
                         <div style={{ borderRadius: 6, overflow: 'hidden', border: `1px solid ${border}` }}>
                           {parsed.map((entry, i) => (
                             <div key={i} style={{ display: 'flex', borderBottom: i < parsed.length - 1 ? `1px solid ${border}` : 'none', background: entry.bold ? accentLight : (i % 2 === 0 ? '#fff' : '#FAFAF8') }}>
-                              <div style={{ padding: '8px 14px', fontFamily: 'monospace', fontSize: 12, color: accent, fontWeight: 700, minWidth: 80, flexShrink: 0, borderRight: `1px solid ${border}` }}>{entry.time}</div>
+                              <div style={{ padding: '8px 14px', fontFamily: 'monospace', fontSize: 12, color: accent, fontWeight: 700, minWidth: 80, flexShrink: 0, whiteSpace: 'nowrap', borderRight: `1px solid ${border}` }}>{entry.time}</div>
                               <div style={{ padding: '8px 14px', fontSize: 13, color: text, lineHeight: 1.5, fontWeight: entry.bold ? 600 : 400 }}>{entry.text}</div>
                             </div>
                           ))}
