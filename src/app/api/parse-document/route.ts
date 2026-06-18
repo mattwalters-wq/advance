@@ -105,7 +105,12 @@ Rules:
 - Dates must be YYYY-MM-DD format. If only day/month given, infer the year from context
 - If NO date appears anywhere in the document, set "date" to null — do NOT invent one. Never drop the show or the contacts just because the date or venue is missing.
 - This may be a single-day RUNSHEET / DAY SHEET / studio session (e.g. "Like A Version") with no city or venue. Still extract it as ONE show: set "type" to "recording" for studio/Like A Version sessions, "rehearsal" for rehearsals, "press" for press/interview days, otherwise "show". If there's no venue but the sheet has a session/show name or branding, use that as the venue.
-- Map the schedule: first arrival/load-in → arrival_time, soundcheck → soundcheck_time, doors → doors_time, the performance/record/set → set_time. Put the FULL list of timestamped schedule lines into notes so nothing is lost.
+- Map the schedule: first arrival/load-in → arrival_time, soundcheck → soundcheck_time, doors → doors_time, the performance/record/set → set_time.
+- ALSO put the FULL run-of-show into notes so nothing is lost, but PRESERVE ITS STRUCTURE. This is critical: a runsheet is usually a "Time | What" table — keep it as a table, do NOT merge it into prose.
+  - Put EACH timed item on its OWN line, formatted as "HH:MM Description" (use "HH:MM-HH:MM" for ranges), in chronological order. Separate lines with newlines (\\n).
+  - NEVER collapse multiple timed items into a single paragraph or sentence.
+  - Any non-timed lead-in (document title, day-before bump-in lines, general notes) goes on its own line(s) at the TOP of notes, before the timed items.
+  - Example notes value: "MITS 10 Year Event Runsheet\\nThursday - Marquee set up\\n14:00 Encore set up\\n18:30 Guests arrive\\n19:30 Formalities commence\\n20:15 Music - Emma Donovan\\n22:00 Event concludes"
 - Extract EVERY named person as a contact with their exact role as labelled — crew and studio staff count too (engineer, monitors, director, camera operator, producer, promoter, venue, sound, lighting, stage manager, tour manager, etc.)
 - Times must be HH:MM 24hr format (e.g. "3:30pm" = "15:30", "9pm" = "21:00", "1130" = "11:30")
 - Extract the venue full address if provided
