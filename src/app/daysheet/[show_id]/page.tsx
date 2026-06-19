@@ -457,7 +457,7 @@ export default function DaySheetPage() {
                       <div style={{ marginTop: 14 }}>
                         <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: accent, marginBottom: 10 }}>DETAILED SCHEDULE</div>
                         {preamble && (
-                          <div style={{ fontSize: 12, color: muted, lineHeight: 1.6, marginBottom: 10 }}>{preamble}</div>
+                          <div style={{ fontSize: 12, color: muted, lineHeight: 1.6, marginBottom: 10 }}>{linkify(preamble, accent)}</div>
                         )}
                         <div style={{ borderRadius: 6, overflow: 'hidden', border: `1px solid ${border}` }}>
                           {parsed.map((entry, i) => (
