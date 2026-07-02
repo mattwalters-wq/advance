@@ -211,7 +211,7 @@ export default function DaySheetPage() {
   // Build schedule timeline
   const isNonShow = ['rehearsal', 'recording', 'press'].includes(show?.type || '')
   const schedule: { time: string; sort: string; event: string; highlight?: boolean }[] = []
-  if (show?.arrival_time) schedule.push({ time: fmt(show.arrival_time), sort: show.arrival_time, event: 'Artist arrival' })
+  if (show?.arrival_time) schedule.push({ time: fmt(show.arrival_time), sort: show.arrival_time, event: show.arrival_label || 'Artist arrival' })
   if (isNonShow) {
     if (show?.soundcheck_time) schedule.push({ time: fmt(show.soundcheck_time), sort: show.soundcheck_time, event: 'Start', highlight: true })
     if (show?.set_time) schedule.push({ time: fmt(show.set_time), sort: show.set_time, event: 'Finish' })
