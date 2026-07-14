@@ -164,6 +164,7 @@ export default function PublicTourPage() {
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 14, fontWeight: 700 }}>{t.from_location} to {t.to_location}</div>
+                            {t.travellers && <div style={{ fontSize: 12.5, color: accent, fontWeight: 600, marginTop: 3 }}>👤 {t.travellers}</div>}
                             {(t.carrier || t.reference) && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{[t.carrier, t.reference].filter(Boolean).join(' · ')}</div>}
                             {t.arrival_time && <div style={{ fontSize: 12, color: muted }}>Arr {fmt(t.arrival_time)}</div>}
                             {t.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{t.notes}</div>}
