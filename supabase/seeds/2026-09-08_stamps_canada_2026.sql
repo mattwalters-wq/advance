@@ -195,6 +195,36 @@ from seed_contacts p cross join seed_ctx c
 where p.existing_id is null
   and not exists (select 1 from contacts k where k.tour_id = c.tour_id and lower(k.name) = lower(p.name) and k.deleted_at is null);
 
+-- 3h. Flights — Amex Travel booking 31408422 (booked 3 Aug 2026), Air Canada
+--     supplier confirmation FPQP92, all three travellers on every segment.
+--     Source: canada_itinerary.pdf. Guarded on (tour, date, carrier).
+insert into travel (tour_id, org_id, travel_date, travel_type, departure_time, arrival_time,
+                    from_location, to_location, carrier, reference, travellers, notes)
+select c.tour_id, c.org_id, f.travel_date::date, 'Flight', f.dep, f.arr, f.from_loc, f.to_loc, f.carrier, 'FPQP92',
+       'Sofia, Scarlett, Rubina', f.notes
+from seed_ctx c cross join (values
+  ('2026-09-28','23:55','06:15','Perth (PER)','Sydney (SYD)','AC2738',
+   'Air Canada codeshare operated by Virgin Australia, 737 MAX 8, Economy (G). Arrives 29 Sep. Layover SYD 3h05. Baggage included. Seat requests pending with airline. Amex booking 31408422.'),
+  ('2026-09-29','09:20','06:40','Sydney (SYD)','Vancouver (YVR)','AC34',
+   'Air Canada 787-9, Economy (G). Arrives 06:40 local same date (crosses date line). Layover YVR 1h50. Clear Canadian customs/immigration at YVR. Baggage included.'),
+  ('2026-09-29','08:30','15:53','Vancouver (YVR)','Toronto (YYZ)','AC186',
+   'Air Canada 787-9, Economy (G). Domestic leg. Baggage included. Arrival Toronto 15:53 local — two days before first show (Waterloo, 1 Oct).'),
+  ('2026-11-05','17:40','20:56','Toronto (YYZ)','Vancouver (YVR)','AC119',
+   'Air Canada 777-300ER, Economy (G). Departs the day after the last show (Drom Taberna, 4 Nov). Layover YVR 2h54. Baggage included.'),
+  ('2026-11-05','23:50','09:35','Vancouver (YVR)','Sydney (SYD)','AC33',
+   'Air Canada 777-200LR, Economy (G). Arrives Sydney 09:35 Sat 7 Nov (+2 days). Layover SYD 2h50. Baggage included.'),
+  ('2026-11-07','12:25','14:30','Sydney (SYD)','Perth (PER)','AC2739',
+   'Air Canada codeshare operated by Virgin Australia, 737 MAX 8, Economy (G). Baggage included. Seat requests pending with airline.')
+) f(travel_date, dep, arr, from_loc, to_loc, carrier, notes)
+where not exists (select 1 from travel t where t.tour_id = c.tour_id and t.travel_date = f.travel_date::date and t.carrier = f.carrier and t.deleted_at is null);
+
+-- 3i. Airfare expense — booked figure to replace the budget placeholder.
+insert into expenses (tour_id, org_id, show_id, category, description, amount, amount_paid, currency, status, notes)
+select c.tour_id, c.org_id, null, 'flights', 'International flights PER–YYZ return x3 (Air Canada / Virgin Australia)', 6513.24, 6513.24, 'AUD', 'paid',
+       'Amex Travel booking 31408422, paid 3 Aug 2026 on card. Fare $4,644.00 + taxes/fees $1,869.24 = $6,513.24 AUD. Supplier confirmation FPQP92. Travellers: Sofia Rosa Hourani, Rubina Kate Bertolini, Scarlett Ceciley Graham.'
+from seed_ctx c
+where not exists (select 1 from expenses x where x.tour_id = c.tour_id and x.description like 'International flights PER%');
+
 commit;
 
 -- ---------------------------------------------------------------------------
@@ -204,3 +234,6 @@ select s.date, s.city, s.venue, s.type, s.set_time, x.deal_type, x.capacity, x.t
 from shows s left join settlements x on x.show_id = s.id
 where s.tour_id = '0c82a5bd-4407-42fe-9de0-eeb75c9b38c0' and s.deleted_at is null
 order by s.date;
+
+select travel_date, carrier, departure_time, arrival_time, from_location, to_location, reference
+from travel where tour_id = '0c82a5bd-4407-42fe-9de0-eeb75c9b38c0' and deleted_at is null order by travel_date, departure_time;
