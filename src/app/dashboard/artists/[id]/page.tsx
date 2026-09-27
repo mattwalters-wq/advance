@@ -1709,7 +1709,7 @@ export default function ArtistPage() {
         </div>
       </div>
 
-      <div className="content-container" style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
+      <div className="content-container" style={{ maxWidth: 900, margin: '0 auto', padding: 24, minWidth: 0 }}>
 
         {/* Tour tabs - split active vs archived */}
         {tours.length > 0 && (() => {
@@ -1926,7 +1926,7 @@ export default function ArtistPage() {
                         {/* Warnings */}
             {/* LIST VIEW */}
             {view === 'list' && (
-              <div style={{ display: 'grid', gap: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 20 }}>
                 {/* Manual add row */}
                 <div className="add-row" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {([['show', '+ Show'], ['travel', '+ Travel'], ['accommodation', '+ Hotel'], ['contact', '+ Contact'], ['press', '+ Press'], ['document', '+ Docs']] as const).map(([type, label]) => (
@@ -1951,7 +1951,7 @@ export default function ArtistPage() {
                   )}
                 </div>
                 {(shows.length > 0 || travel.length > 0) && (
-                  <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
+                  <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}`, minWidth: 0 }}>
                     <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>
                       {(() => {
                         const showCount = shows.filter(s => !s.type || s.type === 'show').length
@@ -2650,7 +2650,7 @@ export default function ArtistPage() {
 
             {/* NOTES VIEW */}
             {view === 'notes' && (
-              <div style={{ display: 'grid', gap: 0 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 0 }}>
                 <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
                   <div style={{ padding: '12px 20px', borderBottom: `1px solid ${border}`, fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: muted }}>
                     TOUR NOTES — {selectedTour?.name}
@@ -2810,7 +2810,7 @@ export default function ArtistPage() {
 
             {/* IMPORT VIEW */}
             {view === 'import' && (
-              <div style={{ display: 'grid', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 16 }}>
 
                 {/* Tab toggle */}
                 <div style={{ display: 'flex', gap: 0, background: darkMode ? '#222' : '#EDE8DF', borderRadius: 8, padding: 3, alignSelf: 'flex-start' }}>
