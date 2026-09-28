@@ -42,7 +42,8 @@ export default function PublicTourPage() {
     setShows(s1.data || [])
     setTravel(s2.data || [])
     setAccommodation(s3.data || [])
-    setContacts(s4.data || [])
+    // Only tour-wide contacts here; show-specific ones live on their day sheet
+    setContacts((s4.data || []).filter((c: any) => c.on_daysheet !== false && !c.show_id))
     setPress(s5.data || [])
     setLoading(false)
   }

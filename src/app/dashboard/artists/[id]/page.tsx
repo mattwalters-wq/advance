@@ -1228,6 +1228,25 @@ export default function ArtistPage() {
                   <label style={labelStyle}>Email</label>
                   <input style={inputStyle} value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="email@venue.com" />
                 </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Show on day sheets</label>
+                  <select style={inputStyle}
+                    value={form.on_daysheet === false ? 'hidden' : (form.show_id || 'all')}
+                    onChange={e => {
+                      const v = e.target.value
+                      if (v === 'all') setForm({ ...form, show_id: null, on_daysheet: true })
+                      else if (v === 'hidden') setForm({ ...form, show_id: null, on_daysheet: false })
+                      else setForm({ ...form, show_id: v, on_daysheet: true })
+                    }}>
+                    <option value="all">Every day sheet</option>
+                    {shows.map(s => (
+                      <option key={s.id} value={s.id}>
+                        Only {s.date ? new Date(s.date + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) + ' — ' : ''}{s.venue || s.city || 'TBC'}
+                      </option>
+                    ))}
+                    <option value="hidden">Hidden (dashboard only)</option>
+                  </select>
+                </div>
               </>
             )}
 
@@ -2422,6 +2441,12 @@ export default function ArtistPage() {
                           {c.role && <div style={{ fontSize: 13, color: muted }}>{c.role}</div>}
                           {c.phone && <div style={{ fontSize: 13, color: muted }}>📞 {c.phone}</div>}
                           {c.email && <div style={{ fontSize: 13, color: muted }}>✉️ {c.email}</div>}
+                          {(() => {
+                            if (c.on_daysheet === false) return <div style={{ fontSize: 11, color: muted, marginTop: 4, fontFamily: 'monospace' }}>Hidden from day sheets</div>
+                            const s = c.show_id && shows.find(x => x.id === c.show_id)
+                            if (s) return <div style={{ fontSize: 11, color: muted, marginTop: 4, fontFamily: 'monospace' }}>Day sheet: {s.venue || s.city}</div>
+                            return null
+                          })()}
                         </div>
                         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                           <button onClick={() => openModal('contact', c)}

@@ -190,7 +190,10 @@ export default function DaySheetPage() {
       if (!a.check_in) return false
       return a.check_in <= showDate && (a.check_out || a.check_in) >= showDate
     }))
-    setContacts(contactsRes.data || [])
+    // This show's venue contacts first, then tour-wide ones (no show_id); skip ones hidden from sheets
+    setContacts((contactsRes.data || [])
+      .filter((c: any) => c.on_daysheet !== false && (!c.show_id || c.show_id === showData.id))
+      .sort((a: any, b: any) => (a.show_id ? 0 : 1) - (b.show_id ? 0 : 1)))
     setRider(riderRes.data || null)
     setPress(pressRes.data || [])
     setSetlist(setlistRes.data || null)
