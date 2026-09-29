@@ -20,49 +20,55 @@ function DashboardInner() {
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/auth/signin'); return }
+    let redirecting = false
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { redirecting = true; router.push('/auth/signin'); return }
 
-    // God mode: admin can view any user's roster
-    const superadmin = searchParams.get('superadmin')
-    const orgId = searchParams.get('org_id')
-    if (superadmin === '1' && orgId && user.email === ADMIN_EMAIL) {
-      // Load the target user's profile and artists
-      const [profileRes, artistsRes] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', orgId).single(),
-        supabase.from('artists').select('*').eq('org_id', orgId).order('name'),
-      ])
-      setUser(user)
-      setProfile(profileRes.data)
-      setArtists(artistsRes.data || [])
-      setGodMode({ orgId, name: profileRes.data?.full_name || orgId })
-      setLoading(false)
-      return
-    }
-
-    setUser(user)
-    // Parallelise profile + artists
-    const [profileRes, artistsRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', user.id).single(),
-      supabase.from('artists').select('*').order('name'),
-    ])
-    let profile = profileRes.data
-    // If no profile or no org, run full setup
-    if (!profile?.org_id) {
-      const res = await fetch('/api/setup-account', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, email: user.email, fullName: profile?.full_name || '' }),
-      })
-      const setupData = await res.json()
-      if (setupData.success) {
-        const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-        profile = refreshed
+      // God mode: admin can view any user's roster
+      const superadmin = searchParams.get('superadmin')
+      const orgId = searchParams.get('org_id')
+      if (superadmin === '1' && orgId && user.email === ADMIN_EMAIL) {
+        // Resolve the target org's profile (fall back to treating the param as a user id for old links)
+        let { data: targetProfile } = await supabase.from('profiles').select('*').eq('org_id', orgId).limit(1).maybeSingle()
+        if (!targetProfile) {
+          const { data: byId } = await supabase.from('profiles').select('*').eq('id', orgId).maybeSingle()
+          targetProfile = byId
+        }
+        const targetOrgId = targetProfile?.org_id || orgId
+        const { data: artistsData } = await supabase.from('artists').select('*').eq('org_id', targetOrgId).order('name')
+        setUser(user)
+        setProfile(targetProfile)
+        setArtists(artistsData || [])
+        setGodMode({ orgId: targetOrgId, name: targetProfile?.full_name || targetOrgId })
+        return
       }
+
+      setUser(user)
+      // Parallelise profile + artists
+      const [profileRes, artistsRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', user.id).single(),
+        supabase.from('artists').select('*').order('name'),
+      ])
+      let profile = profileRes.data
+      // If no profile or no org, run full setup
+      if (!profile?.org_id) {
+        const res = await fetch('/api/setup-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, email: user.email, fullName: profile?.full_name || '' }),
+        })
+        const setupData = await res.json()
+        if (setupData.success) {
+          const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+          profile = refreshed
+        }
+      }
+      setProfile(profile)
+      setArtists(artistsRes.data || [])
+    } finally {
+      if (!redirecting) setLoading(false)
     }
-    setProfile(profile)
-    setArtists(artistsRes.data || [])
-    setLoading(false)
   }
 
   async function handleSignout() {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
 const supabase = createClient()
@@ -11,6 +11,11 @@ function fmt(t: string) {
   const [h, m] = t.split(':')
   const hour = parseInt(h)
   return `${hour % 12 || 12}:${m}${hour >= 12 ? 'pm' : 'am'}`
+}
+
+function localToday() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function fmtDateLong(d: string) {
@@ -29,6 +34,9 @@ function fmtDateShort(d: string) {
 
 export default function FestivalSheetPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
+  const venueFilter = searchParams.get('venue')
+  const [notFound, setNotFound] = useState(false)
   const [tour, setTour] = useState<any>(null)
   const [artist, setArtist] = useState<any>(null)
   const [shows, setShows] = useState<any[]>([])
@@ -38,31 +46,27 @@ export default function FestivalSheetPage() {
   const [loading, setLoading] = useState(true)
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set())
 
-  useEffect(() => { loadData() }, [params.tour_id])
+  useEffect(() => { loadData() }, [params.tour_id, venueFilter])
 
   async function loadData() {
-    const [tourRes, showsRes, pressRes, setlistsRes, peopleRes] = await Promise.all([
-      supabase.from('tours').select('*, artists(*)').eq('id', params.tour_id).single(),
-      supabase.from('shows').select('*').eq('tour_id', params.tour_id).is('deleted_at', null).order('date'),
-      supabase.from('press').select('*').eq('tour_id', params.tour_id).is('deleted_at', null).order('date'),
-      supabase.from('setlists').select('*').eq('tour_id', params.tour_id).is('deleted_at', null),
-      supabase.from('show_people').select('*').eq('tour_id', params.tour_id).is('deleted_at', null),
-    ])
-    if (tourRes.data) {
-      setTour(tourRes.data)
-      if (tourRes.data.artists) setArtist(tourRes.data.artists)
-    }
-    setShows(showsRes.data || [])
-    setPress(pressRes.data || [])
-    setSetlists(setlistsRes.data || [])
-    setShowPeople(peopleRes.data || [])
+    // Server-side call; with ?venue= it returns just that festival's days
+    const { data } = await supabase.rpc('public_festival', { p_tour_id: params.tour_id, p_venue: venueFilter })
+    if (!data?.tour) { setNotFound(true); setLoading(false); return }
+    setTour(data.tour)
+    if (data.tour.artists) setArtist(data.tour.artists)
+    const showsData: any[] = data.shows || []
+    const pressData: any[] = data.press || []
+    setShows(showsData)
+    setPress(pressData)
+    setSetlists(data.setlists || [])
+    setShowPeople(data.show_people || [])
 
     // Auto-expand today's day if it's in the festival, else expand all
-    const today = new Date().toISOString().split('T')[0]
+    const today = localToday()
     const allDates = new Set<string>([
-      ...(showsRes.data || []).map((s: any) => s.date),
-      ...(pressRes.data || []).map((p: any) => p.date),
-    ])
+      ...showsData.map((s: any) => s.date),
+      ...pressData.map((p: any) => p.date),
+    ].filter(Boolean))
     if (allDates.has(today)) {
       setExpandedDays(new Set([today]))
     } else {
@@ -80,6 +84,7 @@ export default function FestivalSheetPage() {
   const sectionBg = '#F9F6F2'
 
   if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F9F6F2', fontFamily: 'sans-serif', color: muted }}>Loading...</div>
+  if (notFound) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F9F6F2', fontFamily: 'sans-serif', color: muted }}>Festival not found.</div>
 
   // Collect all unique dates from shows + press, sorted
   const allDates = Array.from(new Set([
@@ -108,7 +113,7 @@ export default function FestivalSheetPage() {
   function expandAll() { setExpandedDays(new Set(allDates)) }
   function collapseAll() { setExpandedDays(new Set()) }
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = localToday()
 
   // Get the venue (should be same across all shows for a festival)
   const venue = shows[0]?.venue || ''
@@ -127,12 +132,12 @@ export default function FestivalSheetPage() {
       `}</style>
 
       {/* Toolbar */}
-      <div className="no-print" style={{ background: '#1A1714', padding: '0 16px 0 24px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <div className="no-print" style={{ background: '#1A1714', padding: '8px 16px', minHeight: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 17, fontStyle: 'italic', color: '#F5F0E8', fontFamily: 'Georgia, serif' }}>Advance</span>
           <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: accent }}>FESTIVAL SHEET</span>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={expandAll}
             style={{ padding: '6px 12px', background: 'transparent', color: '#8A8580', border: '1px solid #2A2520', borderRadius: 5, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
             EXPAND ALL
@@ -141,7 +146,7 @@ export default function FestivalSheetPage() {
             style={{ padding: '6px 12px', background: 'transparent', color: '#8A8580', border: '1px solid #2A2520', borderRadius: 5, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
             COLLAPSE
           </button>
-          <button onClick={() => window.print()}
+          <button onClick={() => { expandAll(); setTimeout(() => window.print(), 50) }}
             style={{ padding: '7px 18px', background: accent, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2 }}>
             PRINT
           </button>

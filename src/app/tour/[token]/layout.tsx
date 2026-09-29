@@ -28,6 +28,7 @@ export async function generateMetadata({ params }: { params: { token: string } }
     .from('shows')
     .select('date, venue, city, country')
     .eq('tour_id', tour.id)
+    .is('deleted_at', null)
     .order('date')
     .limit(4)
 

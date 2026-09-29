@@ -9,6 +9,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [checkEmail, setCheckEmail] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -18,15 +19,25 @@ export default function SignupPage() {
     setLoading(true)
     setError('')
     try {
-      const { data, error } = await supabase.auth.signUp({ email, password })
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding` },
+      })
       if (error) throw error
       if (data.user) {
         // Create profile + personal org via service role API
-        await fetch('/api/setup-account', {
+        const res = await fetch('/api/setup-account', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: data.user.id, email: data.user.email, fullName: '' }),
         })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error || 'Could not finish setting up your account. Please try again.')
+        }
+        // Email confirmation is on: no session until the user clicks the link
+        if (!data.session) { setCheckEmail(true); return }
         router.push('/onboarding')
       }
     } catch (err: any) {
@@ -54,6 +65,12 @@ export default function SignupPage() {
       <div style={{ width: '100%', maxWidth: 380 }}>
         <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: '#8A8580', textAlign: 'center', marginBottom: 8 }}>CREATE ACCOUNT</div>
         <div style={{ textAlign: 'center', fontSize: 14, color: '#8A8580', marginBottom: 28 }}>Tour management, built for the road.</div>
+
+        {checkEmail && (
+          <div style={{ background: 'rgba(61,107,80,0.2)', border: '1px solid rgba(61,107,80,0.5)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#A8D5B5', textAlign: 'center' }}>
+            Check your email to confirm your account. We sent a link to {email}.
+          </div>
+        )}
 
         {error && (
           <div style={{ background: 'rgba(200,0,0,0.15)', border: '1px solid rgba(200,0,0,0.3)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#ff8080', fontFamily: 'monospace' }}>

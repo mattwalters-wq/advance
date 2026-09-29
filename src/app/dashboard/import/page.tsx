@@ -246,6 +246,7 @@ export default function ImportPage() {
       if (!user) throw new Error('Not logged in')
       const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
       if (!profile) throw new Error('No profile found')
+      if (!profile.org_id) throw new Error('Your account is not linked to an organisation — finish onboarding before importing')
       const org_id = profile.org_id
 
       let tourId: string
@@ -271,11 +272,22 @@ export default function ImportPage() {
         }
         return row
       }).filter(Boolean)
-      if (showRows.length) await supabase.from('shows').insert(showRows)
-      if (merged.travel?.length) await supabase.from('travel').insert(merged.travel.map((t: any) => ({ ...t, tour_id: tourId, org_id })))
-      if (merged.accommodation?.length) await supabase.from('accommodation').insert(merged.accommodation.map((a: any) => ({ ...a, tour_id: tourId, org_id })))
-      if (merged.contacts?.length) await supabase.from('contacts').insert(merged.contacts.map((c: any) => ({ ...c, tour_id: tourId, org_id })))
-      if (merged.personnel?.length) await supabase.from('personnel').insert(merged.personnel.map((p: any) => ({ ...p, tour_id: tourId, org_id })))
+      // Empty strings break typed columns (dates/times) — send null instead
+      const clean = (r: any) => Object.fromEntries(Object.entries(r || {}).map(([k, v]) => [k, v === '' ? null : v]))
+      const failures: string[] = []
+      const insertRows = async (table: string, rows: any[]) => {
+        if (!rows.length) return
+        const { error } = await supabase.from(table).insert(rows)
+        if (error) failures.push(`${table}: ${error.message}`)
+      }
+      await insertRows('shows', showRows)
+      await insertRows('travel', (merged.travel || []).map((t: any) => ({ ...clean(t), tour_id: tourId, org_id })))
+      await insertRows('accommodation', (merged.accommodation || []).map((a: any) => ({ ...clean(a), tour_id: tourId, org_id })))
+      await insertRows('contacts', (merged.contacts || []).map((c: any) => ({ ...clean(c), tour_id: tourId, org_id })))
+      await insertRows('personnel', (merged.personnel || []).map((p: any) => ({ ...clean(p), tour_id: tourId, org_id })))
+      if (failures.length) {
+        throw new Error((importMode === 'new' ? `Tour "${tourName}" was created, but some items failed to import — ` : 'Some items failed to import — ') + failures.join('; '))
+      }
 
       setImported(true)
       setTimeout(() => router.push(`/dashboard/artists/${selectedArtistId}`), 1200)

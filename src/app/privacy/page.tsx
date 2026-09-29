@@ -1,5 +1,17 @@
 import Link from 'next/link'
 
+// Section copy contains a contact-form anchor as text; render it as a real link
+const CONTACT_ANCHOR = '<a href="/contact">contact form</a>'
+function renderBody(body: string) {
+  const parts = body.split(CONTACT_ANCHOR)
+  return parts.map((part, j) => (
+    <span key={j}>
+      {part}
+      {j < parts.length - 1 && <Link href="/contact" style={{ color: 'inherit', textDecoration: 'underline' }}>contact form</Link>}
+    </span>
+  ))
+}
+
 export default function PrivacyPage() {
   return (
     <div style={{ background: '#F7F3EE', minHeight: '100vh', fontFamily: '"Georgia", serif', color: '#1A1714' }}>
@@ -59,7 +71,7 @@ export default function PrivacyPage() {
         ].map((section, i) => (
           <div key={i} style={{ marginBottom: 36 }}>
             <h2 style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 20, fontWeight: 700, marginBottom: 10, color: '#1A1714' }}>{section.title}</h2>
-            <p style={{ fontSize: 14, color: '#6A6058', lineHeight: 1.85 }}>{section.body}</p>
+            <p style={{ fontSize: 14, color: '#6A6058', lineHeight: 1.85 }}>{renderBody(section.body)}</p>
           </div>
         ))}
       </div>

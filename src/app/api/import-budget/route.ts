@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     if (!(await userCanAccessTour(supabase, user.id, tourId))) return forbidden()
 
-    const { data: shows } = await supabase.from('shows').select('*').eq('tour_id', tourId).order('date')
+    const { data: shows } = await supabase.from('shows').select('*').eq('tour_id', tourId).is('deleted_at', null).order('date')
     const showList = (shows || []).map(s => `- id:${s.id} | ${s.date} | ${s.venue}, ${s.city || ''}`).join('\n')
 
     const prompt = `You are extracting budget data from a tour budget document. Match each show fee/income line to the correct show, and extract all expense items.

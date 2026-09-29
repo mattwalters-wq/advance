@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { fileToAttachment, collectFiles } from '@/lib/attach'
@@ -79,9 +79,13 @@ export default function ArtistPage() {
   const [newNote, setNewNote] = useState('')
   const [postingNote, setPostingNote] = useState(false)
   const [userName, setUserName] = useState('Manager')
+  // Guards against stale loadTourData responses overwriting a newer tour's data
+  const loadSeqRef = useRef(0)
+  const selectedTourIdRef = useRef<string | null>(null)
 
   useEffect(() => { loadArtist() }, [params.id])
   useEffect(() => {
+    selectedTourIdRef.current = selectedTour?.id || null
     if (selectedTour) {
       loadTourData(selectedTour.id)
       // Broadcast to FloatingAssistant so it uses the same tour
@@ -90,7 +94,7 @@ export default function ArtistPage() {
         window.dispatchEvent(new CustomEvent('advance:tour-change', { detail: { tourId: selectedTour.id } }))
       } catch {}
     }
-  }, [selectedTour])
+  }, [selectedTour?.id])
 
   async function loadArtist() {
     // Parallelise all initial queries
@@ -113,7 +117,7 @@ export default function ArtistPage() {
     setTours(toursData)
     setAllTourShows(allShows)
     if (toursData.length > 0) {
-      const today = new Date().toISOString().split('T')[0]
+      const today = new Date().toLocaleDateString('en-CA')
       function isArchivedCheck(t: any) {
         if (t.end_date) return t.end_date < today
         const latestShow = allShows.filter((s: any) => s.tour_id === t.id).map((s: any) => s.date).filter(Boolean).sort().reverse()[0]
@@ -163,6 +167,10 @@ export default function ArtistPage() {
   }
 
   async function loadTourData(tourId: string) {
+    // A reload for a tour that's no longer selected must not start (or cancel the current tour's load)
+    if (selectedTourIdRef.current && selectedTourIdRef.current !== tourId) return
+    const seq = ++loadSeqRef.current
+    const isStale = () => seq !== loadSeqRef.current || selectedTourIdRef.current !== tourId
     const [s, t, a, c, p, sl, d, sp, gl, ex] = await Promise.all([
       supabase.from('shows').select('*').eq('tour_id', tourId).is('deleted_at', null).order('date'),
       supabase.from('travel').select('*').eq('tour_id', tourId).is('deleted_at', null).order('travel_date'),
@@ -175,6 +183,7 @@ export default function ArtistPage() {
       supabase.from('guest_list').select('*').eq('tour_id', tourId).is('deleted_at', null).order('name'),
       supabase.from('expenses').select('id, description, amount, currency, notes, show_id, status').eq('tour_id', tourId).not('show_id', 'is', null).is('deleted_at', null),
     ])
+    if (isStale()) return
     const showsData = s.data || []
     const travelData = t.data || []
     const accomData = a.data || []
@@ -196,12 +205,25 @@ export default function ArtistPage() {
     // Parallelise secondary queries
     const [notesRes, riderRes, settlementsRes] = await Promise.all([
       supabase.from('tour_notes').select('*').eq('tour_id', tourId).order('created_at', { ascending: true }),
-      supabase.from('riders').select('*').eq('tour_id', tourId).single(),
+      supabase.from('riders').select('*').eq('tour_id', tourId).order('created_at', { ascending: true }).limit(1).maybeSingle(),
       supabase.from('settlements').select('*').eq('tour_id', tourId),
     ])
+    if (isStale()) return
     setNotes(notesRes.data || [])
     setRider(riderRes.data || null)
     setSettlements(settlementsRes.data || [])
+  }
+
+  // Move a show and everything linked to it (by show_id) to another tour
+  async function moveShowToTour(showId: string, target: any) {
+    const updates = { tour_id: target.id, org_id: target.org_id }
+    const { error } = await supabase.from('shows').update(updates).eq('id', showId)
+    if (error) { alert('Could not move show: ' + error.message); return false }
+    const linked = ['setlists', 'show_people', 'guest_list', 'settlements', 'expenses', 'contacts']
+    const results = await Promise.all(linked.map(table => supabase.from(table).update(updates).eq('show_id', showId)))
+    const failed = results.find(r => r.error)
+    if (failed?.error) alert('Show moved, but some linked items could not be moved: ' + failed.error.message)
+    return true
   }
 
   async function postNote() {
@@ -219,7 +241,9 @@ export default function ArtistPage() {
   }
 
   async function deleteNote(id: string) {
-    await supabase.from('tour_notes').delete().eq('id', id)
+    if (!confirm('Delete this note?')) return
+    const { error } = await supabase.from('tour_notes').delete().eq('id', id)
+    if (error) { alert('Could not delete note: ' + error.message); return }
     setNotes(prev => prev.filter(n => n.id !== id))
   }
 
@@ -511,10 +535,11 @@ export default function ArtistPage() {
     setSaving(true)
 
     if (modal === 'tour') {
+      if (!String(form.name || '').trim()) { setSaving(false); alert('Tour name is required'); return }
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const tourFields = {
-          name: form.name,
+          name: String(form.name).trim(),
           start_date: form.start_date || null,
           end_date: form.end_date || null,
           status: form.status || 'routing',
@@ -522,7 +547,8 @@ export default function ArtistPage() {
         }
         if (editingId) {
           // Edit existing tour
-          await supabase.from('tours').update(tourFields).eq('id', editingId)
+          const { error } = await supabase.from('tours').update(tourFields).eq('id', editingId)
+          if (error) { setSaving(false); alert('Could not save changes: ' + error.message); return }
           const { data: toursData } = await supabase.from('tours').select('*').eq('artist_id', params.id as string).order('start_date', { ascending: true })
           setTours(toursData || [])
           const updated = (toursData || []).find((t: any) => t.id === editingId)
@@ -530,10 +556,12 @@ export default function ArtistPage() {
         } else {
           // Create new tour
           const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
+          if (!profile) { setSaving(false); alert('Could not save: profile not found'); return }
           if (profile) {
-            const { data: newTour } = await supabase.from('tours')
+            const { data: newTour, error } = await supabase.from('tours')
               .insert({ ...tourFields, artist_id: params.id, org_id: profile.org_id })
               .select().single()
+            if (error) { setSaving(false); alert('Could not save: ' + error.message); return }
             if (newTour) {
               const { data: toursData } = await supabase.from('tours').select('*').eq('artist_id', params.id as string).order('start_date', { ascending: true })
               setTours(toursData || [])
@@ -550,86 +578,6 @@ export default function ArtistPage() {
     if (!selectedTour) { setSaving(false); return }
     const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id }
 
-    if (modal === 'settlement') {
-      const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id, show_id: settlementShow?.id }
-      const existing = settlements.find(s => s.show_id === settlementShow?.id)
-      if (existing) {
-        const { id, tour_id, org_id, show_id, created_at, ...updates } = form
-        await supabase.from('settlements').update(updates).eq('id', existing.id)
-        setSettlements(prev => prev.map(s => s.id === existing.id ? { ...s, ...updates } : s))
-      } else {
-        const { data } = await supabase.from('settlements').insert({ ...base, ...form }).select().single()
-        if (data) setSettlements(prev => [...prev, data])
-      }
-      setSaving(false)
-      closeModal()
-      return
-    }
-
-    if (modal === 'rider') {
-      if (rider?.id) {
-        const { id, tour_id, org_id, created_at, ...updates } = form
-        await supabase.from('riders').update(updates).eq('id', rider.id)
-        setRider({ ...rider, ...updates })
-      } else {
-        const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id }
-        const { data } = await supabase.from('riders').insert({ ...base, ...form }).select().single()
-        setRider(data)
-      }
-      setSaving(false)
-      closeModal()
-      return
-    }
-
-    if (modal === 'setlist') {
-      const { songs, notes } = form
-      const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id, show_id: setlistShow?.id }
-      const existing = setlists.find(s => s.show_id === setlistShow?.id)
-      if (existing) {
-        await supabase.from('setlists').update({ songs, notes: notes || null, updated_at: new Date().toISOString() }).eq('id', existing.id)
-      } else {
-        await supabase.from('setlists').insert({ ...base, songs, notes: notes || null })
-      }
-      await loadTourData(selectedTour.id)
-      setSaving(false)
-      closeModal()
-      return
-    }
-
-    if (modal === 'person') {
-      const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id, show_id: personShow?.id || form.show_id }
-      if (editingId) {
-        const { id, tour_id, org_id, created_at, show_id, ...updates } = form
-        await supabase.from('show_people').update(updates).eq('id', editingId)
-      } else {
-        await supabase.from('show_people').insert({ ...base, ...form })
-      }
-      await loadTourData(selectedTour.id)
-      setSaving(false)
-      closeModal()
-      return
-    }
-
-    if (modal === 'guest') {
-      const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id, show_id: guestShow?.id || form.show_id }
-      if (editingId) {
-        const { id, tour_id, org_id, created_at, show_id, ...updates } = form
-        await supabase.from('guest_list').update(updates).eq('id', editingId)
-      } else {
-        await supabase.from('guest_list').insert({ ...base, ...form })
-      }
-      await loadTourData(selectedTour.id)
-      setSaving(false)
-      closeModal()
-      return
-    }
-
-    const tableMap: Record<string, string> = {
-      show: 'shows', travel: 'travel', accommodation: 'accommodation', contact: 'contacts', press: 'press', document: 'tour_documents'
-    }
-    const table = tableMap[modal as string]
-    if (!table) { setSaving(false); return }
-
     // Strip client-only keys (e.g. _type added by the schedule view) and the
     // immutable ones, and turn blank strings into null so typed columns
     // (date/time) don't reject the write.
@@ -642,6 +590,95 @@ export default function ArtistPage() {
       }
       return out
     }
+
+    if (modal === 'settlement') {
+      const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id, show_id: settlementShow?.id }
+      const existing = settlements.find(s => s.show_id === settlementShow?.id)
+      if (existing) {
+        const { show_id, ...updates } = clean(form)
+        const { error } = await supabase.from('settlements').update(updates).eq('id', existing.id)
+        if (error) { setSaving(false); alert('Could not save changes: ' + error.message); return }
+      } else {
+        const { error } = await supabase.from('settlements').insert({ ...clean(form), ...base })
+        if (error) { setSaving(false); alert('Could not save: ' + error.message); return }
+      }
+      await loadTourData(selectedTour.id)
+      setSaving(false)
+      closeModal()
+      return
+    }
+
+    if (modal === 'rider') {
+      if (rider?.id) {
+        const updates = clean(form)
+        const { error } = await supabase.from('riders').update(updates).eq('id', rider.id)
+        if (error) { setSaving(false); alert('Could not save changes: ' + error.message); return }
+        setRider({ ...rider, ...updates })
+      } else {
+        const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id }
+        const { data, error } = await supabase.from('riders').insert({ ...base, ...clean(form) }).select().single()
+        if (error) { setSaving(false); alert('Could not save: ' + error.message); return }
+        setRider(data)
+      }
+      setSaving(false)
+      closeModal()
+      return
+    }
+
+    if (modal === 'setlist') {
+      const { songs, notes } = form
+      const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id, show_id: setlistShow?.id }
+      const existing = setlists.find(s => s.show_id === setlistShow?.id)
+      if (existing) {
+        const { error } = await supabase.from('setlists').update({ songs, notes: notes || null, updated_at: new Date().toISOString() }).eq('id', existing.id)
+        if (error) { setSaving(false); alert('Could not save changes: ' + error.message); return }
+      } else {
+        const { error } = await supabase.from('setlists').insert({ ...base, songs, notes: notes || null })
+        if (error) { setSaving(false); alert('Could not save: ' + error.message); return }
+      }
+      await loadTourData(selectedTour.id)
+      setSaving(false)
+      closeModal()
+      return
+    }
+
+    if (modal === 'person') {
+      const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id, show_id: personShow?.id || form.show_id }
+      if (editingId) {
+        const { show_id, ...updates } = clean(form)
+        const { error } = await supabase.from('show_people').update(updates).eq('id', editingId)
+        if (error) { setSaving(false); alert('Could not save changes: ' + error.message); return }
+      } else {
+        const { error } = await supabase.from('show_people').insert({ ...clean(form), ...base })
+        if (error) { setSaving(false); alert('Could not save: ' + error.message); return }
+      }
+      await loadTourData(selectedTour.id)
+      setSaving(false)
+      closeModal()
+      return
+    }
+
+    if (modal === 'guest') {
+      const base = { tour_id: selectedTour.id, org_id: selectedTour.org_id, show_id: guestShow?.id || form.show_id }
+      if (editingId) {
+        const { show_id, ...updates } = clean(form)
+        const { error } = await supabase.from('guest_list').update(updates).eq('id', editingId)
+        if (error) { setSaving(false); alert('Could not save changes: ' + error.message); return }
+      } else {
+        const { error } = await supabase.from('guest_list').insert({ ...clean(form), ...base })
+        if (error) { setSaving(false); alert('Could not save: ' + error.message); return }
+      }
+      await loadTourData(selectedTour.id)
+      setSaving(false)
+      closeModal()
+      return
+    }
+
+    const tableMap: Record<string, string> = {
+      show: 'shows', travel: 'travel', accommodation: 'accommodation', contact: 'contacts', press: 'press', document: 'tour_documents'
+    }
+    const table = tableMap[modal as string]
+    if (!table) { setSaving(false); return }
 
     if (editingId) {
       const { error } = await supabase.from(table).update(clean(form)).eq('id', editingId)
@@ -664,129 +701,147 @@ export default function ArtistPage() {
       // dateStr is YYYY-MM-DD
       return dateStr.replace(/-/g, '')
     }
+    // 'HH:MM' or 'HH:MM:SS' -> 'HHMM' (null if not a valid time)
+    function toHHMM(timeStr: string): string | null {
+      if (!timeStr) return null
+      const [h, m] = String(timeStr).slice(0, 5).split(':').map(Number)
+      if (isNaN(h) || isNaN(m)) return null
+      return `${pad(h)}${pad(m)}`
+    }
     function toIcalDateTime(dateStr: string, timeStr: string) {
-      // returns local datetime string YYYYMMDDTHHmmss
-      if (!timeStr) return toIcalDate(dateStr)
-      const t = timeStr.replace(':', '')
-      return `${dateStr.replace(/-/g, '')}T${t}00`
+      // floating local datetime YYYYMMDDTHHMMSS (no TZID)
+      const hhmm = toHHMM(timeStr)
+      if (!hhmm) return toIcalDate(dateStr)
+      return `${toIcalDate(dateStr)}T${hhmm}00`
     }
-    function toIcalDateTimeWithTZ(dateStr: string, timeStr: string) {
-      if (!timeStr) return `VALUE=DATE:${toIcalDate(dateStr)}`
-      return `TZID=Australia/Melbourne:${toIcalDateTime(dateStr, timeStr)}`
+    function nextDay(icalDate: string) {
+      // icalDate is YYYYMMDD
+      const d = new Date(Date.UTC(+icalDate.slice(0, 4), +icalDate.slice(4, 6) - 1, +icalDate.slice(6, 8) + 1))
+      return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`
     }
-    function uid() {
-      return Math.random().toString(36).slice(2) + '@advance'
+    // If DTEND <= DTSTART, roll DTEND forward one day
+    function fixEnd(start: string, end: string) {
+      if (end > start) return end
+      const [date, time] = end.split('T')
+      return time ? `${nextDay(date)}T${time}` : nextDay(date)
     }
     function escIcal(str: string) {
-      return (str || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
+      return String(str || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r\n|\r|\n/g, '\\n')
     }
+    const dtstamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
 
     const lines: string[] = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
       'PRODID:-//Advance//Tour Manager//EN',
-      `X-WR-CALNAME:${escIcal(artist.name)} - ${escIcal(selectedTour.name)}`,
-      'X-WR-TIMEZONE:Australia/Melbourne',
+      `X-WR-CALNAME:${escIcal(`${artist.name} - ${selectedTour.name}`)}`,
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
-      'BEGIN:VTIMEZONE',
-      'TZID:Australia/Melbourne',
-      'BEGIN:STANDARD',
-      'DTSTART:19710101T020000',
-      'TZOFFSETFROM:+1100',
-      'TZOFFSETTO:+1000',
-      'TZNAME:AEST',
-      'RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4',
-      'END:STANDARD',
-      'BEGIN:DAYLIGHT',
-      'DTSTART:19711001T020000',
-      'TZOFFSETFROM:+1000',
-      'TZOFFSETTO:+1100',
-      'TZNAME:AEDT',
-      'RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10',
-      'END:DAYLIGHT',
-      'END:VTIMEZONE',
     ]
 
     // Shows
     for (const show of shows) {
-      const dtstart = show.set_time
+      const hhmm = toHHMM(show.set_time)
+      const dtstart = hhmm
         ? toIcalDateTime(show.date, show.set_time)
         : toIcalDate(show.date)
-      const isAllDay = !show.set_time
+      const isAllDay = !hhmm
       const location = [show.venue, show.city, show.country].filter(Boolean).join(', ')
       const description = [
         show.doors_time ? `Doors: ${show.doors_time}` : '',
         show.soundcheck_time ? `Soundcheck: ${show.soundcheck_time}` : '',
         show.stage ? `Stage: ${show.stage}` : '',
         show.notes || '',
-      ].filter(Boolean).join('\\n')
+      ].filter(Boolean).join('\n')
 
       lines.push('BEGIN:VEVENT')
-      lines.push(`UID:show-${uid()}`)
-      lines.push(`SUMMARY:🎵 ${escIcal(show.venue)}${show.city ? ` — ${escIcal(show.city)}` : ''}`)
+      lines.push(`UID:show-${show.id}@getadvance.co`)
+      lines.push(`DTSTAMP:${dtstamp}`)
+      lines.push(`SUMMARY:${escIcal(`🎵 ${show.venue || ''}${show.city ? ` — ${show.city}` : ''}`)}`)
       if (isAllDay) {
         lines.push(`DTSTART;VALUE=DATE:${dtstart}`)
-        lines.push(`DTEND;VALUE=DATE:${dtstart}`)
+        lines.push(`DTEND;VALUE=DATE:${fixEnd(dtstart, dtstart)}`)
       } else {
         lines.push(`DTSTART:${dtstart}`)
         // default 2hr show
-        const [h, m] = show.set_time.split(':').map(Number)
+        const h = Number(hhmm!.slice(0, 2)), m = hhmm!.slice(2, 4)
         const endH = pad((h + 2) % 24)
-        lines.push(`DTEND:${toIcalDate(show.date)}T${endH}${pad(m)}00`)
+        lines.push(`DTEND:${fixEnd(dtstart, `${toIcalDate(show.date)}T${endH}${m}00`)}`)
       }
       if (location) lines.push(`LOCATION:${escIcal(location)}`)
-      if (description) lines.push(`DESCRIPTION:${description}`)
+      if (description) lines.push(`DESCRIPTION:${escIcal(description)}`)
       lines.push('END:VEVENT')
     }
 
     // Travel
     for (const t of travel) {
-      const dtstart = t.departure_time
+      const depHHMM = toHHMM(t.departure_time)
+      const dtstart = depHHMM
         ? toIcalDateTime(t.travel_date, t.departure_time)
         : toIcalDate(t.travel_date)
-      const isAllDay = !t.departure_time
-      const summary = `${t.travel_type || '✈️'} ${escIcal(t.from_location)} → ${escIcal(t.to_location)}`
+      const isAllDay = !depHHMM
+      const summary = `${t.travel_type || '✈️'} ${t.from_location || ''} → ${t.to_location || ''}`
       const description = [
         t.carrier ? `${t.carrier}` : '',
         t.reference ? `Ref: ${t.reference}` : '',
         t.notes || '',
-      ].filter(Boolean).join('\\n')
+      ].filter(Boolean).join('\n')
 
       lines.push('BEGIN:VEVENT')
-      lines.push(`UID:travel-${uid()}`)
-      lines.push(`SUMMARY:${summary}`)
+      lines.push(`UID:travel-${t.id}@getadvance.co`)
+      lines.push(`DTSTAMP:${dtstamp}`)
+      lines.push(`SUMMARY:${escIcal(summary)}`)
       if (isAllDay) {
         lines.push(`DTSTART;VALUE=DATE:${dtstart}`)
-        lines.push(`DTEND;VALUE=DATE:${dtstart}`)
+        lines.push(`DTEND;VALUE=DATE:${fixEnd(dtstart, dtstart)}`)
       } else {
         lines.push(`DTSTART:${dtstart}`)
-        if (t.arrival_time) {
-          lines.push(`DTEND:${toIcalDateTime(t.travel_date, t.arrival_time)}`)
+        if (toHHMM(t.arrival_time)) {
+          lines.push(`DTEND:${fixEnd(dtstart, toIcalDateTime(t.travel_date, t.arrival_time))}`)
         } else {
           lines.push(`DTEND:${dtstart}`)
         }
       }
-      if (description) lines.push(`DESCRIPTION:${description}`)
+      if (description) lines.push(`DESCRIPTION:${escIcal(description)}`)
       lines.push('END:VEVENT')
     }
 
     // Accommodation
     for (const a of accommodation) {
+      const start = toIcalDate(a.check_in)
       lines.push('BEGIN:VEVENT')
-      lines.push(`UID:hotel-${uid()}`)
-      lines.push(`SUMMARY:🏨 ${escIcal(a.name)}`)
-      lines.push(`DTSTART;VALUE=DATE:${toIcalDate(a.check_in)}`)
-      lines.push(`DTEND;VALUE=DATE:${a.check_out ? toIcalDate(a.check_out) : toIcalDate(a.check_in)}`)
+      lines.push(`UID:accom-${a.id}@getadvance.co`)
+      lines.push(`DTSTAMP:${dtstamp}`)
+      lines.push(`SUMMARY:${escIcal(`🏨 ${a.name || ''}`)}`)
+      lines.push(`DTSTART;VALUE=DATE:${start}`)
+      lines.push(`DTEND;VALUE=DATE:${fixEnd(start, a.check_out ? toIcalDate(a.check_out) : start)}`)
       if (a.address) lines.push(`LOCATION:${escIcal(a.address)}`)
-      const desc = [a.confirmation ? `Confirmation: ${a.confirmation}` : '', a.notes || ''].filter(Boolean).join('\\n')
-      if (desc) lines.push(`DESCRIPTION:${desc}`)
+      const desc = [a.confirmation ? `Confirmation: ${a.confirmation}` : '', a.notes || ''].filter(Boolean).join('\n')
+      if (desc) lines.push(`DESCRIPTION:${escIcal(desc)}`)
       lines.push('END:VEVENT')
     }
 
     lines.push('END:VCALENDAR')
 
-    const icsContent = lines.join('\r\n')
+    // Fold lines longer than 75 octets (RFC 5545 §3.1), never splitting a character
+    const encoder = new TextEncoder()
+    function fold(line: string) {
+      if (encoder.encode(line).length <= 75) return line
+      const out: string[] = []
+      let cur = ''
+      let curLen = 0
+      for (const ch of line) {
+        const len = encoder.encode(ch).length
+        const limit = out.length === 0 ? 75 : 74
+        if (curLen + len > limit) { out.push(cur); cur = ''; curLen = 0 }
+        cur += ch
+        curLen += len
+      }
+      out.push(cur)
+      return out.join('\r\n ')
+    }
+
+    const icsContent = lines.map(fold).join('\r\n') + '\r\n'
     const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -850,6 +905,8 @@ export default function ArtistPage() {
   const labelStyle = { fontSize: 11, fontFamily: 'monospace', letterSpacing: 2, color: muted, textTransform: 'uppercase' as const, display: 'block', marginBottom: 6 }
   const fieldStyle = { marginBottom: 16 }
 
+  // Ignore settlements whose show was deleted or moved (not in the live shows list)
+  const liveSettlements = settlements.filter(st => shows.some(sh => sh.id === st.show_id))
   const year = calMonth.getFullYear()
   const month = calMonth.getMonth()
   const daysInMonth = getDaysInMonth(year, month)
@@ -1621,7 +1678,7 @@ export default function ArtistPage() {
               {tours.filter((t: any) => t.id !== selectedTour?.id).map((t: any) => (
                 <button key={t.id}
                   onClick={async () => {
-                    await supabase.from('shows').update({ tour_id: t.id, org_id: t.org_id }).eq('id', moveShow.id)
+                    if (!(await moveShowToTour(moveShow.id, t))) return
                     setMoveShow(null)
                     if (selectedTour) await loadTourData(selectedTour.id)
                   }}
@@ -1641,7 +1698,7 @@ export default function ArtistPage() {
                     status: 'routing',
                   }).select().single()
                   if (newTour) {
-                    await supabase.from('shows').update({ tour_id: newTour.id, org_id: newTour.org_id }).eq('id', moveShow.id)
+                    await moveShowToTour(moveShow.id, newTour)
                     const { data: refreshedTours } = await supabase.from('tours').select('*').eq('artist_id', artist?.id).order('start_date')
                     if (refreshedTours) setTours(refreshedTours)
                     setSelectedTour(newTour)
@@ -1681,7 +1738,7 @@ export default function ArtistPage() {
         @media (max-width: 600px) {
           .toolbar-tabs button { padding: 7px 8px !important; font-size: 8px !important; letter-spacing: 0 !important; }
           .toolbar-tabs button span { display: none; }
-          .toolbar-right { flex-wrap: nowrap !important; }
+          .toolbar-right { flex-wrap: wrap !important; }
           .add-row { display: grid !important; grid-template-columns: repeat(4, 1fr) !important; gap: 5px !important; }
           .add-row button, .add-row a { font-size: 9px !important; padding: 7px 4px !important; text-align: center !important; letter-spacing: 0 !important; }
           .show-actions { flex-direction: column !important; align-items: flex-end !important; gap: 4px !important; }
@@ -1732,7 +1789,7 @@ export default function ArtistPage() {
 
         {/* Tour tabs - split active vs archived */}
         {tours.length > 0 && (() => {
-          const today = new Date().toISOString().split('T')[0]
+          const today = new Date().toLocaleDateString('en-CA')
 
           // Archive if end_date is past, OR if no end_date but all shows are in the past
           function isArchived(tour: any): boolean {
@@ -1874,7 +1931,7 @@ export default function ArtistPage() {
               {/* Right actions */}
               <div className="toolbar-right" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <button onClick={() => {
-                  const today = new Date().toISOString().slice(0, 10)
+                  const today = new Date().toLocaleDateString('en-CA')
                   const upcoming = shows.filter(s => s.date >= today).sort((a,b) => a.date.localeCompare(b.date))
                   const target = upcoming[0]?.date || shows[0]?.date || today
                   router.push(`/day?tourId=${selectedTour?.id}&date=${target}`)
@@ -2568,12 +2625,12 @@ export default function ArtistPage() {
                     })()}
                   </div>
                 )})()}
-                {settlements.length > 0 && (
+                {liveSettlements.length > 0 && (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
-                    <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Settlements — {settlements.length} show{settlements.length !== 1 ? 's' : ''}</div>
+                    <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Settlements — {liveSettlements.length} show{liveSettlements.length !== 1 ? 's' : ''}</div>
                     {(() => {
-                      const total = settlements.reduce((sum, s) => sum + (parseFloat(s.paid_amount) || 0), 0)
-                      const agreed = settlements.reduce((sum, s) => sum + (parseFloat(s.agreed_amount) || 0), 0)
+                      const total = liveSettlements.reduce((sum, s) => sum + (parseFloat(s.paid_amount) || 0), 0)
+                      const agreed = liveSettlements.reduce((sum, s) => sum + (parseFloat(s.agreed_amount) || 0), 0)
                       const outstanding = agreed - total
                       const statusColor: Record<string,string> = { paid: '#2d7a4f', partial: '#B8860B', pending: muted, disputed: '#C00' }
                       return (
@@ -2594,10 +2651,10 @@ export default function ArtistPage() {
                               </div>
                             )}
                           </div>
-                          {settlements.map((s, i) => {
+                          {liveSettlements.map((s, i) => {
                             const show = shows.find(sh => sh.id === s.show_id)
                             return (
-                              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < settlements.length - 1 ? `1px solid ${border}` : 'none', flexWrap: 'wrap', gap: 8 }}>
+                              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < liveSettlements.length - 1 ? `1px solid ${border}` : 'none', flexWrap: 'wrap', gap: 8 }}>
                                 <div>
                                   <div style={{ fontSize: 13, fontWeight: 600 }}>{show?.venue || 'Unknown venue'}</div>
                                   <div style={{ fontSize: 11, color: muted }}>{show?.date} · {s.deal_type}</div>
@@ -2761,7 +2818,7 @@ export default function ArtistPage() {
                             ))}
                           </div>
                         )}
-                        <div className="ai-msg" dangerouslySetInnerHTML={{ __html: (msg.content || '').split('\n').join('<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
+                        <div className="ai-msg" dangerouslySetInnerHTML={{ __html: String(msg.content || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').split('\n').join('<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
                         {/* Save to tour button if AI extracted data */}
                         {msg.extracted && (
                           <button onClick={() => saveAiExtracted(msg.extracted)}
@@ -3060,8 +3117,14 @@ export default function ArtistPage() {
                             if (!selectedTour) return
                             setBitImporting(true)
                             const toImport = bitEvents.filter((s: any) => bitSelected.has(s.bandsintown_id))
+                            // Skip events whose date + venue (case-insensitive) already exist as a live show
+                            const showKey = (x: any) => `${x.date || ''}|${String(x.venue || '').trim().toLowerCase()}`
+                            const { data: liveShows } = await supabase.from('shows').select('date, venue').eq('tour_id', selectedTour.id).is('deleted_at', null)
+                            const existingKeys = new Set((liveShows || shows).map(showKey))
                             let count = 0
                             for (const show of toImport) {
+                              if (existingKeys.has(showKey(show))) continue
+                              existingKeys.add(showKey(show))
                               const { error } = await supabase.from('shows').insert({
                                 tour_id: selectedTour.id,
                                 org_id: selectedTour.org_id,

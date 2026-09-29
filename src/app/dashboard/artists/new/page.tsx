@@ -38,7 +38,8 @@ export default function NewArtistPage() {
           profile = { ...profile, org_id: setupData.org_id }
         }
       }
-      const { error } = await supabase.from('artists').insert({ name, project, org_id: profile?.org_id, color, status: 'active' })
+      if (!profile?.org_id) throw new Error('Your account is not linked to an organisation yet — please refresh and try again, or contact support.')
+      const { error } = await supabase.from('artists').insert({ name, project, org_id: profile.org_id, color, status: 'active' })
       if (error) throw error
       router.push('/dashboard')
     } catch (err: any) {

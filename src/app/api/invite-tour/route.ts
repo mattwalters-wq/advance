@@ -3,10 +3,35 @@ import { NextRequest, NextResponse } from 'next/server'
 import { sendInviteEmail } from '@/lib/email'
 import { getAuthUser, unauthorized, forbidden } from '@/lib/api-auth'
 
+// Must match TOUR_ROLES in dashboard/artists/[id]/settings. Unknown values fall back to 'Other'.
+const TOUR_ROLES = [
+  'Tour Manager', 'Production Manager', 'FOH Engineer', 'Monitor Engineer',
+  'Lighting Designer', 'Stage Manager', 'Tour Accountant', 'Merchandise',
+  'Backline Tech', 'Drum Tech', 'Guitar Tech', 'Bass Tech', 'Keys Tech',
+  'Wardrobe', 'Catering', 'Security', 'Driver', 'Press/Promo',
+  'Band Member', 'Agent', 'Publicist', 'Label Rep', 'Other',
+]
+
+// listUsers is paginated — walk every page so this works for any number of users.
+async function findUserIdByEmail(supabase: any, email: string): Promise<string | undefined> {
+  const target = email.trim().toLowerCase()
+  const perPage = 1000
+  for (let page = 1; ; page++) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage })
+    if (error) throw error
+    const users = data?.users || []
+    const found = users.find((u: any) => u.email?.toLowerCase() === target)
+    if (found) return found.id
+    if (users.length < perPage) return undefined
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { email, name, role, tourIds, artistId, invitedByName } = await request.json()
-    if (!email) return NextResponse.json({ success: false, error: 'Email required' }, { status: 400 })
+    // invitedByName from the client is ignored — it's read from the inviter's profile
+    const { email, name, role: requestedRole, tourIds, artistId } = await request.json()
+    if (!email || typeof email !== 'string') return NextResponse.json({ success: false, error: 'Email required' }, { status: 400 })
+    const role = TOUR_ROLES.includes(requestedRole) ? requestedRole : 'Other'
 
     const inviter = await getAuthUser()
     if (!inviter) return unauthorized()
@@ -24,13 +49,14 @@ export async function POST(request: NextRequest) {
     const org_id = artist.org_id
     const artistName = artist.name
 
-    const { data: inviterProfile } = await supabase.from('profiles').select('org_id').eq('id', inviter.id).single()
+    const { data: inviterProfile } = await supabase.from('profiles').select('org_id, full_name').eq('id', inviter.id).single()
     if (!inviterProfile?.org_id || inviterProfile.org_id !== org_id) return forbidden()
+    const invitedByName = inviterProfile.full_name || invitedByEmail
 
     // Only grant access to tours that actually belong to this org
     let allowedTourIds: string[] = []
     let tourNames: string[] = []
-    if (tourIds?.length) {
+    if (Array.isArray(tourIds) && tourIds.length) {
       const { data: tours } = await supabase.from('tours').select('id, name').in('id', tourIds).eq('org_id', org_id)
       allowedTourIds = (tours || []).map((t: any) => t.id)
       tourNames = (tours || []).map((t: any) => t.name).filter(Boolean)
@@ -49,9 +75,7 @@ export async function POST(request: NextRequest) {
     // Get or find the user
     let userId = inviteData?.user?.id
     if (!userId) {
-      const { data: { users } } = await supabase.auth.admin.listUsers()
-      const existing = users.find((u: any) => u.email === email)
-      userId = existing?.id
+      userId = await findUserIdByEmail(supabase, email)
     }
 
     if (userId) {
@@ -74,7 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send branded email via Resend
-    await sendInviteEmail({
+    const { error: emailError } = await sendInviteEmail({
       toEmail: email,
       toName: name,
       invitedByName,
@@ -84,6 +108,9 @@ export async function POST(request: NextRequest) {
       artistName,
       acceptUrl: `${process.env.NEXT_PUBLIC_APP_URL}/onboarding`,
     })
+    if (emailError) {
+      return NextResponse.json({ success: false, error: `Access granted but the invite email failed to send: ${emailError.message}` }, { status: 502 })
+    }
 
     return NextResponse.json({ success: true })
   } catch (err: any) {

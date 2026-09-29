@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const encoded = encodeURIComponent(artistName)
-    const url = `https://rest.bandsintown.com/artists/${encoded}/events/?app_id=${appId}&date=upcoming`
+    const url = `https://rest.bandsintown.com/artists/${encoded}/events/?app_id=${encodeURIComponent(appId)}&date=upcoming`
     const res = await fetch(url, {
       headers: { 'Accept': 'application/json', 'User-Agent': 'Advance/1.0' }
     })

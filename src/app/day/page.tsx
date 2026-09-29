@@ -57,14 +57,14 @@ function DayScheduleContent() {
   const [loading, setLoading] = useState(true)
   const [darkMode, setDarkMode] = useState(false)
 
-  useEffect(() => { if (tourId) loadData() }, [tourId])
+  useEffect(() => { if (tourId) loadData(); else setLoading(false) }, [tourId])
 
   async function loadData() {
     const [tourRes, showsRes, travelRes, accomRes] = await Promise.all([
       supabase.from('tours').select('*, artists(name, project, color)').eq('id', tourId).single(),
-      supabase.from('shows').select('*').eq('tour_id', tourId).order('date'),
-      supabase.from('travel').select('*').eq('tour_id', tourId).order('travel_date'),
-      supabase.from('accommodation').select('*').eq('tour_id', tourId).order('check_in'),
+      supabase.from('shows').select('*').eq('tour_id', tourId).is('deleted_at', null).order('date'),
+      supabase.from('travel').select('*').eq('tour_id', tourId).is('deleted_at', null).order('travel_date'),
+      supabase.from('accommodation').select('*').eq('tour_id', tourId).is('deleted_at', null).order('check_in'),
     ])
     setTour(tourRes.data)
     setArtist(tourRes.data?.artists)
@@ -77,9 +77,9 @@ function DayScheduleContent() {
   // Build list of all tour dates
   const tourDates = (() => {
     const dates = new Set<string>()
-    allShows.forEach(s => dates.add(s.date))
-    allTravel.forEach(t => dates.add(t.travel_date))
-    allAccom.forEach(a => { dates.add(a.check_in); if (a.check_out) dates.add(a.check_out) })
+    allShows.forEach(s => { if (s.date) dates.add(s.date) })
+    allTravel.forEach(t => { if (t.travel_date) dates.add(t.travel_date) })
+    allAccom.forEach(a => { if (a.check_in) dates.add(a.check_in); if (a.check_out) dates.add(a.check_out) })
     if (!dates.size) return []
     const sorted = [...dates].sort()
     // Fill in all days between first and last
@@ -125,7 +125,8 @@ function DayScheduleContent() {
 
   // Travel
   dayTravel.forEach(t => {
-    const tIcon = t.travel_type === 'Drive' ? '🚗' : t.travel_type === 'Train' ? '🚂' : t.travel_type === 'Bus' ? '🚌' : t.travel_type === 'Ferry' ? '⛴' : '✈️'
+    const tt = (t.travel_type || '').toLowerCase()
+    const tIcon = tt === 'drive' ? '🚗' : tt === 'train' ? '🚂' : tt === 'bus' ? '🚌' : tt === 'ferry' ? '⛴' : '✈️'
     if (t.departure_time) timeline.push({ time: fmt(t.departure_time), sort: t.departure_time, icon: tIcon, label: `${t.from_location} → ${t.to_location}`, sub: [t.carrier, t.reference ? `Ref: ${t.reference}` : ''].filter(Boolean).join(' · ') || undefined, detail: t.travellers ? `👤 ${t.travellers}` : undefined, color: '#2E6B8A', major: true })
     if (t.arrival_time) timeline.push({ time: fmt(t.arrival_time), sort: t.arrival_time, icon: '📍', label: `Arrive ${t.to_location}`, sub: t.travellers ? `👤 ${t.travellers}` : (t.notes || undefined), color: '#2E6B8A' })
   })

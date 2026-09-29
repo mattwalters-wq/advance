@@ -41,11 +41,25 @@ export default function FloatingAssistant() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [signedIn, setSignedIn] = useState(false)
+  const tourEventCount = useRef(0)
 
-  // Don't show on public pages or auth pages
-  const hidden = ['/', '/auth/signin', '/auth/signup', '/onboarding', '/privacy', '/terms'].includes(pathname)
+  // Don't show on public pages, share pages or auth pages
+  const hidden = ['/', '/onboarding', '/privacy', '/terms', '/contact', '/day'].includes(pathname)
+    || pathname.startsWith('/auth')
     || pathname.startsWith('/daysheet/')
     || pathname.startsWith('/tour/')
+    || pathname.startsWith('/guests/')
+    || pathname.startsWith('/festival/')
+    || pathname.startsWith('/day/')
+    || pathname.startsWith('/contact/')
+
+  // Only render for signed-in users
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSignedIn(!!data.session))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSignedIn(!!session))
+    return () => subscription.unsubscribe()
+  }, [])
 
   // Extract tour_id from URL if on a tour-related page
   useEffect(() => {
@@ -57,18 +71,19 @@ export default function FloatingAssistant() {
     } else if (match) {
       const artistId = match[1]
       if (artistId && artistId !== 'new') {
-        // Check sessionStorage first for the tour user actively selected
+        // Check sessionStorage first for the tour user actively selected — only if it belongs to this artist
         try {
-          const stored = sessionStorage.getItem('advance_active_tour_id')
-          if (stored) {
-            setTourId(stored)
+          const stored = JSON.parse(sessionStorage.getItem('advance_assistant_tour') || 'null')
+          if (stored?.tourId && stored.artistId === artistId) {
+            setTourId(stored.tourId)
             return
           }
         } catch {}
-        // Fall back to first tour for that artist
+        // Fall back to first tour for that artist (unless the artist page has since announced its selected tour)
+        const eventsBefore = tourEventCount.current
         supabase.from('tours').select('id, name').eq('artist_id', artistId).order('start_date', { ascending: true }).limit(1).single()
           .then(({ data }) => {
-            if (data) { setTourId(data.id); setTourName(data.name) }
+            if (data && tourEventCount.current === eventsBefore) { setTourId(data.id); setTourName(data.name) }
           })
       }
     }
@@ -77,14 +92,21 @@ export default function FloatingAssistant() {
   // Listen for active tour changes from the artist page
   useEffect(() => {
     function handler(e: any) {
-      if (e.detail?.tourId) setTourId(e.detail.tourId)
+      if (!e.detail?.tourId) return
+      tourEventCount.current++
+      setTourId(e.detail.tourId)
+      const artistMatch = window.location.pathname.match(/\/dashboard\/artists\/([^/]+)/)
+      try {
+        if (artistMatch) sessionStorage.setItem('advance_assistant_tour', JSON.stringify({ artistId: artistMatch[1], tourId: e.detail.tourId }))
+      } catch {}
     }
     window.addEventListener('advance:tour-change', handler)
     return () => window.removeEventListener('advance:tour-change', handler)
   }, [])
 
-  // Load tour name when tourId changes
+  // Load tour name when tourId changes; clear conversation from the previous tour
   useEffect(() => {
+    setMessages([])
     if (!tourId) return
     supabase.from('tours').select('name').eq('id', tourId).single()
       .then(({ data }) => { if (data) setTourName(data.name) })
@@ -175,6 +197,8 @@ export default function FloatingAssistant() {
 
   function formatMessage(text: string) {
     return text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
       .split('\n')
       .map((line, i) => {
         line = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -186,7 +210,7 @@ export default function FloatingAssistant() {
       .join('<br/>')
   }
 
-  if (hidden) return null
+  if (hidden || !signedIn) return null
 
   return (
     <>

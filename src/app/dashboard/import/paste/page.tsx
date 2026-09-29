@@ -46,26 +46,53 @@ export default function PastePage() {
   async function handleImport() {
     if (!selectedArtistId || !tourName) return
     setImporting(true)
+    setError('')
+    let tourCreated = false
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not logged in')
       const { data: profile } = await supabase.from('profiles').select('org_id').eq('id', user.id).single()
       if (!profile) throw new Error('No profile')
+      if (!profile.org_id) throw new Error('Your account is not linked to an organisation — finish onboarding before importing')
       const org_id = profile.org_id
 
       const { data: tour, error: tourError } = await supabase
         .from('tours').insert({ name: tourName, artist_id: selectedArtistId, org_id }).select().single()
       if (tourError) throw tourError
+      tourCreated = true
 
-      if (result.shows?.length) await supabase.from('shows').insert(result.shows.map((s: any) => ({ ...s, tour_id: tour.id, org_id })))
-      if (result.travel?.length) await supabase.from('travel').insert(result.travel.map((t: any) => ({ ...t, tour_id: tour.id, org_id })))
-      if (result.accommodation?.length) await supabase.from('accommodation').insert(result.accommodation.map((a: any) => ({ ...a, tour_id: tour.id, org_id })))
-      if (result.contacts?.length) await supabase.from('contacts').insert(result.contacts.map((c: any) => ({ ...c, tour_id: tour.id, org_id })))
+      // Only insert columns that exist on `shows`, and ensure a date (NOT NULL) — same rules as the file importer.
+      const SHOW_COLS = ['venue', 'city', 'country', 'stage', 'set_time', 'doors_time', 'soundcheck_time', 'notes', 'catering', 'backline', 'type', 'arrival_time', 'address', 'parking', 'fee', 'set_length']
+      const showRows = (result.shows || []).map((s: any) => {
+        const date = s.date
+        if (!date) return null
+        const row: any = { tour_id: tour.id, org_id, date }
+        for (const c of SHOW_COLS) {
+          const v = s[c]
+          if (v !== undefined && v !== null && v !== '') row[c] = v
+        }
+        return row
+      }).filter(Boolean)
+      // Empty strings break typed columns (dates/times) — send null instead
+      const clean = (r: any) => Object.fromEntries(Object.entries(r || {}).map(([k, v]) => [k, v === '' ? null : v]))
+      const failures: string[] = []
+      const insertRows = async (table: string, rows: any[]) => {
+        if (!rows.length) return
+        const { error } = await supabase.from(table).insert(rows)
+        if (error) failures.push(`${table}: ${error.message}`)
+      }
+      await insertRows('shows', showRows)
+      await insertRows('travel', (result.travel || []).map((t: any) => ({ ...clean(t), tour_id: tour.id, org_id })))
+      await insertRows('accommodation', (result.accommodation || []).map((a: any) => ({ ...clean(a), tour_id: tour.id, org_id })))
+      await insertRows('contacts', (result.contacts || []).map((c: any) => ({ ...clean(c), tour_id: tour.id, org_id })))
+      if (failures.length) throw new Error(failures.join('; '))
 
       setImported(true)
       setTimeout(() => router.push(`/dashboard/artists/${selectedArtistId}`), 1500)
     } catch (err: any) {
-      setError(err.message)
+      setError(tourCreated
+        ? `Tour "${tourName}" was created, but some items failed to import — ${err.message}. Open the tour to check what's missing before importing again.`
+        : err.message)
     }
     setImporting(false)
   }
@@ -157,6 +184,8 @@ export default function PastePage() {
                 <input value={tourName} onChange={e => setTourName(e.target.value)} placeholder="e.g. EU Tour 2026" style={inputStyle} />
               </div>
             </div>
+
+            {error && <div style={{ background: '#FEE', borderRadius: 6, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#C00', fontFamily: 'monospace' }}>{error}</div>}
 
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => { setResult(null); setError('') }}

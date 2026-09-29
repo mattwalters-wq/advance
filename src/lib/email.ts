@@ -1,5 +1,17 @@
 import { Resend } from 'resend'
 
+export const EMAIL_FROM = 'Advance <noreply@getadvance.co>'
+
+// Escape user-supplied values before interpolating them into email HTML.
+export function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 interface InviteEmailOptions {
   toEmail: string
   toName?: string
@@ -32,9 +44,15 @@ export async function sendInviteEmail(opts: InviteEmailOptions) {
     ? role.charAt(0).toUpperCase() + role.slice(1).replace(/_/g, ' ')
     : 'Team member'
 
+  // HTML-escaped copies of every user-supplied value (the text part uses the raw ones)
+  const hDisplayName = escapeHtml(displayName)
+  const hFromLabel = escapeHtml(fromLabel)
+  const hInvitedByEmail = escapeHtml(invitedByEmail)
+  const hAcceptUrl = escapeHtml(acceptUrl)
+
   const contextLine = artistName
-    ? `You've been added as <strong>${roleLabel}</strong> on <strong>${artistName}</strong>${tourNames?.length ? ` for ${tourNames.join(', ')}` : ''}.`
-    : `You've been invited to join Advance as <strong>${roleLabel}</strong>.`
+    ? `You've been added as <strong>${escapeHtml(roleLabel)}</strong> on <strong>${escapeHtml(artistName)}</strong>${tourNames?.length ? ` for ${escapeHtml(tourNames.join(', '))}` : ''}.`
+    : `You've been invited to join Advance as <strong>${escapeHtml(roleLabel)}</strong>.`
 
   const html = `<!DOCTYPE html>
 <html>
@@ -71,11 +89,11 @@ export async function sendInviteEmail(opts: InviteEmailOptions) {
                     </p>
 
                     <p style="margin:0 0 16px;font-size:15px;color:#3A3530;line-height:1.6;">
-                      Hi ${displayName},
+                      Hi ${hDisplayName},
                     </p>
 
                     <p style="margin:0 0 16px;font-size:15px;color:#3A3530;line-height:1.6;">
-                      ${fromLabel} has invited you to <strong>Advance</strong> - tour management built for the way touring actually works.
+                      ${hFromLabel} has invited you to <strong>Advance</strong> - tour management built for the way touring actually works.
                     </p>
 
                     <p style="margin:0 0 28px;font-size:15px;color:#3A3530;line-height:1.6;">
@@ -86,7 +104,7 @@ export async function sendInviteEmail(opts: InviteEmailOptions) {
                     <table cellpadding="0" cellspacing="0">
                       <tr>
                         <td style="border-radius:8px;background:${accent};">
-                          <a href="${acceptUrl}"
+                          <a href="${hAcceptUrl}"
                             style="display:inline-block;padding:14px 32px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;letter-spacing:0.2px;">
                             Accept invite
                           </a>
@@ -96,7 +114,7 @@ export async function sendInviteEmail(opts: InviteEmailOptions) {
 
                     <p style="margin:20px 0 0;font-size:12px;color:#8A8580;line-height:1.6;">
                       Or copy this link into your browser:<br/>
-                      <span style="color:#C4622D;word-break:break-all;">${acceptUrl}</span>
+                      <span style="color:#C4622D;word-break:break-all;">${hAcceptUrl}</span>
                     </p>
 
                   </td>
@@ -106,7 +124,7 @@ export async function sendInviteEmail(opts: InviteEmailOptions) {
                 <tr>
                   <td style="padding:20px 40px;border-top:1px solid #F0EAE0;background:#FDFAF7;">
                     <p style="margin:0;font-size:12px;color:#8A8580;line-height:1.6;">
-                      This invite was sent by ${fromLabel}${invitedByEmail ? ` (${invitedByEmail})` : ''}. If you weren't expecting this, you can ignore it.
+                      This invite was sent by ${hFromLabel}${invitedByEmail ? ` (${hInvitedByEmail})` : ''}. If you weren't expecting this, you can ignore it.
                     </p>
                   </td>
                 </tr>
@@ -145,7 +163,7 @@ If you weren't expecting this, you can ignore it.
 getadvance.co`
 
   return resend.emails.send({
-    from: 'Advance <noreply@getadvance.co>',
+    from: EMAIL_FROM,
     to: toEmail,
     subject: `You've been invited to Advance`,
     html,

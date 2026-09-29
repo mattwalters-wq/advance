@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser, unauthorized } from '@/lib/api-auth'
 import { extractStructured } from '@/lib/extract'
+import { isSupportedImageType, UNSUPPORTED_IMAGE_ERROR } from '@/lib/attach'
 
 const str = { type: 'string' }
 const EXTRACT_SCHEMA = {
@@ -126,6 +127,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { text, pdf_base64, image_base64, image_type, filename } = body
+
+    if (image_base64 && image_type && !isSupportedImageType(image_type)) {
+      return NextResponse.json({ success: false, error: UNSUPPORTED_IMAGE_ERROR }, { status: 400 })
+    }
 
     let messageContent: any[]
 

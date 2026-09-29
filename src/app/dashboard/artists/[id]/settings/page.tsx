@@ -85,7 +85,8 @@ export default function ArtistSettingsPage() {
 
   async function handleDeleteTour(tour: any) {
     setDeleting(true)
-    await supabase.from('tours').delete().eq('id', tour.id)
+    const { error } = await supabase.from('tours').delete().eq('id', tour.id)
+    if (error) { alert(`Delete failed: ${error.message}`); setDeleting(false); return }
     setTours(prev => prev.filter(t => t.id !== tour.id))
     setConfirmDeleteTour(null)
     setDeleting(false)
@@ -93,7 +94,8 @@ export default function ArtistSettingsPage() {
 
   async function handleDeleteArtist() {
     setDeleting(true)
-    await supabase.from('artists').delete().eq('id', params.id)
+    const { error } = await supabase.from('artists').delete().eq('id', params.id)
+    if (error) { alert(`Delete failed: ${error.message}`); setDeleting(false); return }
     router.push('/dashboard')
   }
 

@@ -13,7 +13,7 @@ export default async function Image({ params }: { params: { show_id: string } })
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  const { data: show } = await supabase.from('shows').select('*').eq('id', params.show_id).single()
+  const { data: show } = await supabase.from('shows').select('*').eq('id', params.show_id).is('deleted_at', null).single()
   const { data: tour } = show ? await supabase.from('tours').select('*, artists(name, color)').eq('id', show.tour_id).single() : { data: null }
 
   const artist = (tour as any)?.artists

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthUser, userCanAccessTour, unauthorized, forbidden } from '@/lib/api-auth'
 import { extractStructured } from '@/lib/extract'
+import { isSupportedImageType, UNSUPPORTED_IMAGE_ERROR } from '@/lib/attach'
 
 const str = { type: 'string' }
 const MERGE_SCHEMA = {
@@ -140,12 +141,16 @@ export async function POST(request: NextRequest) {
 
     if (!(await userCanAccessTour(supabase, user.id, tourId))) return forbidden()
 
+    if (image_base64 && image_type && !isSupportedImageType(image_type)) {
+      return NextResponse.json({ success: false, error: UNSUPPORTED_IMAGE_ERROR }, { status: 400 })
+    }
+
     // 1. Load existing tour data
     const [showsRes, travelRes, accomRes, contactsRes] = await Promise.all([
-      supabase.from('shows').select('*').eq('tour_id', tourId),
-      supabase.from('travel').select('*').eq('tour_id', tourId),
-      supabase.from('accommodation').select('*').eq('tour_id', tourId),
-      supabase.from('contacts').select('*').eq('tour_id', tourId),
+      supabase.from('shows').select('*').eq('tour_id', tourId).is('deleted_at', null),
+      supabase.from('travel').select('*').eq('tour_id', tourId).is('deleted_at', null),
+      supabase.from('accommodation').select('*').eq('tour_id', tourId).is('deleted_at', null),
+      supabase.from('contacts').select('*').eq('tour_id', tourId).is('deleted_at', null),
     ])
     const existingShows = showsRes.data || []
     const existingTravel = travelRes.data || []
@@ -213,10 +218,10 @@ Rules:
 
     // 5. Smart merge
     const result = {
-      shows: { added: 0, updated: 0, unchanged: 0, details: [] as any[] },
-      travel: { added: 0, updated: 0, unchanged: 0 },
-      accommodation: { added: 0, updated: 0, unchanged: 0 },
-      contacts: { added: 0, updated: 0, unchanged: 0 },
+      shows: { added: 0, updated: 0, unchanged: 0, failed: 0, details: [] as any[] },
+      travel: { added: 0, updated: 0, unchanged: 0, failed: 0 },
+      accommodation: { added: 0, updated: 0, unchanged: 0, failed: 0 },
+      contacts: { added: 0, updated: 0, unchanged: 0, failed: 0 },
     }
 
     // Shows
@@ -233,13 +238,18 @@ Rules:
         if (Object.keys(updates).length > 0) {
           // Strip fields that may not exist in schema yet
           const safeUpdates = { ...updates }
-          const { error: updateErr } = await supabase.from('shows').update(safeUpdates).eq('id', match.id)
+          let { error: updateErr } = await supabase.from('shows').update(safeUpdates).eq('id', match.id).eq('tour_id', tourId)
           if (updateErr && updateErr.message?.includes('column')) {
             const { catering: _c, backline: _b, ...baseUpdates } = safeUpdates
-            await supabase.from('shows').update(baseUpdates).eq('id', match.id)
+            ;({ error: updateErr } = await supabase.from('shows').update(baseUpdates).eq('id', match.id).eq('tour_id', tourId))
           }
-          result.shows.updated++
-          result.shows.details.push({ action: 'updated', date: newShow.date, venue: newShow.venue, fields: changed })
+          if (updateErr) {
+            result.shows.failed++
+            result.shows.details.push({ action: 'failed', date: newShow.date, venue: newShow.venue, fields: changed, error: updateErr.message })
+          } else {
+            result.shows.updated++
+            result.shows.details.push({ action: 'updated', date: newShow.date, venue: newShow.venue, fields: changed })
+          }
         } else {
           result.shows.unchanged++
           result.shows.details.push({ action: 'unchanged', date: newShow.date, venue: newShow.venue, fields: [] })
@@ -249,14 +259,19 @@ Rules:
         const { catering, backline, ...safeShow } = newShow
         const insertData: any = { ...safeShow, tour_id: tourId, org_id }
         // Try with extra fields first, fall back without
-        const { error: insertErr } = await supabase.from('shows').insert(insertData)
+        let { error: insertErr } = await supabase.from('shows').insert(insertData)
         if (insertErr && insertErr.message?.includes('column')) {
           // Schema doesn't have new columns yet — insert without them
           const { catering: _c, backline: _b, ...baseShow } = insertData
-          await supabase.from('shows').insert(baseShow)
+          ;({ error: insertErr } = await supabase.from('shows').insert(baseShow))
         }
-        result.shows.added++
-        result.shows.details.push({ action: 'added', date: newShow.date, venue: newShow.venue, fields: [] })
+        if (insertErr) {
+          result.shows.failed++
+          result.shows.details.push({ action: 'failed', date: newShow.date, venue: newShow.venue, fields: [], error: insertErr.message })
+        } else {
+          result.shows.added++
+          result.shows.details.push({ action: 'added', date: newShow.date, venue: newShow.venue, fields: [] })
+        }
       }
     }
 
@@ -266,14 +281,16 @@ Rules:
       if (match) {
         const { updates } = mergeFields(match, newTravel, ['travel_type', 'departure_time', 'arrival_time', 'carrier', 'reference', 'notes'])
         if (Object.keys(updates).length > 0) {
-          await supabase.from('travel').update(updates).eq('id', match.id)
-          result.travel.updated++
+          const { error } = await supabase.from('travel').update(updates).eq('id', match.id).eq('tour_id', tourId)
+          if (error) result.travel.failed++
+          else result.travel.updated++
         } else {
           result.travel.unchanged++
         }
       } else {
-        await supabase.from('travel').insert({ ...newTravel, tour_id: tourId, org_id })
-        result.travel.added++
+        const { error } = await supabase.from('travel').insert({ ...newTravel, tour_id: tourId, org_id })
+        if (error) result.travel.failed++
+        else result.travel.added++
       }
     }
 
@@ -283,14 +300,16 @@ Rules:
       if (match) {
         const { updates } = mergeFields(match, newAccom, ['check_out', 'address', 'confirmation', 'notes'])
         if (Object.keys(updates).length > 0) {
-          await supabase.from('accommodation').update(updates).eq('id', match.id)
-          result.accommodation.updated++
+          const { error } = await supabase.from('accommodation').update(updates).eq('id', match.id).eq('tour_id', tourId)
+          if (error) result.accommodation.failed++
+          else result.accommodation.updated++
         } else {
           result.accommodation.unchanged++
         }
       } else {
-        await supabase.from('accommodation').insert({ ...newAccom, tour_id: tourId, org_id })
-        result.accommodation.added++
+        const { error } = await supabase.from('accommodation').insert({ ...newAccom, tour_id: tourId, org_id })
+        if (error) result.accommodation.failed++
+        else result.accommodation.added++
       }
     }
 
@@ -300,14 +319,16 @@ Rules:
       if (match) {
         const { updates } = mergeFields(match, newContact, ['role', 'phone', 'email'])
         if (Object.keys(updates).length > 0) {
-          await supabase.from('contacts').update(updates).eq('id', match.id)
-          result.contacts.updated++
+          const { error } = await supabase.from('contacts').update(updates).eq('id', match.id).eq('tour_id', tourId)
+          if (error) result.contacts.failed++
+          else result.contacts.updated++
         } else {
           result.contacts.unchanged++
         }
       } else {
-        await supabase.from('contacts').insert({ ...newContact, tour_id: tourId, org_id })
-        result.contacts.added++
+        const { error } = await supabase.from('contacts').insert({ ...newContact, tour_id: tourId, org_id })
+        if (error) result.contacts.failed++
+        else result.contacts.added++
       }
     }
 

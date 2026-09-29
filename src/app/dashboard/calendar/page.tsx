@@ -30,8 +30,8 @@ export default function CalendarPage() {
 
     if (tourIds.length > 0) {
       const [showsRes, travelRes] = await Promise.all([
-        supabase.from('shows').select('*, tours(artist_id)').in('tour_id', tourIds).order('date'),
-        supabase.from('travel').select('*, tours(artist_id)').in('tour_id', tourIds).order('travel_date'),
+        supabase.from('shows').select('*, tours(artist_id)').in('tour_id', tourIds).is('deleted_at', null).order('date'),
+        supabase.from('travel').select('*, tours(artist_id)').in('tour_id', tourIds).is('deleted_at', null).order('travel_date'),
       ])
       setShows(showsRes.data || [])
       setTravel(travelRes.data || [])

@@ -12,31 +12,39 @@ export default function OnboardingPage() {
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
   const [sessionReady, setSessionReady] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     // Exchange the token from the invite link URL for a real session
-    supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) setSessionReady(true)
     })
     // Also check if session already exists
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setSessionReady(true)
     })
+    return () => subscription.unsubscribe()
   }, [])
 
   async function handleSaveName() {
-    if (!name.trim()) return
+    if (!name.trim() || !sessionReady || saving) return
     setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      await supabase.from('profiles').upsert({
+    setError('')
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Your session has expired — please sign in again.')
+      // Don't send `role` here: it would overwrite an owner's admin role
+      const { error: upsertError } = await supabase.from('profiles').upsert({
         id: user.id,
         full_name: name.trim(),
-        role: 'member',
       }, { onConflict: 'id' })
+      if (upsertError) throw upsertError
+      setStep(2)
+    } catch (err: any) {
+      setError(err.message || 'Could not save your name')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
-    setStep(2)
   }
 
   const accent = '#C4622D'
@@ -65,9 +73,10 @@ export default function OnboardingPage() {
               autoFocus
               style={{ width: '100%', padding: '14px 16px', background: '#2A2520', border: '1px solid #333', borderRadius: 10, color: '#F5F0E8', fontSize: 16, fontFamily: 'Georgia, serif', outline: 'none', boxSizing: 'border-box' as const, marginBottom: 16, textAlign: 'center' }}
             />
-            <button onClick={handleSaveName} disabled={saving || !name.trim()}
-              style={{ width: '100%', padding: 14, background: name.trim() ? accent : '#333', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: name.trim() ? 'pointer' : 'default' }}>
-              {saving ? 'SAVING...' : 'CONTINUE →'}
+            {error && <div style={{ background: '#3A1F1A', border: '1px solid #5A2F25', borderRadius: 6, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#F0A58A', fontFamily: 'monospace', textAlign: 'left' }}>{error}</div>}
+            <button onClick={handleSaveName} disabled={saving || !name.trim() || !sessionReady}
+              style={{ width: '100%', padding: 14, background: name.trim() && sessionReady ? accent : '#333', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: name.trim() && sessionReady ? 'pointer' : 'default' }}>
+              {saving ? 'SAVING...' : !sessionReady ? 'LOADING...' : 'CONTINUE →'}
             </button>
           </div>
         )}
