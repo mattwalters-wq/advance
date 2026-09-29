@@ -831,7 +831,7 @@ export default function BudgetPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { loadArtist(); fetchFx() }, [params.id])
-  useEffect(() => { if (selectedTourId) loadBudget(selectedTourId) }, [selectedTourId])
+  useEffect(() => { setImportResult(null); if (selectedTourId) loadBudget(selectedTourId) }, [selectedTourId])
 
   async function fetchFx() {
     setFxLoading(true)
@@ -906,7 +906,7 @@ export default function BudgetPage() {
         setSelectedTourId(match.id)
       } else {
         // Fall back to first non-archived tour (no end_date or end_date >= today)
-        const today = new Date().toISOString().split('T')[0]
+        const today = new Date().toLocaleDateString('en-CA')
         const active = toursData.find((t: any) => !t.end_date || t.end_date >= today)
         setSelectedTourId((active || toursData[0]).id)
       }
@@ -915,9 +915,9 @@ export default function BudgetPage() {
 
   async function loadBudget(tourId: string) {
     const [showsRes, settlementsRes, expensesRes] = await Promise.all([
-      supabase.from('shows').select('*').eq('tour_id', tourId).order('date'),
+      supabase.from('shows').select('*').eq('tour_id', tourId).is('deleted_at', null).order('date'),
       supabase.from('settlements').select('*').eq('tour_id', tourId),
-      supabase.from('expenses').select('*').eq('tour_id', tourId),
+      supabase.from('expenses').select('*').eq('tour_id', tourId).is('deleted_at', null),
     ])
     setShows(showsRes.data || [])
     setSettlements(settlementsRes.data || [])
@@ -1189,10 +1189,15 @@ export default function BudgetPage() {
         }
       }
 
-      const { error: delError } = await supabase.from('expenses').delete().eq('tour_id', selectedTourId)
-      if (delError) throw new Error(`Expenses delete failed: ${delError.message}`)
-
       if (importResult.expenses?.length) {
+        // Replace only tour-level imported expenses; never touch per-show expenses (show_id set)
+        const { error: delError } = await supabase.from('expenses')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('tour_id', selectedTourId)
+          .is('show_id', null)
+          .is('deleted_at', null)
+        if (delError) throw new Error(`Expenses delete failed: ${delError.message}`)
+
         const { error: insError } = await supabase.from('expenses').insert(
           importResult.expenses.map((e: any) => ({
             tour_id: selectedTourId,
@@ -1225,7 +1230,7 @@ export default function BudgetPage() {
     setDragging(false)
     const file = e.dataTransfer.files[0]
     if (file) processFile(file)
-  }, [selectedTourId])
+  }, [selectedTourId, shows])
 
   const bg = darkMode ? '#1a1a1a' : '#F5F0E8'
   const card = darkMode ? '#2a2a2a' : '#fff'
@@ -1534,7 +1539,7 @@ export default function BudgetPage() {
                   {hasBudget && (
                     <button onClick={async () => {
                       if (!confirm('Wipe all budget data for this tour? This cannot be undone.')) return
-                      await supabase.from('expenses').delete().eq('tour_id', selectedTourId)
+                      await supabase.from('expenses').update({ deleted_at: new Date().toISOString() }).eq('tour_id', selectedTourId).is('deleted_at', null)
                       await supabase.from('settlements').delete().eq('tour_id', selectedTourId)
                       await loadBudget(selectedTourId)
                     }}
@@ -1670,7 +1675,7 @@ export default function BudgetPage() {
                               await loadBudget(selectedTourId)
                             }}
                             onDelete={async () => {
-                              const { error } = await supabase.from('expenses').delete().eq('id', e.id)
+                              const { error } = await supabase.from('expenses').update({ deleted_at: new Date().toISOString() }).eq('id', e.id)
                               if (!error) await loadBudget(selectedTourId)
                             }}
                             isLast={i === items.length - 1}
@@ -1721,9 +1726,9 @@ export default function BudgetPage() {
 
         {/* ── MERCH VIEW ── */}
         <div style={{ display: view === 'merch' ? 'block' : 'none' }}>
-          <MerchEstimator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} onProfitChange={setMerchProfit} tourId={selectedTourId} supabase={supabase} />
+          <MerchEstimator key={`merch-${selectedTourId}`} card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} onProfitChange={setMerchProfit} tourId={selectedTourId} supabase={supabase} />
           <div style={{ marginTop: 16 }}>
-            <PerDiemEstimator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} tourId={selectedTourId} supabase={supabase} onCostChange={setPerDiemCost} />
+            <PerDiemEstimator key={`perdiem-${selectedTourId}`} card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} tourId={selectedTourId} supabase={supabase} onCostChange={setPerDiemCost} />
           </div>
         </div>
 
@@ -1765,7 +1770,7 @@ export default function BudgetPage() {
 
         {/* ── CALCULATOR VIEW ── */}
         {view === 'calculator' && (
-          <TourCalculator card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} tourId={selectedTourId} supabase={supabase} artistName={artist?.name} tourName={tours.find((t: any) => t.id === selectedTourId)?.name} />
+          <TourCalculator key={`calc-${selectedTourId}`} card={card} border={border} text={text} muted={muted} accent={accent} green={green} red={red} bg={bg} darkMode={darkMode} tourId={selectedTourId} supabase={supabase} artistName={artist?.name} tourName={tours.find((t: any) => t.id === selectedTourId)?.name} />
         )}
 
         {/* ── IMPORT VIEW ── */}
@@ -1906,7 +1911,7 @@ export default function BudgetPage() {
               </div>
               <button onClick={async () => {
                 if (!confirm('Wipe all budget data for this tour? This cannot be undone.')) return
-                await supabase.from('expenses').delete().eq('tour_id', selectedTourId)
+                await supabase.from('expenses').update({ deleted_at: new Date().toISOString() }).eq('tour_id', selectedTourId).is('deleted_at', null)
                 await supabase.from('settlements').delete().eq('tour_id', selectedTourId)
                 await loadBudget(selectedTourId)
                 setView('overview')

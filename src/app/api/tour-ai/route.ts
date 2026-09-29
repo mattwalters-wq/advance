@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthUser, userCanAccessTour, unauthorized, forbidden } from '@/lib/api-auth'
+import { isSupportedImageType, UNSUPPORTED_IMAGE_ERROR } from '@/lib/attach'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -353,6 +354,35 @@ const TOOLS: any[] = [
   },
 ]
 
+// Fields the model must never set — ownership/soft-delete/identity columns.
+const PROTECTED_FIELDS = ['id', 'tour_id', 'org_id', 'deleted_at', 'created_at']
+
+function sanitizeInput(input: any) {
+  const out: any = { ...(input || {}) }
+  for (const k of PROTECTED_FIELDS) delete out[k]
+  return out
+}
+
+// The service-role client bypasses RLS, so every show_id the model supplies
+// must be checked against the authorised tour.
+async function showInTour(supabase: any, showId: any, tourId: string) {
+  if (!showId || typeof showId !== 'string') return false
+  const { data } = await supabase.from('shows').select('id')
+    .eq('id', showId).eq('tour_id', tourId).is('deleted_at', null).maybeSingle()
+  return !!data
+}
+
+// Update (or soft-delete) a row by id, scoped to the authorised tour.
+async function scopedUpdate(supabase: any, table: string, id: any, tourId: string, updates: any) {
+  if (!id || typeof id !== 'string') throw new Error(`Missing ${table} id`)
+  const { data, error } = await supabase.from(table).update(updates)
+    .eq('id', id).eq('tour_id', tourId).select('id')
+  if (error) throw error
+  if (!data || data.length === 0) throw new Error(`No ${table} record with id ${id} in this tour`)
+}
+
+const SHOW_NOT_IN_TOUR = { success: false, message: 'That show_id does not belong to this tour. Use a show id from the tour data.' }
+
 async function executeTool(
   toolName: string,
   toolInput: any,
@@ -361,89 +391,77 @@ async function executeTool(
   supabase: any
 ): Promise<{ success: boolean, message: string, data?: any }> {
   try {
+    const now = () => new Date().toISOString()
     switch (toolName) {
       case 'add_show': {
         const { data, error } = await supabase.from('shows')
-          .insert({ ...toolInput, tour_id: tourId, org_id: orgId }).select().single()
+          .insert({ ...sanitizeInput(toolInput), tour_id: tourId, org_id: orgId }).select().single()
         if (error) throw error
         return { success: true, message: `Added show: ${toolInput.venue} on ${toolInput.date}`, data }
       }
       case 'update_show': {
-        const { id, ...updates } = toolInput
-        const { error } = await supabase.from('shows').update(updates).eq('id', id)
-        if (error) throw error
+        await scopedUpdate(supabase, 'shows', toolInput?.id, tourId, sanitizeInput(toolInput))
         return { success: true, message: `Updated show` }
       }
       case 'delete_show': {
-        const { error } = await supabase.from('shows').update({ deleted_at: new Date().toISOString() }).eq('id', toolInput.id)
-        if (error) throw error
+        await scopedUpdate(supabase, 'shows', toolInput?.id, tourId, { deleted_at: now() })
         return { success: true, message: `Deleted show` }
       }
       case 'add_travel': {
         const { data, error } = await supabase.from('travel')
-          .insert({ ...toolInput, tour_id: tourId, org_id: orgId }).select().single()
+          .insert({ ...sanitizeInput(toolInput), tour_id: tourId, org_id: orgId }).select().single()
         if (error) throw error
         return { success: true, message: `Added travel: ${toolInput.from_location} → ${toolInput.to_location}`, data }
       }
       case 'update_travel': {
-        const { id, ...updates } = toolInput
-        const { error } = await supabase.from('travel').update(updates).eq('id', id)
-        if (error) throw error
+        await scopedUpdate(supabase, 'travel', toolInput?.id, tourId, sanitizeInput(toolInput))
         return { success: true, message: `Updated travel leg` }
       }
       case 'delete_travel': {
-        const { error } = await supabase.from('travel').update({ deleted_at: new Date().toISOString() }).eq('id', toolInput.id)
-        if (error) throw error
+        await scopedUpdate(supabase, 'travel', toolInput?.id, tourId, { deleted_at: now() })
         return { success: true, message: `Deleted travel leg` }
       }
       case 'add_accommodation': {
         const { data, error } = await supabase.from('accommodation')
-          .insert({ ...toolInput, tour_id: tourId, org_id: orgId }).select().single()
+          .insert({ ...sanitizeInput(toolInput), tour_id: tourId, org_id: orgId }).select().single()
         if (error) throw error
         return { success: true, message: `Added hotel: ${toolInput.name}`, data }
       }
       case 'update_accommodation': {
-        const { id, ...updates } = toolInput
-        const { error } = await supabase.from('accommodation').update(updates).eq('id', id)
-        if (error) throw error
+        await scopedUpdate(supabase, 'accommodation', toolInput?.id, tourId, sanitizeInput(toolInput))
         return { success: true, message: `Updated accommodation` }
       }
       case 'delete_accommodation': {
-        const { error } = await supabase.from('accommodation').update({ deleted_at: new Date().toISOString() }).eq('id', toolInput.id)
-        if (error) throw error
+        await scopedUpdate(supabase, 'accommodation', toolInput?.id, tourId, { deleted_at: now() })
         return { success: true, message: `Deleted accommodation` }
       }
       case 'add_contact': {
         const { data, error } = await supabase.from('contacts')
-          .insert({ ...toolInput, tour_id: tourId, org_id: orgId }).select().single()
+          .insert({ ...sanitizeInput(toolInput), tour_id: tourId, org_id: orgId }).select().single()
         if (error) throw error
         return { success: true, message: `Added contact: ${toolInput.name}`, data }
       }
       case 'add_press': {
         const { data, error } = await supabase.from('press')
-          .insert({ ...toolInput, tour_id: tourId, org_id: orgId }).select().single()
+          .insert({ ...sanitizeInput(toolInput), tour_id: tourId, org_id: orgId }).select().single()
         if (error) throw error
         return { success: true, message: `Added press commitment: ${toolInput.outlet || toolInput.type} on ${toolInput.date}`, data }
       }
       case 'update_press': {
-        const { id, ...updates } = toolInput
-        const { error } = await supabase.from('press').update(updates).eq('id', id)
-        if (error) throw error
+        await scopedUpdate(supabase, 'press', toolInput?.id, tourId, sanitizeInput(toolInput))
         return { success: true, message: `Updated press commitment` }
       }
       case 'delete_press': {
-        const { error } = await supabase.from('press').update({ deleted_at: new Date().toISOString() }).eq('id', toolInput.id)
-        if (error) throw error
+        await scopedUpdate(supabase, 'press', toolInput?.id, tourId, { deleted_at: now() })
         return { success: true, message: `Deleted press commitment` }
       }
       case 'set_setlist': {
-        const { show_id, songs, notes } = toolInput
-        const existing = await supabase.from('setlists').select('id').eq('show_id', show_id).is('deleted_at', null).single()
+        const { show_id, notes } = toolInput
+        const songs = Array.isArray(toolInput.songs) ? toolInput.songs : []
+        if (!(await showInTour(supabase, show_id, tourId))) return SHOW_NOT_IN_TOUR
+        const existing = await supabase.from('setlists').select('id').eq('show_id', show_id).eq('tour_id', tourId).is('deleted_at', null).limit(1).maybeSingle()
         if (existing.data) {
-          const { error } = await supabase.from('setlists')
-            .update({ songs, notes: notes || null, updated_at: new Date().toISOString() })
-            .eq('id', existing.data.id)
-          if (error) throw error
+          await scopedUpdate(supabase, 'setlists', existing.data.id, tourId, { songs, notes: notes || null, updated_at: now() })
           return { success: true, message: `Updated setlist (${songs.length} songs)` }
         } else {
           const { error } = await supabase.from('setlists')
@@ -454,48 +472,47 @@ async function executeTool(
       }
       case 'add_document': {
         const { data, error } = await supabase.from('tour_documents')
-          .insert({ ...toolInput, tour_id: tourId, org_id: orgId }).select().single()
+          .insert({ ...sanitizeInput(toolInput), tour_id: tourId, org_id: orgId }).select().single()
         if (error) throw error
         return { success: true, message: `Added document: ${toolInput.label}`, data }
       }
       case 'delete_document': {
-        const { error } = await supabase.from('tour_documents').update({ deleted_at: new Date().toISOString() }).eq('id', toolInput.id)
-        if (error) throw error
+        await scopedUpdate(supabase, 'tour_documents', toolInput?.id, tourId, { deleted_at: now() })
         return { success: true, message: `Deleted document` }
       }
       case 'add_show_person': {
+        if (!(await showInTour(supabase, toolInput?.show_id, tourId))) return SHOW_NOT_IN_TOUR
         const { data, error } = await supabase.from('show_people')
-          .insert({ ...toolInput, tour_id: tourId, org_id: orgId }).select().single()
+          .insert({ ...sanitizeInput(toolInput), tour_id: tourId, org_id: orgId }).select().single()
         if (error) throw error
         return { success: true, message: `Added ${toolInput.role || 'person'}: ${toolInput.name}`, data }
       }
       case 'update_show_person': {
-        const { id, ...updates } = toolInput
-        const { error } = await supabase.from('show_people').update(updates).eq('id', id)
-        if (error) throw error
+        const updates = sanitizeInput(toolInput)
+        if ('show_id' in updates && !(await showInTour(supabase, updates.show_id, tourId))) return SHOW_NOT_IN_TOUR
+        await scopedUpdate(supabase, 'show_people', toolInput?.id, tourId, updates)
         return { success: true, message: `Updated show person` }
       }
       case 'delete_show_person': {
-        const { error } = await supabase.from('show_people').update({ deleted_at: new Date().toISOString() }).eq('id', toolInput.id)
-        if (error) throw error
+        await scopedUpdate(supabase, 'show_people', toolInput?.id, tourId, { deleted_at: now() })
         return { success: true, message: `Removed show person` }
       }
       case 'add_guest': {
+        if (!(await showInTour(supabase, toolInput?.show_id, tourId))) return SHOW_NOT_IN_TOUR
         const { data, error } = await supabase.from('guest_list')
-          .insert({ ...toolInput, tour_id: tourId, org_id: orgId }).select().single()
+          .insert({ ...sanitizeInput(toolInput), tour_id: tourId, org_id: orgId }).select().single()
         if (error) throw error
         const total = 1 + (toolInput.plus_n || 0)
         return { success: true, message: `Added ${toolInput.name}${toolInput.plus_n ? ` +${toolInput.plus_n}` : ''} to guest list (${total} total)`, data }
       }
       case 'update_guest': {
-        const { id, ...updates } = toolInput
-        const { error } = await supabase.from('guest_list').update(updates).eq('id', id)
-        if (error) throw error
+        const updates = sanitizeInput(toolInput)
+        if ('show_id' in updates && !(await showInTour(supabase, updates.show_id, tourId))) return SHOW_NOT_IN_TOUR
+        await scopedUpdate(supabase, 'guest_list', toolInput?.id, tourId, updates)
         return { success: true, message: `Updated guest` }
       }
       case 'delete_guest': {
-        const { error } = await supabase.from('guest_list').update({ deleted_at: new Date().toISOString() }).eq('id', toolInput.id)
-        if (error) throw error
+        await scopedUpdate(supabase, 'guest_list', toolInput?.id, tourId, { deleted_at: now() })
         return { success: true, message: `Removed from guest list` }
       }
       default:
@@ -620,13 +637,42 @@ Examples:
 
 Be direct. Act first, explain briefly after. If you're unsure which record to update (e.g. multiple flights on same day), ask which one.`
 
+    // Normalise the conversation for the API: must start with a user turn,
+    // no empty messages, and no consecutive same-role turns (merged instead).
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0
+    const rawMessages: any[] = Array.isArray(messages) ? messages : []
+    const cleaned: { role: 'user' | 'assistant', content: string }[] = []
+    rawMessages.forEach((m: any, i: number) => {
+      if (m?.role !== 'user' && m?.role !== 'assistant') return
+      let content = typeof m.content === 'string' ? m.content : ''
+      if (!content.trim()) {
+        // Keep an attachment-only final user message so its files still go through
+        if (i === rawMessages.length - 1 && m.role === 'user' && hasAttachments) content = 'See attached.'
+        else return
+      }
+      if (cleaned.length === 0 && m.role !== 'user') return
+      const prev = cleaned[cleaned.length - 1]
+      if (prev && prev.role === m.role) { prev.content += '\n\n' + content; return }
+      cleaned.push({ role: m.role, content })
+    })
+    if (cleaned.length === 0) {
+      return NextResponse.json({ success: false, error: 'No message to send' }, { status: 400 })
+    }
+
+    if (hasAttachments) {
+      const badImage = attachments.find((att: any) => att?.type?.startsWith('image/') && !isSupportedImageType(att.type))
+      if (badImage) {
+        return NextResponse.json({ success: false, error: `${UNSUPPORTED_IMAGE_ERROR} (${badImage.name || badImage.type})` }, { status: 400 })
+      }
+    }
+
     // Build message content with attachments if present
-    const apiMessages = messages.map((m: any, i: number) => {
-      if (i === messages.length - 1 && m.role === 'user' && attachments?.length > 0) {
+    const apiMessages = cleaned.map((m: any, i: number) => {
+      if (i === cleaned.length - 1 && m.role === 'user' && hasAttachments) {
         const parts: any[] = []
         for (const att of attachments) {
           if (att.type?.startsWith('image/')) {
-            parts.push({ type: 'image', source: { type: 'base64', media_type: att.type, data: att.base64 } })
+            parts.push({ type: 'image', source: { type: 'base64', media_type: att.type.toLowerCase(), data: att.base64 } })
           } else if (att.type === 'application/pdf') {
             parts.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: att.base64 } })
           } else {

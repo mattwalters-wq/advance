@@ -131,13 +131,20 @@ export default function LandingPage() {
         }
         @media (max-width: 560px) {
           .adv-how-grid { grid-template-columns: 1fr !important; }
+          .adv-pad { padding-left: 20px !important; padding-right: 20px !important; }
+          .adv-wrap { white-space: normal !important; }
+          .adv-nav { flex-wrap: wrap; gap: 12px; }
+          .adv-nav-actions { flex-wrap: wrap; gap: 10px !important; }
+        }
+        @media (max-width: 400px) {
+          .adv-hero h1 { font-size: 40px !important; }
         }
       `}</style>
 
       {/* ============ NAV ============ */}
-      <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 1240, margin: '0 auto', padding: '26px 48px' }}>
+      <nav className="adv-nav adv-pad" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 1240, margin: '0 auto', padding: '26px 48px' }}>
         <div style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 25, letterSpacing: '-0.01em' }}>Advance</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+        <div className="adv-nav-actions" style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <a href="#how" className="adv-nav-links adv-link-muted" style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>How it works</a>
           <a href="#features" className="adv-nav-links adv-link-muted" style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>Features</a>
           <a href="/auth/signin" className="adv-btn-ghost" style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: INK, textDecoration: 'none', padding: '10px 18px', border: '1px solid rgba(19,36,28,0.22)', borderRadius: 7 }}>Sign in</a>
@@ -146,7 +153,7 @@ export default function LandingPage() {
       </nav>
 
       {/* ============ HERO ============ */}
-      <header className="adv-hero" style={{ maxWidth: 1240, margin: '0 auto', padding: '72px 48px 96px', display: 'grid', gridTemplateColumns: '1.04fr 0.96fr', gap: 'clamp(40px, 5vw, 72px)', alignItems: 'center' }}>
+      <header className="adv-hero adv-pad" style={{ maxWidth: 1240, margin: '0 auto', padding: '72px 48px 96px', display: 'grid', gridTemplateColumns: '1.04fr 0.96fr', gap: 'clamp(40px, 5vw, 72px)', alignItems: 'center' }}>
         <div>
           <div style={{ display: 'inline-block', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11, letterSpacing: '0.22em', color: '#7d7468', border: '1px solid rgba(19,36,28,0.18)', borderRadius: 100, padding: '7px 16px', background: '#fbfcfa' }}>TOUR MANAGEMENT</div>
           <h1 style={{ fontFamily: DISPLAY, fontSize: 'clamp(46px, 5.6vw, 72px)', lineHeight: 1.04, margin: '28px 0 0', fontWeight: 600, letterSpacing: '-0.015em' }}>
@@ -158,14 +165,14 @@ export default function LandingPage() {
             <a href="/auth/signup" className="adv-btn-solid" style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 13, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#f6faf7', textDecoration: 'none', padding: '17px 30px', borderRadius: 8, boxShadow: '0 10px 24px rgba(31,111,84,0.28)' }}>Get started free</a>
             <a href="#how" className="adv-btn-ghost" style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 13, letterSpacing: '0.14em', textTransform: 'uppercase', color: INK, textDecoration: 'none', padding: '16px 28px', border: '1px solid rgba(19,36,28,0.25)', borderRadius: 8 }}>See how it works</a>
           </div>
-          <div style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, letterSpacing: '0.18em', color: '#84908a', marginTop: 28 }}>UNLIMITED ARTISTS &nbsp;·&nbsp; FREE DURING BETA</div>
+          <div className="adv-wrap" style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, letterSpacing: '0.18em', color: '#84908a', marginTop: 28 }}>UNLIMITED ARTISTS &nbsp;·&nbsp; FREE DURING BETA</div>
         </div>
         <HeroStage />
       </header>
 
       {/* ============ REPLACES STRIP ============ */}
       <section style={{ background: '#fbfcfa', borderTop: '1px solid rgba(19,36,28,0.09)', borderBottom: '1px solid rgba(19,36,28,0.09)' }}>
-        <div style={{ maxWidth: 1240, margin: '0 auto', padding: '26px 48px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '18px 36px' }}>
+        <div className="adv-pad" style={{ maxWidth: 1240, margin: '0 auto', padding: '26px 48px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '18px 36px' }}>
           <span style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 12, letterSpacing: '0.16em', color: '#84908a' }}>REPLACES</span>
           {['MASTER TOUR', 'SPREADSHEETS', 'PDF DAY SHEETS', 'EMAIL THREADS'].map((item) => (
             <span key={item} style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 13, letterSpacing: '0.14em', color: '#46554c' }}>
@@ -177,7 +184,7 @@ export default function LandingPage() {
       </section>
 
       {/* ============ HOW IT WORKS ============ */}
-      <section id="how" style={{ maxWidth: 1240, margin: '0 auto', padding: '110px 48px 120px' }}>
+      <section id="how" className="adv-pad" style={{ maxWidth: 1240, margin: '0 auto', padding: '110px 48px 120px' }}>
         <div style={{ textAlign: 'center', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, letterSpacing: '0.24em', color: '#1f6f54' }}>HOW IT WORKS</div>
         <h2 style={{ fontFamily: DISPLAY, fontSize: 'clamp(36px, 4.2vw, 50px)', fontWeight: 600, textAlign: 'center', margin: '18px 0 0', letterSpacing: '-0.01em' }}>Your agent sends docs. <em style={{ fontStyle: 'normal', fontWeight: 500, color: '#4c5e54' }}>You drop them in.</em></h2>
         <div className="adv-how-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 40, marginTop: 72 }}>
@@ -197,15 +204,15 @@ export default function LandingPage() {
       </section>
 
       {/* ============ SPEED BAND ============ */}
-      <section style={{ background: '#102019', padding: '120px 48px', textAlign: 'center' }}>
+      <section className="adv-pad" style={{ background: '#102019', padding: '120px 48px', textAlign: 'center' }}>
         <div style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, letterSpacing: '0.24em', color: '#4fbf8d' }}>BUILT FOR SPEED</div>
         <h2 style={{ fontFamily: DISPLAY, fontSize: 'clamp(40px, 4.6vw, 58px)', fontWeight: 600, color: '#f3f4f0', margin: '22px auto 0', maxWidth: '18ch', lineHeight: 1.12, letterSpacing: '-0.01em' }}>No more typing it in <em style={{ fontStyle: 'normal', fontWeight: 500, color: '#4fbf8d' }}>twice.</em></h2>
         <p style={{ fontSize: 19, lineHeight: 1.7, color: 'rgba(243,244,240,0.72)', maxWidth: '52ch', margin: '28px auto 0' }}>What used to be an evening of data entry after every email is a thirty-second drag and drop. Forward it, drop it, move on with your day.</p>
-        <div style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 12, letterSpacing: '0.2em', color: 'rgba(243,244,240,0.45)', marginTop: 40 }}>PDF &nbsp;·&nbsp; WORD &nbsp;·&nbsp; EXCEL &nbsp;·&nbsp; SCREENSHOTS — ALL OF IT</div>
+        <div className="adv-wrap" style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 12, letterSpacing: '0.2em', color: 'rgba(243,244,240,0.45)', marginTop: 40 }}>PDF &nbsp;·&nbsp; WORD &nbsp;·&nbsp; EXCEL &nbsp;·&nbsp; SCREENSHOTS — ALL OF IT</div>
       </section>
 
       {/* ============ FEATURES ============ */}
-      <section id="features" style={{ maxWidth: 1240, margin: '0 auto', padding: '110px 48px 120px' }}>
+      <section id="features" className="adv-pad" style={{ maxWidth: 1240, margin: '0 auto', padding: '110px 48px 120px' }}>
         <div style={{ textAlign: 'center', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, letterSpacing: '0.24em', color: '#1f6f54' }}>EVERYTHING INCLUDED</div>
         <h2 style={{ fontFamily: DISPLAY, fontSize: 'clamp(36px, 4.2vw, 50px)', fontWeight: 600, textAlign: 'center', margin: '18px 0 0', letterSpacing: '-0.01em' }}>One tool. <em style={{ fontStyle: 'normal', fontWeight: 500, color: '#4c5e54' }}>The whole tour.</em></h2>
         <div className="adv-features-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 80, marginTop: 64 }}>
@@ -236,16 +243,16 @@ export default function LandingPage() {
       </section>
 
       {/* ============ FINAL CTA ============ */}
-      <section style={{ borderTop: '1px solid rgba(19,36,28,0.09)', padding: '130px 48px 140px', textAlign: 'center' }}>
+      <section className="adv-pad" style={{ borderTop: '1px solid rgba(19,36,28,0.09)', padding: '130px 48px 140px', textAlign: 'center' }}>
         <h2 style={{ fontFamily: DISPLAY, fontSize: 'clamp(38px, 4.4vw, 54px)', fontWeight: 600, margin: '0 auto', maxWidth: '22ch', lineHeight: 1.15, letterSpacing: '-0.01em' }}>Built for managers who are done <em style={{ fontStyle: 'normal', fontWeight: 500, color: '#4c5e54' }}>patching things together.</em></h2>
-        <div style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 12, letterSpacing: '0.2em', color: '#84908a', marginTop: 26 }}>FREE DURING BETA &nbsp;·&nbsp; UNLIMITED ARTISTS &nbsp;·&nbsp; GETADVANCE.CO</div>
+        <div className="adv-wrap" style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 12, letterSpacing: '0.2em', color: '#84908a', marginTop: 26 }}>FREE DURING BETA &nbsp;·&nbsp; UNLIMITED ARTISTS &nbsp;·&nbsp; GETADVANCE.CO</div>
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 38 }}>
           <a href="/auth/signup" className="adv-btn-solid" style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 13, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#f6faf7', textDecoration: 'none', padding: '18px 34px', borderRadius: 8, boxShadow: '0 10px 24px rgba(31,111,84,0.28)' }}>Get started free</a>
         </div>
       </section>
 
       {/* ============ FOOTER ============ */}
-      <footer style={{ borderTop: '1px solid rgba(19,36,28,0.09)', maxWidth: 1240, margin: '0 auto', padding: '34px 48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+      <footer className="adv-pad" style={{ borderTop: '1px solid rgba(19,36,28,0.09)', maxWidth: 1240, margin: '0 auto', padding: '34px 48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
         <div style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 18, color: '#84908a' }}>Advance</div>
         <div style={{ display: 'flex', gap: 32 }}>
           <a href="/terms" className="adv-footer-link" style={{ whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, letterSpacing: '0.16em', textDecoration: 'none' }}>TERMS</a>

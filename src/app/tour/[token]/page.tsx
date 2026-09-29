@@ -28,23 +28,17 @@ export default function PublicTourPage() {
   useEffect(() => { loadTour() }, [params.token])
 
   async function loadTour() {
-    const { data: tourData } = await supabase.from('tours').select('*, artists(*)').eq('share_token', params.token).single()
-    if (!tourData) { setNotFound(true); setLoading(false); return }
-    setTour(tourData)
-    setArtist(tourData.artists)
-    const [s1, s2, s3, s4, s5] = await Promise.all([
-      supabase.from('shows').select('*').eq('tour_id', tourData.id).is('deleted_at', null).order('date'),
-      supabase.from('travel').select('*').eq('tour_id', tourData.id).is('deleted_at', null).order('travel_date'),
-      supabase.from('accommodation').select('*').eq('tour_id', tourData.id).is('deleted_at', null).order('check_in'),
-      supabase.from('contacts').select('*').eq('tour_id', tourData.id).is('deleted_at', null),
-      supabase.from('press').select('*').eq('tour_id', tourData.id).is('deleted_at', null).order('date').order('time'),
-    ])
-    setShows(s1.data || [])
-    setTravel(s2.data || [])
-    setAccommodation(s3.data || [])
-    // Only tour-wide contacts here; show-specific ones live on their day sheet
-    setContacts((s4.data || []).filter((c: any) => c.on_daysheet !== false && !c.show_id))
-    setPress(s5.data || [])
+    // One server-side call scoped to this share token (see public_tour in the DB)
+    const { data } = await supabase.rpc('public_tour', { p_token: params.token })
+    if (!data?.tour) { setNotFound(true); setLoading(false); return }
+    setTour(data.tour)
+    setArtist(data.tour.artists)
+    setShows(data.shows || [])
+    setTravel(data.travel || [])
+    setAccommodation(data.accommodation || [])
+    // Tour-wide contacts only; show-specific ones live on their day sheet
+    setContacts(data.contacts || [])
+    setPress(data.press || [])
     setLoading(false)
   }
 
@@ -95,7 +89,8 @@ export default function PublicTourPage() {
   })
   accommodation.forEach(a => { if (a.check_in && !byDate[a.check_in]) byDate[a.check_in] = [] })
 
-  const today = new Date().toISOString().split('T')[0]
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
   return (
     <div style={{ background: bg, minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif', color: text }}>
@@ -113,8 +108,8 @@ export default function PublicTourPage() {
 
         {Object.keys(byDate).sort().map(date => {
           const isToday = date === today
-          const isPast = date < today
-          const dayAccom = accommodation.filter(a => a.check_in <= date && (a.check_out || a.check_in) >= date)
+          const isPast = date !== 'TBC' && date < today
+          const dayAccom = accommodation.filter(a => a.check_in <= date && (a.check_out ? a.check_out > date : a.check_in === date))
           const sortedItems = [...byDate[date]].sort((a, b) => (a.time || '').localeCompare(b.time || ''))
 
           return (
@@ -122,6 +117,9 @@ export default function PublicTourPage() {
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                 <div style={{ background: isToday ? accent : '#1A1714', borderRadius: 8, padding: '6px 12px', minWidth: 56, textAlign: 'center' as const, flexShrink: 0 }}>
+                  {date === 'TBC' ? (
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#F5F0E8', padding: '6px 0' }}>TBC</div>
+                  ) : (<>
                   <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, color: isToday ? 'rgba(255,255,255,0.8)' : '#5A5450' }}>
                     {new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' }).toUpperCase()}
                   </div>
@@ -131,6 +129,7 @@ export default function PublicTourPage() {
                   <div style={{ fontFamily: 'monospace', fontSize: 9, color: isToday ? 'rgba(255,255,255,0.8)' : '#5A5450' }}>
                     {new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { month: 'short' }).toUpperCase()}
                   </div>
+                  </>)}
                 </div>
                 <div style={{ flex: 1, height: 1, background: border }} />
                 {isToday && <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: accent, flexShrink: 0 }}>TODAY</div>}

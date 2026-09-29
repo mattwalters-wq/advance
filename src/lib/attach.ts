@@ -9,6 +9,20 @@ export interface Attachment {
   type: string
 }
 
+// Image media types the Anthropic API accepts. Anything else (HEIC, BMP,
+// TIFF…) is rejected server-side with a clear error.
+export const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+export const UNSUPPORTED_IMAGE_ERROR = 'Unsupported image type — please use JPG or PNG'
+
+export function isSupportedImageType(type: string | null | undefined): boolean {
+  return !!type && SUPPORTED_IMAGE_TYPES.includes(type.toLowerCase())
+}
+
+const IMAGE_EXT_TYPES: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
+  heic: 'image/heic', bmp: 'image/bmp', tiff: 'image/tiff',
+}
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -27,7 +41,7 @@ export async function fileToAttachment(file: File): Promise<Attachment> {
   const isImage = file.type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'bmp', 'tiff'].includes(ext)
 
   if (isImage) {
-    return { name: file.name, base64: await fileToBase64(file), type: file.type || 'image/png' }
+    return { name: file.name, base64: await fileToBase64(file), type: file.type || IMAGE_EXT_TYPES[ext] || 'image/png' }
   }
   if (ext === 'pdf' || file.type === 'application/pdf') {
     return { name: file.name, base64: await fileToBase64(file), type: 'application/pdf' }

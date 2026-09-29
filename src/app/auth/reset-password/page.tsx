@@ -15,16 +15,41 @@ export default function ResetPasswordPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    // Supabase puts the token in the URL hash - listen for the session
-    supabase.auth.onAuthStateChange((event, session) => {
+    // Surface errors Supabase puts in the URL (query or hash), e.g. error_code=otp_expired
+    const query = new URLSearchParams(window.location.search)
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    const errorCode = query.get('error_code') || hash.get('error_code')
+    const errorDescription = query.get('error_description') || hash.get('error_description')
+    if (errorCode || errorDescription) {
+      setError(errorCode === 'otp_expired'
+        ? 'This reset link has expired or has already been used. Please request a new one.'
+        : (errorDescription || errorCode || '').replace(/\+/g, ' '))
+    }
+
+    // Supabase puts the token in the URL (code / hash) - listen for the session
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY' || session) {
         setSessionReady(true)
       }
     })
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setSessionReady(true)
+    })
+
+    // Email templates using token_hash links: verify the recovery OTP directly
+    const tokenHash = query.get('token_hash')
+    if (tokenHash && query.get('type') === 'recovery') {
+      supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ data, error }) => {
+        if (error) setError(error.message)
+        else if (data.session) setSessionReady(true)
+      })
+    }
+
+    return () => subscription.unsubscribe()
   }, [])
 
   async function handleReset() {
-    if (!password.trim()) return
+    if (!password.trim() || !sessionReady) return
     if (password !== confirm) { setError('Passwords do not match'); return }
     if (password.length < 8) { setError('Password must be at least 8 characters'); return }
 
@@ -76,19 +101,27 @@ export default function ResetPasswordPage() {
 
             <div style={{ marginBottom: 14 }}>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                placeholder="New password" autoFocus style={inputStyle} />
+                placeholder="New password" autoFocus disabled={!sessionReady} style={{ ...inputStyle, opacity: sessionReady ? 1 : 0.5 }} />
             </div>
             <div style={{ marginBottom: 24 }}>
               <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
                 placeholder="Confirm new password"
                 onKeyDown={e => e.key === 'Enter' && handleReset()}
-                style={inputStyle} />
+                disabled={!sessionReady} style={{ ...inputStyle, opacity: sessionReady ? 1 : 0.5 }} />
             </div>
 
-            <button onClick={handleReset} disabled={loading || !password.trim()}
-              style={{ width: '100%', padding: 14, background: '#C4622D', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: password.trim() ? 'pointer' : 'default', opacity: !password.trim() ? 0.5 : 1 }}>
-              {loading ? 'UPDATING...' : 'SET NEW PASSWORD →'}
+            <button onClick={handleReset} disabled={loading || !password.trim() || !sessionReady}
+              style={{ width: '100%', padding: 14, background: '#C4622D', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, cursor: password.trim() && sessionReady ? 'pointer' : 'default', opacity: !password.trim() || !sessionReady ? 0.5 : 1 }}>
+              {loading ? 'UPDATING...' : !sessionReady ? 'VERIFYING LINK...' : 'SET NEW PASSWORD →'}
             </button>
+
+            {!sessionReady && error && (
+              <div style={{ textAlign: 'center', fontSize: 13, color: '#8A8580', marginTop: 16 }}>
+                <span onClick={() => router.push('/auth/forgot-password')} style={{ color: '#F5F0E8', cursor: 'pointer', textDecoration: 'underline' }}>
+                  Request a new reset link
+                </span>
+              </div>
+            )}
           </>
         )}
       </div>

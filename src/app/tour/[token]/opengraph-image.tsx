@@ -18,7 +18,7 @@ export default async function Image({ params }: { params: { token: string } }) {
   const accent = artist?.color || '#C4622D'
 
   const { data: shows } = tour
-    ? await supabase.from('shows').select('date, venue, city, set_time').eq('tour_id', tour.id).order('date').limit(4)
+    ? await supabase.from('shows').select('date, venue, city, set_time').eq('tour_id', tour.id).is('deleted_at', null).order('date').limit(4)
     : { data: [] }
 
   function fmtDateShort(d: string) {
@@ -57,11 +57,6 @@ export default async function Image({ params }: { params: { token: string } }) {
                 </div>
               </div>
             ))}
-            {(shows?.length || 0) > 4 && (
-              <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#3A3530', letterSpacing: '1px', paddingLeft: 20 }}>
-                +{(shows?.length || 0) - 4} MORE SHOWS
-              </div>
-            )}
           </div>
         </div>
 

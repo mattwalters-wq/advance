@@ -18,21 +18,15 @@ export default function PublicGuestListPage() {
   useEffect(() => { loadData() }, [params.token])
 
   async function loadData() {
-    const { data: showData } = await supabase.from('shows')
-      .select('*, tours(*, artists(*))')
-      .eq('guest_list_token', params.token)
-      .single()
-    if (!showData) { setNotFound(true); setLoading(false); return }
-    setShow(showData)
-    if (showData.tours) {
-      setTour(showData.tours)
-      if (showData.tours.artists) setArtist(showData.tours.artists)
+    // Server-side call scoped to this guest-list token; removed guests are excluded
+    const { data } = await supabase.rpc('public_guest_list', { p_token: params.token })
+    if (!data?.show) { setNotFound(true); setLoading(false); return }
+    setShow(data.show)
+    if (data.tour) {
+      setTour(data.tour)
+      if (data.tour.artists) setArtist(data.tour.artists)
     }
-    const { data: guestsData } = await supabase.from('guest_list')
-      .select('*')
-      .eq('show_id', showData.id)
-      .order('name')
-    setGuests(guestsData || [])
+    setGuests(data.guests || [])
     setLoading(false)
   }
 

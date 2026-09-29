@@ -34,32 +34,48 @@ export default function AdminPage() {
   }
 
   async function checkAndLoad() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user || user.email !== ADMIN_EMAIL) { router.push('/dashboard'); return }
-    await loadAll()
-    setLoading(false)
+    let redirecting = false
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user || user.email !== ADMIN_EMAIL) { redirecting = true; router.push('/dashboard'); return }
+      await loadAll()
+    } finally {
+      if (!redirecting) setLoading(false)
+    }
   }
 
   async function loadAll() {
     setRefreshing(true)
-    const token = await getToken()
-    const res = await fetch('/api/admin', { headers: { 'Authorization': `Bearer ${token}` } })
-    if (!res.ok) { router.push('/dashboard'); return }
-    setData(await res.json())
-    setRefreshing(false)
+    try {
+      const token = await getToken()
+      const res = await fetch('/api/admin', { headers: { 'Authorization': `Bearer ${token}` } })
+      if (!res.ok) { router.push('/dashboard'); return }
+      setData(await res.json())
+    } catch {
+      showToast('Failed to load admin data')
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   async function drillIntoUser(user: any) {
     setDrillUser(user)
+    setDrillData(null)
     setDrillLoading(true)
-    const token = await getToken()
-    const res = await fetch(`/api/admin?user_id=${user.id}`, { headers: { 'Authorization': `Bearer ${token}` } })
-    if (res.ok) setDrillData(await res.json())
-    setDrillLoading(false)
+    try {
+      const token = await getToken()
+      // API resolves the user's org (profiles.org_id) from the user id
+      const res = await fetch(`/api/admin?user_id=${encodeURIComponent(user.id)}`, { headers: { 'Authorization': `Bearer ${token}` } })
+      if (res.ok) setDrillData(await res.json())
+    } catch {
+      showToast('Failed to load user data')
+    } finally {
+      setDrillLoading(false)
+    }
   }
 
-  async function impersonate(userId: string) {
-    const url = `/dashboard?superadmin=1&org_id=${userId}`
+  async function impersonate(orgId: string) {
+    const url = `/dashboard?superadmin=1&org_id=${encodeURIComponent(orgId)}`
     window.open(url, '_blank')
     showToast('Opening account in god mode...')
   }
@@ -158,7 +174,7 @@ export default function AdminPage() {
             <span style={{ fontSize: 14, color: text, fontWeight: 600 }}>{drillUser.full_name || drillUser.email}</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => impersonate(drillUser.id)} disabled={impersonating}
+            <button onClick={() => impersonate(drillUser.org_id || drillUser.id)} disabled={impersonating}
               style={{ padding: '6px 14px', background: accent, border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1 }}>
               {impersonating ? '...' : '⚡ ENTER ACCOUNT'}
             </button>
@@ -186,7 +202,7 @@ export default function AdminPage() {
                 <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
                   <div><div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 4 }}>JOINED</div><div style={{ fontSize: 13 }}>{fmtDate(drillUser.created_at)}</div></div>
                   <div><div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 4 }}>LAST SIGN IN</div><div style={{ fontSize: 13 }}>{fmtRelative(drillUser.last_sign_in)}</div></div>
-                  <div><div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 4 }}>ORG ID</div><div style={{ fontSize: 11, fontFamily: 'monospace', color: muted }}>{drillUser.id?.slice(0, 20)}...</div></div>
+                  <div><div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: muted, marginBottom: 4 }}>ORG ID</div><div style={{ fontSize: 11, fontFamily: 'monospace', color: muted }}>{(drillUser.org_id || drillUser.id)?.slice(0, 20)}...</div></div>
                 </div>
               </div>
 
@@ -262,7 +278,9 @@ export default function AdminPage() {
 
   const activeToursCount = tours.filter((t: any) => {
     if (!t.end_date) return true
-    return new Date(t.end_date) >= new Date()
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    return String(t.end_date).slice(0, 10) >= today
   }).length
 
   const totalGuests = guests.reduce((s: number, g: any) => s + 1 + (g.plus_n || 0), 0)
@@ -419,7 +437,7 @@ export default function AdminPage() {
                           style={{ padding: '4px 10px', background: 'transparent', border: `1px solid ${border}`, borderRadius: 5, color: muted, cursor: 'pointer', fontSize: 10, fontFamily: 'monospace' }}>
                           VIEW
                         </button>
-                        <button onClick={() => impersonate(u.id)} disabled={impersonating}
+                        <button onClick={() => impersonate(u.org_id || u.id)} disabled={impersonating}
                           style={{ padding: '4px 10px', background: accent, border: 'none', borderRadius: 5, color: '#fff', cursor: 'pointer', fontSize: 10, fontFamily: 'monospace' }}>
                           ⚡
                         </button>

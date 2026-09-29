@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
@@ -13,6 +13,7 @@ export default function SearchPage() {
   const [searching, setSearching] = useState(false)
   const [darkMode, setDarkMode] = useState(false)
   const [artists, setArtists] = useState<any[]>([])
+  const requestId = useRef(0)
 
   useEffect(() => {
     supabase.from('artists').select('*').then(({ data }) => setArtists(data || []))
@@ -24,17 +25,22 @@ export default function SearchPage() {
   }
 
   const search = useCallback(async (q: string) => {
-    if (!q.trim()) { setResults({ shows: [], travel: [], contacts: [], artists: [] }); return }
+    const reqId = ++requestId.current
+    if (!q.trim()) { setResults({ shows: [], travel: [], contacts: [], artists: [] }); setSearching(false); return }
     setSearching(true)
 
-    const term = `%${q}%`
+    // Quote values for PostgREST .or() so commas/parentheses in the query don't break the filter
+    const esc = q.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+    const term = `"%${esc}%"`
     const [showsRes, travelRes, contactsRes, artistsRes] = await Promise.all([
-      supabase.from('shows').select('*, tours(name, artist_id, artists(name))').or(`venue.ilike.${term},city.ilike.${term},country.ilike.${term},notes.ilike.${term}`).limit(20),
-      supabase.from('travel').select('*, tours(name, artist_id, artists(name))').or(`from_location.ilike.${term},to_location.ilike.${term},carrier.ilike.${term},reference.ilike.${term}`).limit(20),
-      supabase.from('contacts').select('*, tours(name, artist_id, artists(name))').or(`name.ilike.${term},role.ilike.${term},phone.ilike.${term},email.ilike.${term}`).limit(20),
+      supabase.from('shows').select('*, tours(name, artist_id, artists(name))').is('deleted_at', null).or(`venue.ilike.${term},city.ilike.${term},country.ilike.${term},notes.ilike.${term}`).limit(20),
+      supabase.from('travel').select('*, tours(name, artist_id, artists(name))').is('deleted_at', null).or(`from_location.ilike.${term},to_location.ilike.${term},carrier.ilike.${term},reference.ilike.${term}`).limit(20),
+      supabase.from('contacts').select('*, tours(name, artist_id, artists(name))').is('deleted_at', null).or(`name.ilike.${term},role.ilike.${term},phone.ilike.${term},email.ilike.${term}`).limit(20),
       supabase.from('artists').select('*').or(`name.ilike.${term},project.ilike.${term}`).limit(10),
     ])
 
+    // Ignore stale responses from an earlier keystroke
+    if (reqId !== requestId.current) return
     setResults({
       shows: showsRes.data || [],
       travel: travelRes.data || [],

@@ -98,12 +98,17 @@ export default function TourAIPage() {
     setLoading(true)
 
     try {
+      // Drop empty messages and any leading assistant messages (UI greeting) — the API expects the conversation to start with the user
+      const apiMessages = newMessages
+        .filter(m => m.content && m.content.trim())
+        .map(m => ({ role: m.role, content: m.content }))
+      while (apiMessages.length && apiMessages[0].role === 'assistant') apiMessages.shift()
       const res = await fetch('/api/tour-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tourId: params.tour_id,
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          messages: apiMessages,
           attachments,
         }),
       })
@@ -134,6 +139,9 @@ export default function TourAIPage() {
   function formatMessage(text: string) {
     // Simple markdown: bold, bullets, line breaks
     return text
+      // Escape HTML first so model/user content can't inject markup
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
       .split('\n')
       .map((line, i) => {
         // Bold

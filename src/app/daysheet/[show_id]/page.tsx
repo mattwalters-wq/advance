@@ -128,23 +128,18 @@ export default function DaySheetPage() {
   useEffect(() => { loadData() }, [params.show_id])
 
   async function loadData() {
-    const { data: showData } = await supabase.from('shows').select('*').eq('id', params.show_id).single()
+    // One server-side call returns only what this sheet needs (see public_daysheet in the DB)
+    const { data } = await supabase.rpc('public_daysheet', { p_show_id: params.show_id })
+    const showData = data?.show
     if (!showData) { setNotFound(true); setLoading(false); return }
 
     // Check if this is a festival: 2+ shows at same venue on consecutive days
     // Respect is_festival override: false = never redirect, true = always redirect
-    if (showData.is_festival === false) {
-      setShow(showData)
-    } else {
-      const { data: allTourShows } = await supabase.from('shows')
-        .select('id, date, venue, tour_id, is_festival')
-        .eq('tour_id', showData.tour_id)
-        .eq('venue', showData.venue)
-        .order('date')
-
+    if (showData.is_festival !== false && (showData.type || 'show') === 'show') {
+      const venueShows: any[] = data.venue_shows || []
       let redirectToFestival = showData.is_festival === true
-      if (!redirectToFestival && allTourShows && allTourShows.length >= 2) {
-        const dates = allTourShows.map((s: any) => s.date).sort()
+      if (!redirectToFestival && venueShows.length >= 2) {
+        const dates = venueShows.map((s: any) => s.date).sort()
         const first = new Date(dates[0] + 'T00:00:00')
         const last = new Date(dates[dates.length - 1] + 'T00:00:00')
         const spanDays = (last.getTime() - first.getTime()) / (1000 * 60 * 60 * 24)
@@ -152,24 +147,14 @@ export default function DaySheetPage() {
       }
 
       if (redirectToFestival) {
-        window.location.replace(`/festival/${showData.tour_id}`)
+        const venue = showData.venue ? `?venue=${encodeURIComponent(showData.venue)}` : ''
+        window.location.replace(`/festival/${showData.tour_id}${venue}`)
         return
       }
-      setShow(showData)
     }
+    setShow(showData)
 
-    const [tourRes, travelRes, accomRes, contactsRes, riderRes, pressRes, setlistRes, peopleRes] = await Promise.all([
-      supabase.from('tours').select('*, artists(*)').eq('id', showData.tour_id).single(),
-      supabase.from('travel').select('*').eq('tour_id', showData.tour_id).is('deleted_at', null).order('travel_date'),
-      supabase.from('accommodation').select('*').eq('tour_id', showData.tour_id).is('deleted_at', null).order('check_in'),
-      supabase.from('contacts').select('*').eq('tour_id', showData.tour_id).is('deleted_at', null),
-      supabase.from('riders').select('*').eq('tour_id', showData.tour_id).single(),
-      supabase.from('press').select('*').eq('tour_id', showData.tour_id).is('deleted_at', null).order('date'),
-      supabase.from('setlists').select('*').eq('show_id', showData.id).is('deleted_at', null).single(),
-      supabase.from('show_people').select('*').eq('show_id', showData.id).is('deleted_at', null),
-    ])
-
-    const tourData = tourRes.data
+    const tourData = data.tour
     setTour(tourData)
     if (tourData?.artists) setArtist(tourData.artists)
 
@@ -179,25 +164,23 @@ export default function DaySheetPage() {
     windowStart.setDate(windowStart.getDate() - 1)
     const windowEnd = new Date(showDateObj)
     windowEnd.setDate(windowEnd.getDate() + 3)
-    const toStr = (d: Date) => d.toISOString().split('T')[0]
+    const toStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
     // Store all travel within the window - filter client-side by mode/person
-    setTravel((travelRes.data || []).filter((t: any) => {
+    setTravel((data.travel || []).filter((t: any) => {
       if (!t.travel_date) return false
       return t.travel_date >= toStr(windowStart) && t.travel_date <= toStr(windowEnd)
     }))
-    setAccommodation((accomRes.data || []).filter((a: any) => {
+    setAccommodation((data.accommodation || []).filter((a: any) => {
       if (!a.check_in) return false
       return a.check_in <= showDate && (a.check_out || a.check_in) >= showDate
     }))
-    // This show's venue contacts first, then tour-wide ones (no show_id); skip ones hidden from sheets
-    setContacts((contactsRes.data || [])
-      .filter((c: any) => c.on_daysheet !== false && (!c.show_id || c.show_id === showData.id))
-      .sort((a: any, b: any) => (a.show_id ? 0 : 1) - (b.show_id ? 0 : 1)))
-    setRider(riderRes.data || null)
-    setPress(pressRes.data || [])
-    setSetlist(setlistRes.data || null)
-    setShowPeople(peopleRes.data || [])
+    // Already filtered server-side: this show's contacts first, then tour-wide ones
+    setContacts(data.contacts || [])
+    setRider(data.rider || null)
+    setPress(data.press || [])
+    setSetlist(data.setlist || null)
+    setShowPeople(data.show_people || [])
     setLoading(false)
   }
 
@@ -292,8 +275,8 @@ export default function DaySheetPage() {
       `}</style>
 
       {/* Toolbar */}
-      <div className="no-print" style={{ background: '#1A1714', padding: '0 16px 0 24px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+      <div className="no-print" style={{ background: '#1A1714', padding: '8px 16px', minHeight: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 17, fontStyle: 'italic', color: '#F5F0E8', fontFamily: 'Georgia, serif', flexShrink: 0 }}>Advance</span>
 
           {/* Day / Trip toggle */}
@@ -669,24 +652,26 @@ export default function DaySheetPage() {
           <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
             <SectionHeader label="Key Contacts" />
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <tbody>
               {contacts.map((c, i) => (
                 <tr key={i} style={{ borderBottom: i < contacts.length - 1 ? `1px solid ${border}` : 'none' }}>
-                  <td style={{ padding: '13px 24px', verticalAlign: 'middle' }}>
+                  <td style={{ padding: '13px 12px 13px 24px', verticalAlign: 'middle' }}>
                     <div style={{ fontSize: 15, fontWeight: 600 }}>{c.name}</div>
                     {c.role && <div style={{ fontSize: 11, color: muted, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>{c.role}</div>}
                   </td>
-                  <td style={{ padding: '13px 24px', textAlign: 'right', verticalAlign: 'middle' }}>
+                  <td style={{ padding: '13px 24px 13px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
                     <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                       {c.phone && (
                         <a href={`tel:${c.phone}`} style={{ fontSize: 14, color: accent, textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>{c.phone}</a>
                       )}
                       {c.email && (
-                        <a href={`mailto:${c.email}`} style={{ fontSize: 13, color: muted, textDecoration: 'none', whiteSpace: 'nowrap' }}>{c.email}</a>
+                        <a href={`mailto:${c.email}`} style={{ fontSize: 13, color: muted, textDecoration: 'none', wordBreak: 'break-all' }}>{c.email}</a>
                       )}
                     </div>
                   </td>
                 </tr>
               ))}
+              </tbody>
             </table>
           </div>
         )}

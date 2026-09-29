@@ -34,16 +34,22 @@ export async function GET(request: NextRequest) {
     const drilldown = url.searchParams.get('user_id')
 
     if (drilldown) {
-      const [artistsRes, profileRes] = await Promise.all([
-        supabase.from('artists').select('*').eq('org_id', drilldown).order('created_at', { ascending: false }),
-        supabase.from('profiles').select('*').eq('id', drilldown).single(),
-      ])
+      // drilldown is a user id; data is owned by the user's org (profiles.org_id)
+      const profileRes = await supabase.from('profiles').select('*').eq('id', drilldown).single()
+      const orgId = profileRes.data?.org_id
+      if (!orgId) {
+        return NextResponse.json({
+          profile: profileRes.data, artists: [], tours: [], shows: [], travel: [],
+          accommodation: [], guests: [], showPeople: [],
+        })
+      }
+      const artistsRes = await supabase.from('artists').select('*').eq('org_id', orgId).order('created_at', { ascending: false })
       const artists = artistsRes.data || []
       const artistIds = artists.map((a: any) => a.id)
 
       // Fetch tours both by org_id AND by artist_id (in case org_id wasn't set on creation)
       const [toursByOrg, toursByArtist] = await Promise.all([
-        supabase.from('tours').select('*, artists(name)').eq('org_id', drilldown),
+        supabase.from('tours').select('*, artists(name)').eq('org_id', orgId),
         artistIds.length > 0
           ? supabase.from('tours').select('*, artists(name)').in('artist_id', artistIds)
           : Promise.resolve({ data: [] }),
@@ -55,11 +61,11 @@ export async function GET(request: NextRequest) {
         .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
       const [showsRes, travelRes, accomRes, guestsRes, peopleRes] = await Promise.all([
-        supabase.from('shows').select('id, date, venue, city, tour_id, type').eq('org_id', drilldown).order('date', { ascending: false }),
-        supabase.from('travel').select('id, travel_date, from_location, to_location, tour_id').eq('org_id', drilldown),
-        supabase.from('accommodation').select('id, name, check_in, tour_id').eq('org_id', drilldown),
-        supabase.from('guest_list').select('id, name, plus_n, tour_id').eq('org_id', drilldown),
-        supabase.from('show_people').select('id, name, role, tour_id').eq('org_id', drilldown),
+        supabase.from('shows').select('id, date, venue, city, tour_id, type').eq('org_id', orgId).order('date', { ascending: false }),
+        supabase.from('travel').select('id, travel_date, from_location, to_location, tour_id').eq('org_id', orgId),
+        supabase.from('accommodation').select('id, name, check_in, tour_id').eq('org_id', orgId),
+        supabase.from('guest_list').select('id, name, plus_n, tour_id').eq('org_id', orgId),
+        supabase.from('show_people').select('id, name, role, tour_id').eq('org_id', orgId),
       ])
 
       return NextResponse.json({
@@ -98,14 +104,15 @@ export async function GET(request: NextRequest) {
       ...p,
       email: emailMap[p.id] || null,
       last_sign_in: lastSignInMap[p.id] || null,
-      artist_count: (artistsRes.data || []).filter((a: any) => a.org_id === p.id).length,
-      tour_count: (toursRes.data || []).filter((t: any) => {
-        if (t.org_id === p.id) return true
-        // fallback: check if the tour's artist belongs to this user
+      // artists/tours/shows are owned by the org (profiles.org_id), not the user id
+      artist_count: p.org_id ? (artistsRes.data || []).filter((a: any) => a.org_id === p.org_id).length : 0,
+      tour_count: p.org_id ? (toursRes.data || []).filter((t: any) => {
+        if (t.org_id === p.org_id) return true
+        // fallback: check if the tour's artist belongs to this user's org
         const artist = (artistsRes.data || []).find((a: any) => a.id === t.artist_id)
-        return artist?.org_id === p.id
-      }).length,
-      show_count: (showsRes.data || []).filter((s: any) => s.org_id === p.id).length,
+        return artist?.org_id === p.org_id
+      }).length : 0,
+      show_count: p.org_id ? (showsRes.data || []).filter((s: any) => s.org_id === p.org_id).length : 0,
     }))
 
     return NextResponse.json({

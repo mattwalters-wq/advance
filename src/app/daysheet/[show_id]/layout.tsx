@@ -11,6 +11,7 @@ export async function generateMetadata({ params }: { params: { show_id: string }
     .from('shows')
     .select('*')
     .eq('id', params.show_id)
+    .is('deleted_at', null)
     .single()
 
   const { data: tour } = show
