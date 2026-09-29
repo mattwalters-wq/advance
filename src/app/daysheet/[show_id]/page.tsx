@@ -652,6 +652,7 @@ export default function DaySheetPage() {
           <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
             <SectionHeader label="Key Contacts" />
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <tbody>
               {contacts.map((c, i) => (
                 <tr key={i} style={{ borderBottom: i < contacts.length - 1 ? `1px solid ${border}` : 'none' }}>
                   <td style={{ padding: '13px 12px 13px 24px', verticalAlign: 'middle' }}>
@@ -670,6 +671,7 @@ export default function DaySheetPage() {
                   </td>
                 </tr>
               ))}
+              </tbody>
             </table>
           </div>
         )}
