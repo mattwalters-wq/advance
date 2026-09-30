@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { fileToAttachment, collectFiles } from '@/lib/attach'
+import TourShowSummary, { missingShowDetails } from '@/components/TourShowSummary'
+import TourDetails from '@/components/TourDetails'
 
 const supabase = createClient()
 
@@ -53,6 +55,7 @@ export default function ArtistPage() {
   const [personShow, setPersonShow] = useState<any>(null)
   const [guestShow, setGuestShow] = useState<any>(null)
   const [moveShow, setMoveShow] = useState<any>(null)
+  const [scheduleFilter, setScheduleFilter] = useState<'all' | 'upcoming' | 'past' | 'incomplete'>('all')
   const [expandedShowId, setExpandedShowId] = useState<string | null>(null)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set(['travel', 'accommodation', 'contacts', 'press', 'documents']))
   const [importJobs, setImportJobs] = useState<any[]>([])
@@ -86,6 +89,8 @@ export default function ArtistPage() {
   useEffect(() => { loadArtist() }, [params.id])
   useEffect(() => {
     selectedTourIdRef.current = selectedTour?.id || null
+    setExpandedShowId(null)
+    setScheduleFilter('all')
     if (selectedTour) {
       loadTourData(selectedTour.id)
       // Broadcast to FloatingAssistant so it uses the same tour
@@ -276,7 +281,8 @@ export default function ArtistPage() {
 
   function computeWarnings(showsData: any[], travelData: any[], accomData: any[]) {
     const w: string[] = []
-    const sorted = [...showsData].sort((a, b) => a.date.localeCompare(b.date))
+    // Undated entries are surfaced by the schedule's missing-details filter.
+    const sorted = showsData.filter(show => show.date).sort((a, b) => a.date.localeCompare(b.date))
 
     for (let i = 0; i < sorted.length - 1; i++) {
       const a = sorted[i]
@@ -313,7 +319,7 @@ export default function ArtistPage() {
 
     // Shows with no set time
     for (const show of sorted) {
-      if (!show.set_time) {
+      if ((!show.type || show.type === 'show') && !show.set_time) {
         w.push(`Stage time missing: ${show.venue}${show.city ? ', ' + show.city : ''} (${show.date})`)
       }
     }
@@ -892,7 +898,7 @@ export default function ArtistPage() {
   const bg = darkMode ? '#1a1a1a' : '#f5f0e8'
   const card = darkMode ? '#2a2a2a' : '#ffffff'
   const text = darkMode ? '#e8e0d0' : '#2c2c2c'
-  const muted = darkMode ? '#888' : '#999'
+  const muted = darkMode ? '#B8B1A7' : '#746E65'
   const accent = '#C4622D'
   const border = darkMode ? '#333' : '#e8e0d0'
   const calBg = darkMode ? '#222' : '#faf7f2'
@@ -907,6 +913,10 @@ export default function ArtistPage() {
 
   // Ignore settlements whose show was deleted or moved (not in the live shows list)
   const liveSettlements = settlements.filter(st => shows.some(sh => sh.id === st.show_id))
+  const currentDate = new Date()
+  const today = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`
+  const incompleteShows = shows.filter(show => missingShowDetails(show).length > 0)
+
   const year = calMonth.getFullYear()
   const month = calMonth.getMonth()
   const daysInMonth = getDaysInMonth(year, month)
@@ -943,7 +953,72 @@ export default function ArtistPage() {
   )
 
   return (
-    <div style={{ background: bg, minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif', color: text }}>
+    <div className="tour-workspace" style={{ background: bg, minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif', color: text }}>
+
+      <style>{`
+        .tour-workspace { --tour-card: ${card}; --tour-bg: ${bg}; --tour-text: ${text}; --tour-muted: ${muted}; --tour-border: ${border}; --tour-accent: ${accent}; }
+        .tour-workspace button:focus-visible, .tour-workspace a:focus-visible, .tour-workspace summary:focus-visible { outline: 2px solid var(--tour-accent); outline-offset: 3px; }
+        .tour-add-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .tour-primary-action, .tour-secondary-action, .tour-add-menu > summary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; min-height: 44px; border: 1px solid var(--tour-border); border-radius: 8px; background: var(--tour-card); color: var(--tour-text); cursor: pointer; font: inherit; font-size: 13px; text-decoration: none; }
+        .tour-primary-action { background: var(--tour-accent); border-color: var(--tour-accent); color: white; font-weight: 600; }
+        .tour-add-menu { position: relative; }
+        .tour-add-menu summary { list-style: none; }
+        .tour-add-menu summary::-webkit-details-marker, .tour-details summary::-webkit-details-marker { display: none; }
+        .tour-add-options { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; min-width: 190px; padding: 6px; background: var(--tour-card); border: 1px solid var(--tour-border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+        .tour-add-options button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--tour-text); padding: 12px; min-height: 44px; cursor: pointer; font: inherit; font-size: 14px; border-radius: 6px; }
+        .tour-add-options button:hover { background: var(--tour-bg); }
+        .tour-schedule-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+        .tour-schedule-heading h2, .tour-reference-heading h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
+        .tour-schedule-heading p, .tour-reference-heading p { margin: 6px 0 0; color: var(--tour-muted); font-size: 13px; line-height: 1.5; }
+        .tour-attention-link { background: none; border: none; color: ${darkMode ? '#E5BB70' : '#8A5B12'}; cursor: pointer; font: inherit; font-size: 13px; text-align: left; min-height: 44px; text-decoration: underline; text-underline-offset: 3px; }
+        .tour-schedule-filters { display: flex; gap: 6px; flex-wrap: wrap; padding-bottom: 16px; }
+        .tour-schedule-filters button { background: var(--tour-card); color: var(--tour-muted); border: 1px solid var(--tour-border); border-radius: 20px; padding: 8px 14px; min-height: 44px; font: inherit; font-size: 13px; cursor: pointer; }
+        .tour-schedule-filters button[aria-pressed=true] { background: var(--tour-text); color: var(--tour-card); border-color: var(--tour-text); }
+        .tour-reference-toggle { width: 100%; border: 0; background: none; padding: 0; min-height: 44px; text-align: left; }
+        .tour-show-card { border-top: 1px solid var(--tour-border); }
+        .tour-show-summary { display: flex; align-items: center; gap: 14px; padding: 18px 0; }
+        .tour-show-toggle { flex: 1; display: flex; align-items: flex-start; gap: 16px; text-align: left; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; min-width: 0; }
+        .tour-show-date { flex-shrink: 0; width: 44px; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--tour-muted); font-size: 11px; }
+        .tour-show-date strong { color: var(--tour-text); font-size: 26px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .tour-show-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+        .tour-show-venue { font-size: 16px; font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; }
+        .tour-show-city, .tour-show-type { font-size: 12px; color: var(--tour-muted); }
+        .tour-show-type { color: var(--tour-accent); font-weight: 600; }
+        .tour-show-times { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 12px; color: var(--tour-muted); line-height: 1.6; margin-top: 3px; }
+        .tour-show-times strong { color: var(--tour-text); font-weight: 600; }
+        .tour-show-readiness { font-size: 12px; color: var(--tour-muted); line-height: 1.5; }
+        .tour-show-readiness.needs-details { color: ${darkMode ? '#E5BB70' : '#8A5B12'}; }
+        .tour-show-chevron { flex-shrink: 0; color: var(--tour-muted); font-size: 20px; }
+        .tour-show-actions { display: flex; gap: 8px; flex-shrink: 0; }
+        .tour-show-actions a, .tour-show-actions button { border: 1px solid var(--tour-border); border-radius: 7px; padding: 10px 12px; min-height: 44px; display: inline-flex; align-items: center; background: none; color: var(--tour-text); font: inherit; font-size: 12px; text-decoration: none; cursor: pointer; }
+        .tour-show-actions a { color: var(--tour-accent); }
+        .tour-show-panel a { overflow-wrap: anywhere; }
+        .tour-show-panel { padding: 0 0 18px 60px; overflow-wrap: anywhere; }
+        .tour-show-extra-times { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--tour-muted); margin-bottom: 16px; }
+        .tour-details { background: var(--tour-card); border: 1px solid var(--tour-border); border-radius: 10px; min-width: 0; }
+        .tour-details + .tour-details { margin-top: 10px; }
+        .tour-details summary { list-style: none; cursor: pointer; padding: 16px; min-height: 56px; display: flex; justify-content: space-between; align-items: center; gap: 14px; font-size: 14px; }
+        .tour-details summary strong { font-weight: 600; }
+        .tour-details-hint { display: block; font-size: 12px; color: var(--tour-muted); margin-top: 4px; line-height: 1.4; }
+        .tour-details-chevron { color: var(--tour-muted); font-size: 20px; }
+        .tour-details[open] > summary { border-bottom: 1px solid var(--tour-border); }
+        .tour-details[open] > summary .tour-details-chevron { transform: rotate(180deg); }
+        .tour-details-content { padding: 16px; overflow-wrap: anywhere; }
+        .tour-details-content button { min-height: 44px; }
+        .tour-detail-field + .tour-detail-field { margin-top: 16px; }
+        .tour-detail-field strong { font-size: 12px; color: var(--tour-muted); font-weight: 600; }
+        .tour-detail-field p { margin: 6px 0 0; font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
+        .tour-delete-action { color: #c53939; }
+        .tour-schedule-empty { padding: 24px 0; color: var(--tour-muted); font-size: 14px; }
+        .tour-workspace .toolbar-tabs button, .tour-workspace .toolbar-right button { font-size: 12px !important; letter-spacing: 0 !important; min-height: 44px; }
+        @media (max-width: 600px) {
+          .tour-show-summary { flex-wrap: wrap; gap: 12px; }
+          .tour-show-toggle { flex-basis: 100%; gap: 12px; }
+          .tour-show-actions { margin-left: 56px; flex-wrap: wrap; }
+          .tour-show-panel { padding-left: 0; }
+          .tour-workspace .toolbar-tabs button, .tour-workspace .toolbar-right button { font-size: 11px !important; min-height: 44px; }
+        }
+      `}</style>
 
       {/* Modal overlay */}
       {modal && (
@@ -1075,7 +1150,7 @@ export default function ArtistPage() {
                   <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: 70 }} value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any notes..." />
                 </div>
                 {(!form.type || form.type === 'show') && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#F9F6F2', borderRadius: 8, marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: darkMode ? '#222' : '#F9F6F2', borderRadius: 8, marginBottom: 16 }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>Festival / multi-day event</div>
                       <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>Override auto-detection for same-venue shows</div>
@@ -1759,7 +1834,7 @@ export default function ArtistPage() {
       <div className="header-bar" style={{ background: darkMode ? '#111' : '#0F0E0C', borderBottom: `1px solid ${darkMode ? '#222' : '#1E1C18'}`, padding: '0 16px', minHeight: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <div className="header-left" style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <button onClick={() => router.push('/dashboard')}
-            style={{ background: 'none', border: 'none', color: '#5A5450', cursor: 'pointer', fontSize: 13, fontFamily: '"Georgia", serif', display: 'flex', alignItems: 'center', gap: 6, padding: 0 }}>
+            style={{ background: 'none', border: 'none', color: '#BDB5AC', cursor: 'pointer', fontSize: 13, fontFamily: '"Georgia", serif', display: 'flex', alignItems: 'center', gap: 6, padding: 0 }}>
             ← Roster
           </button>
           <div className="header-divider" style={{ width: 1, height: 20, background: '#2A2520' }} />
@@ -1769,17 +1844,17 @@ export default function ArtistPage() {
             </div>
             <div style={{ minWidth: 0 }}>
               <div className="header-artist-name" style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 17, fontWeight: 700, color: '#F4EFE6', lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{artist?.name}</div>
-              {artist?.project && <div className="header-artist-project" style={{ fontSize: 11, color: '#5A5450', fontStyle: 'italic', marginTop: 2 }}>{artist.project}</div>}
+              {artist?.project && <div className="header-artist-project" style={{ fontSize: 11, color: '#BDB5AC', fontStyle: 'italic', marginTop: 2 }}>{artist.project}</div>}
             </div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <button onClick={() => router.push(`/dashboard/artists/${params.id}/settings`)}
-            style={{ padding: '6px 12px', background: 'transparent', border: '1px solid #2A2520', borderRadius: 6, color: '#5A5450', cursor: 'pointer', fontSize: 11, fontFamily: 'monospace', letterSpacing: '0.1em' }}>
+            style={{ padding: '6px 12px', background: 'transparent', border: '1px solid #2A2520', borderRadius: 6, color: '#BDB5AC', cursor: 'pointer', fontSize: 11, fontFamily: 'monospace', letterSpacing: '0.1em' }}>
             ⚙
           </button>
           <button onClick={() => setDarkMode(!darkMode)}
-            style={{ padding: '6px 12px', background: 'transparent', border: '1px solid #2A2520', borderRadius: 6, color: '#5A5450', cursor: 'pointer', fontSize: 12 }}>
+            style={{ padding: '6px 12px', background: 'transparent', border: '1px solid #2A2520', borderRadius: 6, color: '#BDB5AC', cursor: 'pointer', fontSize: 12 }}>
             {darkMode ? '☀️' : '🌙'}
           </button>
         </div>
@@ -2003,31 +2078,26 @@ export default function ArtistPage() {
             {/* LIST VIEW */}
             {view === 'list' && (
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 20 }}>
-                {/* Manual add row */}
-                <div className="add-row" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {([['show', '+ Show'], ['travel', '+ Travel'], ['accommodation', '+ Hotel'], ['contact', '+ Contact'], ['press', '+ Press'], ['document', '+ Docs']] as const).map(([type, label]) => (
-                    <button key={type} onClick={() => openModal(type)}
-                      style={{ padding: '6px 12px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
-                      {label}
-                    </button>
-                  ))}
-                  <button onClick={() => openModal('rider', rider || {})}
-                    style={{ padding: '6px 12px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
-                    {rider ? '✎ Rider' : '+ Rider'}
-                  </button>
-                  <button onClick={() => router.push(`/dashboard/artists/${params.id}/budget`)}
-                    style={{ padding: '6px 12px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
-                    💰 Budget
-                  </button>
-                  {selectedTour?.budget_url && (
-                    <a href={selectedTour.budget_url} target="_blank" rel="noreferrer"
-                      style={{ padding: '6px 12px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      📊 Spreadsheet ↗
-                    </a>
-                  )}
+                <div className="tour-add-row">
+                  <button className="tour-primary-action" onClick={() => openModal('show')}>+ Add show</button>
+                  <details className="tour-add-menu">
+                    <summary>Add details <span aria-hidden="true">⌄</span></summary>
+                    <div className="tour-add-options">
+                      {([['travel', 'Travel'], ['accommodation', 'Hotel'], ['contact', 'Contact'], ['press', 'Press'], ['document', 'Document']] as const).map(([type, label]) => (
+                        <button key={type} onClick={e => { openModal(type); e.currentTarget.closest('details')?.removeAttribute('open') }}>{label}</button>
+                      ))}
+                      <button onClick={e => { openModal('rider', rider || {}); e.currentTarget.closest('details')?.removeAttribute('open') }}>{rider ? 'Edit rider' : 'Rider'}</button>
+                    </div>
+                  </details>
+                  <button className="tour-secondary-action" onClick={() => router.push(`/dashboard/artists/${params.id}/budget`)}>Budget ↗</button>
+                  {selectedTour?.budget_url && <a className="tour-secondary-action" href={selectedTour.budget_url} target="_blank" rel="noreferrer">Spreadsheet ↗</a>}
                 </div>
                 {(shows.length > 0 || travel.length > 0) && (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}`, minWidth: 0 }}>
+                    <div className="tour-schedule-heading">
+                      <div><h2>Tour schedule</h2><p>Key times at a glance. Expand a show to manage the details.</p></div>
+                      {incompleteShows.length > 0 && <button className="tour-attention-link" onClick={() => setScheduleFilter('incomplete')}>{incompleteShows.length} {incompleteShows.length === 1 ? 'show needs' : 'shows need'} details</button>}
+                    </div>
                     <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>
                       {(() => {
                         const showCount = shows.filter(s => !s.type || s.type === 'show').length
@@ -2040,19 +2110,31 @@ export default function ArtistPage() {
                         if (recordingCount) parts.push(`${recordingCount} recording${recordingCount !== 1 ? 's' : ''}`)
                         if (pressCount) parts.push(`${pressCount} press day${pressCount !== 1 ? 's' : ''}`)
                         if (otherCount) parts.push(`${otherCount} other`)
-                        return `Schedule — ${parts.join(' · ')}`
+                        return parts.join(' · ')
                       })()}
+                    </div>
+                    <div className="tour-schedule-filters" role="group" aria-label="Filter tour schedule">
+                      {([
+                        ['all', 'All dates'], ['upcoming', 'Upcoming'], ['past', 'Past'], ['incomplete', 'Needs details'],
+                      ] as const).map(([value, label]) => <button key={value} aria-pressed={scheduleFilter === value} onClick={() => setScheduleFilter(value)}>{label}</button>)}
                     </div>
                     {(() => {
                       // Merge shows and travel into one sorted list
                       const showItems = shows.map(s => ({ ...s, _type: 'show' as const }))
                       const travelItems = travel.filter(t => t.travel_date).map(t => ({ ...t, _type: 'travel' as const, date: t.travel_date }))
                       const allItems = [...showItems, ...travelItems].sort((a, b) => {
-                        if (a.date !== b.date) return a.date.localeCompare(b.date)
+                        if (a.date !== b.date) return (a.date || '9999').localeCompare(b.date || '9999')
                         // Shows before travel on same day
                         return a._type === 'show' ? -1 : 1
                       })
-                      return allItems.map((item, i) => {
+                      const visibleItems = allItems.filter(item => {
+                        if (scheduleFilter === 'incomplete') return item._type === 'show' && missingShowDetails(item).length > 0
+                        if (scheduleFilter === 'upcoming') return item.date && item.date >= today
+                        if (scheduleFilter === 'past') return item.date && item.date < today
+                        return true
+                      })
+                      if (visibleItems.length === 0) return <div className="tour-schedule-empty"><p>{scheduleFilter === 'incomplete' ? 'All shows have their key details.' : `No ${scheduleFilter} dates in this tour.`}</p><button className="tour-secondary-action" onClick={() => setScheduleFilter('all')}>Show all dates</button></div>
+                      return visibleItems.map((item, i) => {
                       if (item._type === 'travel') {
                         const t = item as any
                         const travelEmoji = (type: string) => {
@@ -2094,8 +2176,7 @@ export default function ArtistPage() {
                       const show = item as any
                       const v = show.venue || ''
                       const venueName = v.length > 55 ? v.split(/\s*[-–]\s*(?:Access|Park in|Contact|via\s|Turn|From\s)/i)[0].trim() : v
-                      const hasDetail = v.length > venueName.length
-                      const isExpanded = expandedShowId === show.id
+                                      const isExpanded = expandedShowId === show.id
                       const settlement = settlements.find(s => s.show_id === show.id)
                       const sl = setlists.find(s => s.show_id === show.id)
                       const songCount = sl && Array.isArray(sl.songs) ? sl.songs.length : 0
@@ -2114,74 +2195,17 @@ export default function ArtistPage() {
                           return (last.getTime() - first.getTime()) / (1000 * 60 * 60 * 24) <= 3
                         })()
                       )
-                      const statusColor: Record<string,string> = { paid: '#2d7a4f', partial: '#B8860B', pending: muted, disputed: '#C00' }
 
                       return (
-                      <div key={i} style={{ borderBottom: i < shows.length - 1 ? `1px solid ${border}` : 'none', position: 'relative' as const }}>
-                        {/* Compact row - tap anywhere expands; DAY SHEET is its own button */}
-                        <div
-                          onClick={() => setExpandedShowId(isExpanded ? null : show.id)}
-                          style={{ padding: '12px 0', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', userSelect: 'none' as const }}>
-                          {/* Date block */}
-                          <div style={{ flexShrink: 0, width: 44, textAlign: 'center' }}>
-                            <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: muted, textTransform: 'uppercase' }}>
-                              {show.date ? new Date(show.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' }) : ''}
-                            </div>
-                            <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: text, fontVariantNumeric: 'tabular-nums' }}>
-                              {show.date ? new Date(show.date + 'T00:00:00').getDate() : ''}
-                            </div>
-                            <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.05em', color: muted }}>
-                              {show.date ? new Date(show.date + 'T00:00:00').toLocaleDateString('en-AU', { month: 'short' }) : ''}
-                            </div>
-                          </div>
-                          <div style={{ width: 1, background: border, alignSelf: 'stretch', flexShrink: 0 }} />
-                          {/* Venue + city */}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 8 }}>
-                              {show.type && show.type !== 'show' && (
-                                <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.5,
-                                  color: show.type === 'rehearsal' ? '#5B4B8A' : show.type === 'recording' ? '#1A6B8A' : show.type === 'press' ? '#B8860B' : show.type === 'day_off' ? '#3D6B50' : '#8A8580',
-                                  background: show.type === 'rehearsal' ? '#F5F0FF' : show.type === 'recording' ? '#F0F8FF' : show.type === 'press' ? '#FFFBF0' : show.type === 'day_off' ? '#F0FFF4' : '#F5F0E8',
-                                  border: `1px solid ${show.type === 'rehearsal' ? '#8B7EC6' : show.type === 'recording' ? '#1A6B8A' : show.type === 'press' ? '#B8860B' : show.type === 'day_off' ? '#3D6B50' : border}`,
-                                  padding: '2px 6px', borderRadius: 3, flexShrink: 0 }}>
-                                  {show.type === 'rehearsal' ? 'REHEARSAL' : show.type === 'recording' ? 'RECORDING' : show.type === 'press' ? 'PRESS DAY' : show.type === 'travel_day' ? 'TRAVEL' : 'DAY OFF'}
-                                </span>
-                              )}
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{venueName}</span>
-                            </div>
-                            <div style={{ fontSize: 12, color: muted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {[show.city, show.country && show.country !== 'AU' ? show.country : null].filter(Boolean).join(', ')}
-                              {['rehearsal','recording','press'].includes(show.type) ? (
-                                show.soundcheck_time && <span style={{ marginLeft: 8, fontFamily: 'monospace', color: accent, fontWeight: 700 }}>· {formatTime(show.soundcheck_time)}</span>
-                              ) : (
-                                show.set_time && <span style={{ marginLeft: 8, fontFamily: 'monospace', color: accent, fontWeight: 700 }}>· {formatTime(show.set_time)}</span>
-                              )}
-                            </div>
-                          </div>
-                          {/* Status indicators */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                            {isFestival && (
-                              <span style={{ fontFamily: 'monospace', fontSize: 9, color: accent, background: '#FDF5EF', border: `1px solid ${accent}`, padding: '2px 6px', borderRadius: 3, letterSpacing: 1 }}>FEST</span>
-                            )}
-                            {settlement && (
-                              <span title={`Settlement: ${settlement.status}`} style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor[settlement.status] || muted, flexShrink: 0 }} />
-                            )}
-                            {songCount > 0 && (
-                              <span title={`${songCount} songs`} style={{ fontFamily: 'monospace', fontSize: 10, color: '#5B4B8A' }}>♪{songCount}</span>
-                            )}
-                            {peopleCount > 0 && (
-                              <span title={`${peopleCount} support/photog`} style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>👥{peopleCount}</span>
-                            )}
-                            {guestCount > 0 && (
-                              <span title={`${guestCount} on guest list`} style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>🎟{guestCount}</span>
-                            )}
-                            <span style={{ fontSize: 14, color: muted, transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0, marginLeft: 4 }}>›</span>
-                          </div>
-                        </div>
+                      <div key={show.id} className="tour-show-card">
+                        <TourShowSummary show={show} venueName={venueName} expanded={isExpanded} festival={isFestival}
+                          sheetUrl={isFestival ? `/festival/${selectedTour?.id}${show.venue ? `?venue=${encodeURIComponent(show.venue)}` : ''}` : `/daysheet/${show.id}`}
+                          onToggle={() => setExpandedShowId(isExpanded ? null : show.id)}
+                          onEdit={() => openModal('show', show)} />
 
-                        {/* Actions panel (toggled by ⋯) */}
+                        {/* Expanded show details */}
                         {isExpanded && (
-                          <div style={{ padding: '4px 0 16px 56px' }}>
+                          <div id={`show-details-${show.id}`} className="tour-show-panel">
                             {/* Full venue name if truncated */}
                             {(v.length > venueName.length) && (
                               <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>📍 {v}</div>
@@ -2196,32 +2220,18 @@ export default function ArtistPage() {
                                 </a>
                               </div>
                             )}
-                            {/* Times row */}
-                            {(show.doors_time || show.soundcheck_time || show.set_time || show.stage || show.catering || show.backline) && (
-                              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
-                                {['rehearsal','recording','press'].includes(show.type) ? (
-                                  <>
-                                    {show.soundcheck_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>Start {formatTime(show.soundcheck_time)}</span>}
-                                    {show.set_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: accent, fontWeight: 700 }}>Finish {formatTime(show.set_time)}</span>}
-                                  </>
-                                ) : (
-                                  <>
-                                    {show.arrival_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>Arrive {formatTime(show.arrival_time)}</span>}
-                                    {show.doors_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>Doors {formatTime(show.doors_time)}</span>}
-                                    {show.soundcheck_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>SC {formatTime(show.soundcheck_time)}</span>}
-                                    {show.set_time && <span style={{ fontFamily: 'monospace', fontSize: 11, color: accent, fontWeight: 700 }}>Stage {formatTime(show.set_time)}</span>}
-                                    {show.stage && <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted }}>{show.stage}</span>}
-                                  </>
-                                )}
-                                {show.catering && <span style={{ fontSize: 11, color: muted }}>🍽 {show.catering}</span>}
-                                {show.backline && <span style={{ fontSize: 11, color: muted }}>🎸 {show.backline}</span>}
-                              </div>
-                            )}
-                            {/* Notes */}
-                            {show.notes && (
-                              <div style={{ fontSize: 12, color: muted, marginBottom: 12, fontStyle: 'italic', lineHeight: 1.5, whiteSpace: 'pre-wrap' as const }}>{show.notes}</div>
-                            )}
+                            {(show.doors_time || show.stage) && <div className="tour-show-extra-times">
+                              {show.doors_time && <span>Doors <strong>{formatTime(show.doors_time)}</strong></span>}
+                              {show.stage && <span>Stage: {show.stage}</span>}
+                            </div>}
+                            {(show.catering || show.backline || show.parking || show.notes) && <TourDetails title="Production & notes" hint="Access, catering, backline and show notes">
+                              {show.parking && <div className="tour-detail-field"><strong>Parking / access</strong><p>{show.parking}</p></div>}
+                              {show.catering && <div className="tour-detail-field"><strong>Catering</strong><p>{show.catering}</p></div>}
+                              {show.backline && <div className="tour-detail-field"><strong>Backline</strong><p>{show.backline}</p></div>}
+                              {show.notes && <div className="tour-detail-field"><strong>Notes</strong><p>{show.notes}</p></div>}
+                            </TourDetails>}
                             {/* Show people (supports, photographers, etc) */}
+                            <TourDetails title="Supports & crew" hint={`${peopleCount} ${peopleCount === 1 ? 'person' : 'people'}`}>
                             {(() => {
                               const people = showPeople.filter(p => p.show_id === show.id)
                               const roleLabels: Record<string, string> = { support: 'Support', photographer: 'Photographer', videographer: 'Video', dj: 'DJ', mc: 'MC', other: 'Other' }
@@ -2231,7 +2241,7 @@ export default function ArtistPage() {
                                   {people.length > 0 && (
                                     <div style={{ display: 'grid', gap: 6, marginBottom: 8 }}>
                                       {people.map((p: any) => (
-                                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#F9F6F2', borderRadius: 6, fontSize: 12 }}>
+                                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: darkMode ? '#222' : '#F9F6F2', borderRadius: 6, fontSize: 12 }}>
                                           <span style={{ fontSize: 14 }}>{roleIcons[p.role] || '•'}</span>
                                           <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ fontWeight: 600, color: text }}>
@@ -2264,7 +2274,9 @@ export default function ArtistPage() {
                                 </div>
                               )
                             })()}
+                            </TourDetails>
                             {/* Guest list */}
+                            <TourDetails title="Guest list" hint={`${guestCount} ${guestCount === 1 ? 'guest' : 'guests'}`}>
                             {(() => {
                               const guests = guestList.filter(g => g.show_id === show.id)
                               const totalHeads = guests.reduce((sum: number, g: any) => sum + 1 + (g.plus_n || 0), 0)
@@ -2289,7 +2301,7 @@ export default function ArtistPage() {
                                       </div>
                                       <div style={{ display: 'grid', gap: 4 }}>
                                         {guests.map((g: any) => (
-                                          <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', background: '#F9F6F2', borderRadius: 6, fontSize: 12 }}>
+                                          <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', background: darkMode ? '#222' : '#F9F6F2', borderRadius: 6, fontSize: 12 }}>
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                               <span style={{ fontWeight: 600, color: text }}>{g.name}</span>
                                               {g.plus_n > 0 && <span style={{ fontFamily: 'monospace', fontSize: 11, color: accent, marginLeft: 6, fontWeight: 700 }}>+{g.plus_n}</span>}
@@ -2329,7 +2341,9 @@ export default function ArtistPage() {
                                 </div>
                               )
                             })()}
+                            </TourDetails>
                             {/* Per-show expenses */}
+                            <TourDetails title="Finances" hint={settlement ? `Settlement: ${settlement.status}` : 'Expenses and settlement'}>
                             {(() => {
                               const showExpenses = expenses.filter((e: any) => e.show_id === show.id)
                               return (
@@ -2340,7 +2354,7 @@ export default function ArtistPage() {
                                         Show expenses · {showExpenses.reduce((s: number, e: any) => s + (parseFloat(e.amount) || 0), 0).toLocaleString()} {showExpenses[0]?.currency || 'AUD'}
                                       </div>
                                       {showExpenses.map((e: any) => (
-                                        <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: '#F9F6F2', borderRadius: 6, marginBottom: 4, fontSize: 12 }}>
+                                        <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: darkMode ? '#222' : '#F9F6F2', borderRadius: 6, marginBottom: 4, fontSize: 12 }}>
                                           <div style={{ flex: 1 }}>
                                             <span style={{ fontWeight: 600 }}>{e.description}</span>
                                             {e.notes && <span style={{ color: muted, marginLeft: 8, fontStyle: 'italic' }}>{e.notes}</span>}
@@ -2366,40 +2380,17 @@ export default function ArtistPage() {
                                 </div>
                               )
                             })()}
-                            {/* Actions */}
-                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                              {isFestival ? (
-                                <button onClick={(e) => { e.stopPropagation(); window.open(`/festival/${selectedTour?.id}`, '_blank') }}
-                                  style={{ background: '#FDF5EF', border: `1px solid ${accent}`, borderRadius: 6, color: accent, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
-                                  FESTIVAL ↗
-                                </button>
-                              ) : (
-                                <button onClick={(e) => { e.stopPropagation(); window.open(`/daysheet/${show.id}`, '_blank') }}
-                                  style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
-                                  DAY SHEET ↗
-                                </button>
-                              )}
-                              <button onClick={(e) => { e.stopPropagation(); setSetlistShow(show); openModal('setlist', sl || { songs: [], show_id: show.id }) }}
-                                style={{ background: songCount > 0 ? '#F5F0FF' : 'transparent', border: `1px solid ${songCount > 0 ? '#8B7EC6' : border}`, borderRadius: 6, color: songCount > 0 ? '#5B4B8A' : muted, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
-                                {songCount > 0 ? `♪ ${songCount} songs` : '♪ SET LIST'}
-                              </button>
-                              <button onClick={(e) => { e.stopPropagation(); setSettlementShow(show); openModal('settlement', settlement || {}) }}
-                                style={{ background: settlement ? (settlement.status === 'paid' ? '#f0fff4' : settlement.status === 'disputed' ? '#fff0f0' : '#FFF8E6') : 'transparent', border: `1px solid ${settlement ? statusColor[settlement.status] || border : border}`, borderRadius: 6, color: settlement ? statusColor[settlement.status] || muted : muted, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
-                                {settlement ? `$ ${settlement.status}` : '$ SETTLE'}
-                              </button>
-                              <button onClick={(e) => { e.stopPropagation(); openModal('show', show) }}
-                                style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 12, padding: '6px 12px' }}>
-                                ✎ Edit
-                              </button>
-                              <button onClick={(e) => { e.stopPropagation(); setMoveShow(show) }}
-                                style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 11, padding: '6px 12px', fontFamily: 'monospace', letterSpacing: 1 }}>
-                                ⇄ MOVE
-                              </button>
-                              <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ table: 'shows', id: show.id, label: `${show.venue} — ${show.date}` }) }}
-                                style={{ background: '#fff0f0', border: '1px solid #ffcccc', borderRadius: 6, color: '#cc0000', cursor: 'pointer', fontSize: 12, padding: '6px 12px', fontWeight: 700 }}>
-                                ✕ Delete
-                              </button>
-                            </div>
+                            <button className="tour-secondary-action" onClick={() => { setSettlementShow(show); openModal('settlement', settlement || {}) }}>Manage settlement</button>
+                            </TourDetails>
+                            <TourDetails title="Setlist" hint={`${songCount} ${songCount === 1 ? 'song' : 'songs'}`}>
+                              <button className="tour-secondary-action" onClick={() => { setSetlistShow(show); openModal('setlist', sl || { songs: [], show_id: show.id }) }}>{songCount > 0 ? 'Edit setlist' : 'Create setlist'}</button>
+                            </TourDetails>
+                            <TourDetails title="Manage show" hint="Move to another tour or delete">
+                              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <button className="tour-secondary-action" onClick={() => setMoveShow(show)}>Move show</button>
+                                <button className="tour-secondary-action tour-delete-action" onClick={() => setConfirmDelete({ table: 'shows', id: show.id, label: `${show.venue} — ${show.date}` })}>Delete show</button>
+                              </div>
+                            </TourDetails>
                           </div>
                         )}
                       </div>
@@ -2408,17 +2399,18 @@ export default function ArtistPage() {
                   })()}
                   </div>
                 )}
+                {(travel.length > 0 || accommodation.length > 0 || contacts.length > 0 || press.length > 0 || documents.length > 0 || liveSettlements.length > 0 || rider) && <div className="tour-reference-heading"><h2>Tour details</h2><p>Travel, contacts and reference information for the whole tour.</p></div>}
                 {travel.length > 0 && (() => {
                   const key = 'travel'
                   const collapsed = collapsedSections.has(key)
                   return (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
-                    <div
+                    <button type="button" aria-expanded={!collapsed} className="tour-reference-toggle"
                       onClick={() => setCollapsedSections(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })}
-                      style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: collapsed ? 0 : 16, textTransform: 'uppercase', fontFamily: 'monospace', cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      style={{ fontSize: 15, fontWeight: 600, color: text, marginBottom: collapsed ? 0 : 16, cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span>Travel — {travel.length}</span>
                       <span style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s', fontSize: 14 }}>›</span>
-                    </div>
+                    </button>
                     {!collapsed && travel.map((t, i) => (
                       <div key={i} style={{ padding: '10px 0', borderBottom: i < travel.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -2452,12 +2444,12 @@ export default function ArtistPage() {
                   const collapsed = collapsedSections.has(key)
                   return (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
-                    <div
+                    <button type="button" aria-expanded={!collapsed} className="tour-reference-toggle"
                       onClick={() => setCollapsedSections(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })}
-                      style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: collapsed ? 0 : 16, textTransform: 'uppercase', fontFamily: 'monospace', cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      style={{ fontSize: 15, fontWeight: 600, color: text, marginBottom: collapsed ? 0 : 16, cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span>Hotels — {accommodation.length}</span>
                       <span style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s', fontSize: 14 }}>›</span>
-                    </div>
+                    </button>
                     {!collapsed && accommodation.map((a, i) => (
                       <div key={i} style={{ padding: '12px 0', borderBottom: i < accommodation.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                         <div style={{ flex: 1 }}>
@@ -2485,12 +2477,12 @@ export default function ArtistPage() {
                   const collapsed = collapsedSections.has(key)
                   return (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
-                    <div
+                    <button type="button" aria-expanded={!collapsed} className="tour-reference-toggle"
                       onClick={() => setCollapsedSections(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })}
-                      style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: collapsed ? 0 : 16, textTransform: 'uppercase', fontFamily: 'monospace', cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      style={{ fontSize: 15, fontWeight: 600, color: text, marginBottom: collapsed ? 0 : 16, cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span>Contacts — {contacts.length}</span>
                       <span style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s', fontSize: 14 }}>›</span>
-                    </div>
+                    </button>
                     {!collapsed && contacts.map((c, i) => (
                       <div key={i} style={{ padding: '12px 0', borderBottom: i < contacts.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                         <div style={{ flex: 1 }}>
@@ -2522,12 +2514,12 @@ export default function ArtistPage() {
                   const collapsed = collapsedSections.has(key)
                   return (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
-                    <div
+                    <button type="button" aria-expanded={!collapsed} className="tour-reference-toggle"
                       onClick={() => setCollapsedSections(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })}
-                      style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: collapsed ? 0 : 16, textTransform: 'uppercase', fontFamily: 'monospace', cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      style={{ fontSize: 15, fontWeight: 600, color: text, marginBottom: collapsed ? 0 : 16, cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 14 }}>📣</span>Press — {press.length}</span>
                       <span style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s', fontSize: 14 }}>›</span>
-                    </div>
+                    </button>
                     {!collapsed && press.map((p, i) => {
                       const typeLabels: Record<string, string> = {
                         interview: 'Interview', radio: 'Radio', tv: 'TV', podcast: 'Podcast',
@@ -2580,12 +2572,12 @@ export default function ArtistPage() {
                   const collapsed = collapsedSections.has(key)
                   return (
                   <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
-                    <div
+                    <button type="button" aria-expanded={!collapsed} className="tour-reference-toggle"
                       onClick={() => setCollapsedSections(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })}
-                      style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: collapsed ? 0 : 16, textTransform: 'uppercase', fontFamily: 'monospace', cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      style={{ fontSize: 15, fontWeight: 600, color: text, marginBottom: collapsed ? 0 : 16, cursor: 'pointer', userSelect: 'none' as const, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 14 }}>📎</span>Documents — {documents.length}</span>
                       <span style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s', fontSize: 14 }}>›</span>
-                    </div>
+                    </button>
                     {!collapsed && (() => {
                       const byCategory = documents.reduce((acc: any, d: any) => {
                         const cat = d.category || 'other'
@@ -2602,7 +2594,7 @@ export default function ArtistPage() {
                             {catLabels[cat]}
                           </div>
                           {byCategory[cat].map((d: any, i: number) => (
-                            <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#F9F6F2', borderRadius: 6, marginBottom: 4, gap: 10 }}>
+                            <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: darkMode ? '#222' : '#F9F6F2', borderRadius: 6, marginBottom: 4, gap: 10 }}>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <a href={d.url} target="_blank" rel="noreferrer"
                                   style={{ fontSize: 13, fontWeight: 600, color: accent, textDecoration: 'none', display: 'block', wordBreak: 'break-word' }}>
@@ -2626,8 +2618,7 @@ export default function ArtistPage() {
                   </div>
                 )})()}
                 {liveSettlements.length > 0 && (
-                  <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
-                    <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, marginBottom: 16, textTransform: 'uppercase', fontFamily: 'monospace' }}>Settlements — {liveSettlements.length} show{liveSettlements.length !== 1 ? 's' : ''}</div>
+                  <TourDetails title="Settlements" hint={`${liveSettlements.length} ${liveSettlements.length === 1 ? 'show' : 'shows'}`}>
                     {(() => {
                       const total = liveSettlements.reduce((sum, s) => sum + (parseFloat(s.paid_amount) || 0), 0)
                       const agreed = liveSettlements.reduce((sum, s) => sum + (parseFloat(s.agreed_amount) || 0), 0)
@@ -2671,16 +2662,12 @@ export default function ArtistPage() {
                         </>
                       )
                     })()}
-                  </div>
+                  </TourDetails>
                 )}
 
                 {rider && (rider.tech_notes || rider.hospitality || rider.set_length || rider.band_size || rider.input_list) && (
-                  <div style={{ background: card, borderRadius: 12, padding: 20, border: `1px solid ${border}` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                      <div style={{ fontSize: 11, letterSpacing: '0.1em', color: muted, textTransform: 'uppercase', fontFamily: 'monospace' }}>Rider / Tech Spec</div>
-                      <button onClick={() => openModal('rider', rider)}
-                        style={{ background: 'none', border: `1px solid ${border}`, borderRadius: 6, color: muted, cursor: 'pointer', fontSize: 11, padding: '3px 8px' }}>✎</button>
-                    </div>
+                  <TourDetails title="Rider & technical details" hint="Band setup and technical requirements">
+                    <button className="tour-secondary-action" style={{ marginBottom: 16 }} onClick={() => openModal('rider', rider)}>Edit rider</button>
                     {rider.band_size && <div style={{ marginBottom: 10 }}><span style={{ fontSize: 11, fontFamily: 'monospace', color: muted, letterSpacing: 1 }}>BAND — </span><span style={{ fontSize: 13 }}>{rider.band_size}</span></div>}
                     {rider.set_length && <div style={{ marginBottom: 10 }}><span style={{ fontSize: 11, fontFamily: 'monospace', color: muted, letterSpacing: 1 }}>SET — </span><span style={{ fontSize: 13 }}>{rider.set_length}</span></div>}
                     {rider.tech_notes && (
@@ -2710,7 +2697,7 @@ export default function ArtistPage() {
                         </a>
                       </div>
                     )}
-                  </div>
+                  </TourDetails>
                 )}
 
                 {shows.length === 0 && travel.length === 0 && accommodation.length === 0 && contacts.length === 0 && (
