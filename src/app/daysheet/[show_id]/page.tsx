@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import SheetDetails from '@/components/SheetDetails'
 
 const supabase = createClient()
 
@@ -187,7 +188,7 @@ export default function DaySheetPage() {
   const accent = '#C4622D'
   const accentLight = '#FDF5EF'
   const border = '#E8E2D8'
-  const muted = '#8A8580'
+  const muted = '#706960'
   const text = '#1A1714'
   const sectionBg = '#F9F6F2'
 
@@ -270,6 +271,11 @@ export default function DaySheetPage() {
           @page { margin: 1.5cm; size: A4; }
         }
         @media (max-width: 600px) {
+          .contact-table td { display: block; padding: 8px 20px !important; text-align: left !important; }
+          .contact-table td:last-child { padding-top: 0 !important; padding-bottom: 16px !important; }
+          .contact-table td:last-child > div { justify-content: flex-start !important; }
+          .sheet-page { padding-top: 16px !important; }
+          .sheet-header { padding: 20px !important; }
           .times-grid { grid-template-columns: repeat(2, 1fr) !important; }
         }
       `}</style>
@@ -282,17 +288,17 @@ export default function DaySheetPage() {
           {/* Day / Trip toggle */}
           <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
             {(['day', 'trip'] as const).map(m => (
-              <button key={m} onClick={() => setMode(m)}
-                style={{ padding: '5px 12px', background: mode === m ? accent : 'transparent', color: mode === m ? '#fff' : '#5A5450', border: `1px solid ${mode === m ? accent : '#2A2520'}`, borderRadius: 5, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 2 }}>
-                {m === 'day' ? 'DAY SHEET' : 'FULL TRIP'}
+              <button key={m} aria-pressed={mode === m} onClick={() => setMode(m)}
+                style={{ padding: '10px 12px', minHeight: 44, background: mode === m ? accent : 'transparent', color: mode === m ? '#fff' : '#BDB5AC', border: `1px solid ${mode === m ? accent : '#2A2520'}`, borderRadius: 5, cursor: 'pointer', fontFamily: 'monospace', fontSize: 12, letterSpacing: 0 }}>
+                {m === 'day' ? 'Day sheet' : 'Nearby travel'}
               </button>
             ))}
           </div>
 
           {/* Person filter - only show if multiple people */}
           {allPeople.length > 1 && (
-            <select value={personFilter} onChange={e => setPersonFilter(e.target.value)}
-              style={{ padding: '5px 10px', background: '#2A2520', color: personFilter !== 'everyone' ? accent : '#5A5450', border: `1px solid ${personFilter !== 'everyone' ? accent : '#2A2520'}`, borderRadius: 5, fontSize: 11, fontFamily: 'monospace', cursor: 'pointer', outline: 'none', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <select aria-label="Filter travel by person" value={personFilter} onChange={e => setPersonFilter(e.target.value)}
+              style={{ padding: '10px 10px', minHeight: 44, background: '#2A2520', color: personFilter !== 'everyone' ? accent : '#BDB5AC', border: `1px solid ${personFilter !== 'everyone' ? accent : '#2A2520'}`, borderRadius: 5, fontSize: 11, fontFamily: 'monospace', cursor: 'pointer', outline: 'none', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
               <option value="everyone">Everyone</option>
               {allPeople.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -300,20 +306,20 @@ export default function DaySheetPage() {
         </div>
 
         <button onClick={() => window.print()}
-          style={{ padding: '7px 18px', background: accent, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, flexShrink: 0 }}>
+          style={{ padding: '10px 18px', minHeight: 44, background: accent, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, flexShrink: 0 }}>
           PRINT
         </button>
       </div>
 
       {/* Page */}
-      <div style={{ maxWidth: 700, margin: '0 auto', padding: '32px 16px 60px' }}>
+      <div className="sheet-page" style={{ maxWidth: 700, margin: '0 auto', padding: '32px 16px 60px' }}>
 
         {/* ── HEADER ── */}
         <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
           <div style={{ height: 5, background: artist?.color || accent }} />
-          <div style={{ padding: '24px 28px' }}>
+          <div className="sheet-header" style={{ padding: '24px 28px' }}>
             <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: muted, marginBottom: 6, textTransform: 'uppercase' }}>
-              {mode === 'day' ? 'Call Sheet' : 'Trip Sheet'}
+              {mode === 'day' ? 'Day sheet' : 'Travel around this show'}
             </div>
             <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 2, lineHeight: 1.1 }}>{artist?.name}</div>
             {tour?.name && <div style={{ fontSize: 14, color: muted, marginBottom: 12 }}>{tour.name}</div>}
@@ -394,6 +400,8 @@ export default function DaySheetPage() {
                     ))}
                   </div>
                 )}
+                {(show?.catering || show?.backline || show?.parking || show?.notes) && (
+                  <SheetDetails title="Venue details & notes" hint="Parking, catering, backline and the detailed schedule">
                 {show?.catering && (
                   <div style={{ padding: '12px 14px', background: '#F0FFF4', borderLeft: '3px solid #3D6B50', borderRadius: 4, fontSize: 13, color: text, lineHeight: 1.7, marginTop: 12 }}>
                     <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: '#3D6B50', marginBottom: 4 }}>CATERING</div>
@@ -503,6 +511,8 @@ export default function DaySheetPage() {
                     </div>
                   )
                 })()}
+                  </SheetDetails>
+                )}
               </div>
             </div>
           </>
@@ -519,15 +529,11 @@ export default function DaySheetPage() {
                 ))}
               </div>
             </div>
-          ) : (
-            <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, padding: '20px 24px', marginBottom: 16, color: muted, fontSize: 13, fontStyle: 'italic' }}>
-              No travel on show day.
-            </div>
-          )
+          ) : null
         ) : (
           Object.keys(travelByDate).length > 0 ? (
             <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
-              <SectionHeader label={personFilter !== 'everyone' ? `Travel - ${personFilter}` : 'Full Trip Travel'} />
+              <SectionHeader label={personFilter !== 'everyone' ? `Travel - ${personFilter}` : 'Travel around this show'} />
               <div style={{ padding: '4px 24px' }}>
                 {Object.entries(travelByDate).map(([date, items], di) => (
                   <div key={date}>
@@ -651,7 +657,7 @@ export default function DaySheetPage() {
         {mode === 'day' && contacts.length > 0 && (
           <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
             <SectionHeader label="Key Contacts" />
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="contact-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
               <tbody>
               {contacts.map((c, i) => (
                 <tr key={i} style={{ borderBottom: i < contacts.length - 1 ? `1px solid ${border}` : 'none' }}>
@@ -678,8 +684,7 @@ export default function DaySheetPage() {
 
         {/* ── RIDER (day mode only) ── */}
         {mode === 'day' && rider && (rider.tech_notes || rider.hospitality || rider.set_length || rider.band_size || rider.input_list || rider.tech_rider_url) && (
-          <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
-            <SectionHeader label="Rider / Tech Spec" />
+          <SheetDetails title="Rider & technical details" hint="Band setup, hospitality and technical documents">
             <div style={{ padding: '16px 24px', display: 'grid', gap: 12 }}>
               {rider.band_size && <RiderRow label="Band" value={rider.band_size} />}
               {rider.set_length && <RiderRow label="Set" value={rider.set_length} />}
@@ -693,7 +698,7 @@ export default function DaySheetPage() {
                 </a>
               )}
             </div>
-          </div>
+          </SheetDetails>
         )}
 
         {/* ── SUPPORT ACTS & PHOTOGRAPHERS (day mode only) ── */}
@@ -710,11 +715,7 @@ export default function DaySheetPage() {
             return (a.name || '').localeCompare(b.name || '')
           })
           return (
-            <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
-              <div style={{ padding: '11px 24px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 14 }}>🎤</span>
-                <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: muted, textTransform: 'uppercase' }}>Supports & Crew</span>
-              </div>
+            <SheetDetails title="Supports & crew" hint="Set times and contact details">
               <div>
                 {sorted.map((p: any, i: number) => (
                   <div key={i} style={{ padding: '12px 24px', borderBottom: i < sorted.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
@@ -743,7 +744,7 @@ export default function DaySheetPage() {
                   </div>
                 ))}
               </div>
-            </div>
+            </SheetDetails>
           )
         })()}
 
@@ -758,17 +759,9 @@ export default function DaySheetPage() {
           const totalMin = Math.floor(totalSeconds / 60)
           const totalSec = totalSeconds % 60
           return (
-            <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
-              <div style={{ padding: '11px 24px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 14 }}>♪</span>
-                  <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: muted, textTransform: 'uppercase' }}>Setlist</span>
-                </div>
-                {totalSeconds > 0 && (
-                  <span style={{ fontFamily: 'monospace', fontSize: 10, color: muted }}>
-                    {setlist.songs.length} songs · {totalMin}:{String(totalSec).padStart(2, '0')}
-                  </span>
-                )}
+            <SheetDetails title="Setlist" hint="Songs, durations and performance notes">
+              <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>
+                {setlist.songs.length} songs{totalSeconds > 0 ? ` · ${totalMin}:${String(totalSec).padStart(2, '0')}` : ''}
               </div>
               <div style={{ padding: '4px 24px' }}>
                 {setlist.songs.map((song: any, i: number) => (
@@ -789,7 +782,7 @@ export default function DaySheetPage() {
                   {setlist.notes}
                 </div>
               )}
-            </div>
+            </SheetDetails>
           )
         })()}
 

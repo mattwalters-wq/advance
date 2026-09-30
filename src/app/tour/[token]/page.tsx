@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import SheetDetails from '@/components/SheetDetails'
 
 const supabase = createClient()
 
@@ -44,7 +45,7 @@ export default function PublicTourPage() {
 
   const accent = '#C4622D'
   const border = '#E8E2D8'
-  const muted = '#8A8580'
+  const muted = '#706960'
   const text = '#1A1714'
   const bg = '#F9F6F2'
   const card = '#fff'
@@ -92,6 +93,10 @@ export default function PublicTourPage() {
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
+  const dates = Object.keys(byDate).sort()
+  const focusDate = dates.find(date => date !== 'TBC' && date >= today) || dates.filter(date => date !== 'TBC').at(-1) || 'TBC'
+  const orderedDates = [focusDate, ...dates.filter(date => date !== focusDate)].filter(date => byDate[date])
+
   return (
     <div style={{ background: bg, minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif', color: text }}>
       <style>{`* { box-sizing: border-box; } a { -webkit-tap-highlight-color: transparent; }`}</style>
@@ -100,40 +105,26 @@ export default function PublicTourPage() {
         <div style={{ height: 4, background: (artist?.color) || accent }} />
         <div style={{ padding: '16px 20px 14px' }}>
           <div style={{ fontSize: 22, fontWeight: 700, color: '#F5F0E8', letterSpacing: '-0.02em', lineHeight: 1.2 }}>{artist?.name}</div>
-          <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.15em', color: '#5A5450', marginTop: 4, textTransform: 'uppercase' }}>{tour?.name}</div>
+          <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.15em', color: '#BDB5AC', marginTop: 4, textTransform: 'uppercase' }}>{tour?.name}</div>
         </div>
       </div>
 
       <div style={{ maxWidth: 620, margin: '0 auto', padding: '20px 14px 48px' }}>
 
-        {Object.keys(byDate).sort().map(date => {
+        <div style={{ marginBottom: 20 }}>
+          <h1 style={{ fontSize: 24, margin: '0 0 6px', letterSpacing: '-0.02em' }}>Your tour at a glance</h1>
+          <p style={{ fontSize: 14, color: muted, lineHeight: 1.5, margin: 0 }}>Open a day for times and travel. Each day sheet has the full show details.</p>
+        </div>
+        {orderedDates.map(date => {
           const isToday = date === today
           const isPast = date !== 'TBC' && date < today
           const dayAccom = accommodation.filter(a => a.check_in <= date && (a.check_out ? a.check_out > date : a.check_in === date))
           const sortedItems = [...byDate[date]].sort((a, b) => (a.time || '').localeCompare(b.time || ''))
 
           return (
-            <div key={date} style={{ marginBottom: 24, opacity: isPast ? 0.6 : 1 }}>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <div style={{ background: isToday ? accent : '#1A1714', borderRadius: 8, padding: '6px 12px', minWidth: 56, textAlign: 'center' as const, flexShrink: 0 }}>
-                  {date === 'TBC' ? (
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#F5F0E8', padding: '6px 0' }}>TBC</div>
-                  ) : (<>
-                  <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, color: isToday ? 'rgba(255,255,255,0.8)' : '#5A5450' }}>
-                    {new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' }).toUpperCase()}
-                  </div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#F5F0E8', lineHeight: 1 }}>
-                    {new Date(date + 'T00:00:00').getDate()}
-                  </div>
-                  <div style={{ fontFamily: 'monospace', fontSize: 9, color: isToday ? 'rgba(255,255,255,0.8)' : '#5A5450' }}>
-                    {new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { month: 'short' }).toUpperCase()}
-                  </div>
-                  </>)}
-                </div>
-                <div style={{ flex: 1, height: 1, background: border }} />
-                {isToday && <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: accent, flexShrink: 0 }}>TODAY</div>}
-              </div>
+            <SheetDetails key={date} defaultOpen={date === focusDate}
+              title={date === 'TBC' ? 'Date to be confirmed' : `${isToday ? 'Today · ' : date === focusDate && !isPast ? 'Up next · ' : ''}${new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}`}
+              hint={[...sortedItems.map(item => item._kind === 'show' ? [item.data.venue || 'Venue TBC', item.data.city].filter(Boolean).join(', ') : item._kind === 'travel' ? `${item.data.from_location} → ${item.data.to_location}` : item.data.outlet || 'Press'), ...dayAccom.map(a => a.name)].filter(Boolean).join(' · ') || 'No scheduled events'}>
 
               {dayAccom.length > 0 && (
                 <div style={{ background: '#F0F8FF', border: '1px solid #C0D8F0', borderRadius: 8, padding: '8px 14px', marginBottom: 8, fontSize: 13, color: '#1A3A5C', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -151,7 +142,7 @@ export default function PublicTourPage() {
                 <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
                   {sortedItems.map((item, i) => {
                     const isLast = i === sortedItems.length - 1
-                    const rowStyle: React.CSSProperties = { display: 'flex', gap: 12, padding: '12px 16px', borderBottom: isLast ? 'none' : `1px solid ${border}`, alignItems: 'flex-start' }
+                    const rowStyle: React.CSSProperties = { display: 'flex', gap: 12, padding: '16px 0', flexWrap: 'wrap', borderBottom: isLast ? 'none' : `1px solid ${border}`, alignItems: 'flex-start' }
                     const icoStyle: React.CSSProperties = { width: 44, flexShrink: 0, textAlign: 'center', paddingTop: 2 }
 
                     if (item._kind === 'travel') {
@@ -162,12 +153,12 @@ export default function PublicTourPage() {
                             <div style={{ fontSize: 18 }}>{travelEmoji(t.travel_type)}</div>
                             {t.departure_time && <div style={{ fontFamily: 'monospace', fontSize: 10, color: muted, marginTop: 2 }}>{fmt(t.departure_time)}</div>}
                           </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ flex: 1, minWidth: 140 }}>
                             <div style={{ fontSize: 14, fontWeight: 700 }}>{t.from_location} to {t.to_location}</div>
                             {t.travellers && <div style={{ fontSize: 12.5, color: accent, fontWeight: 600, marginTop: 3 }}>👤 {t.travellers}</div>}
                             {(t.carrier || t.reference) && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{[t.carrier, t.reference].filter(Boolean).join(' · ')}</div>}
                             {t.arrival_time && <div style={{ fontSize: 12, color: muted }}>Arr {fmt(t.arrival_time)}</div>}
-                            {t.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{t.notes}</div>}
+                            {t.notes && <SheetDetails title="Additional notes">{t.notes}</SheetDetails>}
                           </div>
                         </div>
                       )
@@ -181,7 +172,7 @@ export default function PublicTourPage() {
                             <div style={{ fontSize: 18 }}>{typeIcons[p.type] || '📣'}</div>
                             {p.time && <div style={{ fontFamily: 'monospace', fontSize: 10, color: muted, marginTop: 2 }}>{fmt(p.time)}</div>}
                           </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ flex: 1, minWidth: 140 }}>
                             <div style={{ fontSize: 14, fontWeight: 700 }}>{p.outlet || 'Press'}</div>
                             {p.location && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{p.location}</div>}
                             {p.contact_name && (
@@ -192,7 +183,7 @@ export default function PublicTourPage() {
                                 )}
                               </div>
                             )}
-                            {p.notes && <div style={{ fontSize: 12, color: muted, marginTop: 4, fontStyle: 'italic' }}>{p.notes}</div>}
+                            {p.notes && <SheetDetails title="Additional notes">{p.notes}</SheetDetails>}
                           </div>
                           {p.end_time && <div style={{ fontFamily: 'monospace', fontSize: 10, color: muted, flexShrink: 0, paddingTop: 4 }}>until {fmt(p.end_time)}</div>}
                         </div>
@@ -212,7 +203,7 @@ export default function PublicTourPage() {
                             <div style={{ fontSize: 18 }}>{showEmoji(s.type)}</div>
                             {mainTime && <div style={{ fontFamily: 'monospace', fontSize: 10, color: accent, fontWeight: 700, marginTop: 2 }}>{fmt(mainTime)}</div>}
                           </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ flex: 1, minWidth: 140 }}>
                             <div style={{ fontSize: 14, fontWeight: 700 }}>{venueName}</div>
                             {s.city && <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{s.city}{s.country && s.country !== 'AU' ? `, ${s.country}` : ''}</div>}
                             {s.address && (
@@ -226,11 +217,10 @@ export default function PublicTourPage() {
                               {!isNonShow && s.soundcheck_time && <span style={{ fontSize: 11, color: muted }}>SC {fmt(s.soundcheck_time)}</span>}
                               {s.set_length && <span style={{ fontSize: 11, color: muted }}>Set: {s.set_length}</span>}
                             </div>
-                            {s.notes && <div style={{ fontSize: 11, color: muted, marginTop: 4, fontStyle: 'italic' }}>{s.notes}</div>}
                           </div>
                           {s.id && (
-                            <a href={`/daysheet/${s.id}`} style={{ flexShrink: 0, padding: '5px 10px', background: accent, color: '#fff', borderRadius: 6, fontSize: 10, fontFamily: 'monospace', letterSpacing: 1, textDecoration: 'none', alignSelf: 'center', whiteSpace: 'nowrap' as const }}>
-                              DAY SHEET
+                            <a href={`/daysheet/${s.id}`} style={{ flexShrink: 0, padding: '12px 14px', minHeight: 44, background: accent, color: '#fff', borderRadius: 6, fontSize: 10, fontFamily: 'monospace', letterSpacing: 1, textDecoration: 'none', alignSelf: 'center', whiteSpace: 'nowrap' as const }}>
+                              Day sheet →
                             </a>
                           )}
                         </div>
@@ -242,7 +232,7 @@ export default function PublicTourPage() {
                 </div>
               )}
 
-            </div>
+            </SheetDetails>
           )
         })}
 
