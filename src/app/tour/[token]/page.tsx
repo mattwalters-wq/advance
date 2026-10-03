@@ -95,7 +95,10 @@ export default function PublicTourPage() {
 
   const dates = Object.keys(byDate).sort()
   const focusDate = dates.find(date => date !== 'TBC' && date >= today) || dates.filter(date => date !== 'TBC').at(-1) || 'TBC'
-  const orderedDates = [focusDate, ...dates.filter(date => date !== focusDate)].filter(date => byDate[date])
+  const upcomingDates = dates.filter(date => date !== 'TBC' && date >= focusDate)
+  const earlierDates = dates.filter(date => date !== 'TBC' && date < focusDate)
+  const orderedDates = [...upcomingDates, ...earlierDates, ...dates.filter(date => date === 'TBC')]
+  const firstEarlierDate = earlierDates[0]
 
   return (
     <div style={{ background: bg, minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif', color: text }}>
@@ -122,7 +125,13 @@ export default function PublicTourPage() {
           const sortedItems = [...byDate[date]].sort((a, b) => (a.time || '').localeCompare(b.time || ''))
 
           return (
-            <SheetDetails key={date} defaultOpen={date === focusDate}
+            <div key={date}>
+              {date === firstEarlierDate && (
+                <div style={{ margin: '28px 4px 10px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.15em', color: muted, textTransform: 'uppercase' }}>
+                  Earlier dates
+                </div>
+              )}
+              <SheetDetails defaultOpen={date === focusDate}
               title={date === 'TBC' ? 'Date to be confirmed' : `${isToday ? 'Today · ' : date === focusDate && !isPast ? 'Up next · ' : ''}${new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}`}
               hint={[...sortedItems.map(item => item._kind === 'show' ? [item.data.venue || 'Venue TBC', item.data.city].filter(Boolean).join(', ') : item._kind === 'travel' ? `${item.data.from_location} → ${item.data.to_location}` : item.data.outlet || 'Press'), ...dayAccom.map(a => a.name)].filter(Boolean).join(' · ') || 'No scheduled events'}>
 
@@ -232,7 +241,8 @@ export default function PublicTourPage() {
                 </div>
               )}
 
-            </SheetDetails>
+              </SheetDetails>
+            </div>
           )
         })}
 
