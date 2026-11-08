@@ -78,7 +78,7 @@ export default function PublicTourPage() {
   }
 
   const allItems: any[] = []
-  shows.forEach(s => allItems.push({ date: s.date, time: s.set_time || s.soundcheck_time || '00:00', _kind: 'show', data: s }))
+  shows.forEach(s => allItems.push({ date: s.date, time: s.set_time || s.soundcheck_time || s.arrival_time || '00:00', _kind: 'show', data: s }))
   travel.forEach(t => allItems.push({ date: t.travel_date, time: t.departure_time || '00:00', _kind: 'travel', data: t }))
   press.forEach(p => allItems.push({ date: p.date, time: p.time || '00:00', _kind: 'press', data: p }))
 
