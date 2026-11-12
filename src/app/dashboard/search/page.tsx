@@ -1,198 +1,82 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import Link from 'next/link'
+import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { Artist, Show, Travel, formatDay, searchPattern, tourHref } from '@/lib/workspace'
+import WorkspaceShell, { EmptyState, LoadError, Skeleton } from '@/components/workspace/WorkspaceShell'
+import { WorkspaceProvider, useWorkspace } from '@/components/workspace/WorkspaceProvider'
+import Icon from '@/components/workspace/Icon'
 
-const supabase = createClient()
+interface Contact { id: string; tour_id: string; name: string; role?: string; email?: string; phone?: string }
+type Results = { artists: Artist[]; shows: Show[]; travel: Travel[]; contacts: Contact[] }
+type Category = keyof Results
+const empty: Results = { artists: [], shows: [], travel: [], contacts: [] }
+const labels = { artists: 'Artists', shows: 'Events', travel: 'Travel', contacts: 'Contacts' }
 
-export default function SearchPage() {
-  const router = useRouter()
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<any>({ shows: [], travel: [], contacts: [], artists: [] })
-  const [searching, setSearching] = useState(false)
-  const [darkMode, setDarkMode] = useState(false)
-  const [artists, setArtists] = useState<any[]>([])
-  const requestId = useRef(0)
-
+function Search() {
+  const { artists, tours, loading, error: workspaceError, adminOrg } = useWorkspace()
+  const params = useSearchParams()
+  const [query, setQuery] = useState(params.get('q') || ''), [category, setCategory] = useState<'all' | Category>('all')
+  const [results, setResults] = useState<Results>(empty), [searching, setSearching] = useState(false), [error, setError] = useState('')
+  const [settledQuery, setSettledQuery] = useState(''), [attempt, setAttempt] = useState(0)
+  const requestId = useRef(0), inputRef = useRef<HTMLInputElement>(null)
+  const term = query.trim(), pending = searching || term !== settledQuery
   useEffect(() => {
-    supabase.from('artists').select('*').then(({ data }) => setArtists(data || []))
-  }, [])
-
-  function artistName(tourId: string) {
-    // We'll look this up via tours join
-    return ''
-  }
-
-  const search = useCallback(async (q: string) => {
-    const reqId = ++requestId.current
-    if (!q.trim()) { setResults({ shows: [], travel: [], contacts: [], artists: [] }); setSearching(false); return }
+    const id = ++requestId.current
+    setError(''); setResults(empty)
+    if (loading || workspaceError) return
+    if (!term) { setSearching(false); setSettledQuery(''); return }
     setSearching(true)
-
-    // Quote values for PostgREST .or() so commas/parentheses in the query don't break the filter
-    const esc = q.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-    const term = `"%${esc}%"`
-    const [showsRes, travelRes, contactsRes, artistsRes] = await Promise.all([
-      supabase.from('shows').select('*, tours(name, artist_id, artists(name))').is('deleted_at', null).or(`venue.ilike.${term},city.ilike.${term},country.ilike.${term},notes.ilike.${term}`).limit(20),
-      supabase.from('travel').select('*, tours(name, artist_id, artists(name))').is('deleted_at', null).or(`from_location.ilike.${term},to_location.ilike.${term},carrier.ilike.${term},reference.ilike.${term}`).limit(20),
-      supabase.from('contacts').select('*, tours(name, artist_id, artists(name))').is('deleted_at', null).or(`name.ilike.${term},role.ilike.${term},phone.ilike.${term},email.ilike.${term}`).limit(20),
-      supabase.from('artists').select('*').or(`name.ilike.${term},project.ilike.${term}`).limit(10),
-    ])
-
-    // Ignore stale responses from an earlier keystroke
-    if (reqId !== requestId.current) return
-    setResults({
-      shows: showsRes.data || [],
-      travel: travelRes.data || [],
-      contacts: contactsRes.data || [],
-      artists: artistsRes.data || [],
-    })
-    setSearching(false)
-  }, [])
-
-  useEffect(() => {
-    const t = setTimeout(() => search(query), 300)
-    return () => clearTimeout(t)
-  }, [query, search])
-
-  const total = results.shows.length + results.travel.length + results.contacts.length + results.artists.length
-
-  const bg = darkMode ? '#1a1a1a' : '#F5F0E8'
-  const card = darkMode ? '#2a2a2a' : '#fff'
-  const text = darkMode ? '#e8e0d0' : '#1A1714'
-  const muted = darkMode ? '#888' : '#8A8580'
-  const border = darkMode ? '#333' : '#DDD8CE'
-  const accent = '#C4622D'
-
-  function highlight(str: string) {
-    if (!str || !query) return str
-    const parts = str.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
-    return parts.map((p, i) => p.toLowerCase() === query.toLowerCase()
-      ? <mark key={i} style={{ background: '#FFE066', color: text, borderRadius: 2, padding: '0 2px' }}>{p}</mark>
-      : p)
+    const controller = new AbortController()
+    const timer = setTimeout(async () => {
+      try {
+        const db = createClient(), pattern = searchPattern(term)
+        const found: Results = { ...empty, artists: artists.filter(a => `${a.name} ${a.project || ''}`.toLowerCase().includes(term.toLowerCase())).slice(0, 50), shows: [], travel: [], contacts: [] }
+        // Query only accessible tours and bound each category's results.
+        for (let offset = 0; offset < tours.length; offset += 100) {
+          const ids = tours.slice(offset, offset + 100).map(t => t.id)
+          const responses = await Promise.all([
+            db.from('shows').select('id, tour_id, date, venue, city, set_time').in('tour_id', ids).is('deleted_at', null).or(`venue.ilike.${pattern},city.ilike.${pattern},country.ilike.${pattern},notes.ilike.${pattern}`).order('date', { ascending: false }).order('id').limit(50).abortSignal(controller.signal),
+            db.from('travel').select('id, tour_id, travel_date, from_location, to_location, carrier, reference').in('tour_id', ids).is('deleted_at', null).or(`from_location.ilike.${pattern},to_location.ilike.${pattern},carrier.ilike.${pattern},reference.ilike.${pattern}`).order('travel_date', { ascending: false }).order('id').limit(50).abortSignal(controller.signal),
+            db.from('contacts').select('id, tour_id, name, role, phone, email').in('tour_id', ids).is('deleted_at', null).or(`name.ilike.${pattern},role.ilike.${pattern},phone.ilike.${pattern},email.ilike.${pattern}`).order('name').order('id').limit(50).abortSignal(controller.signal),
+          ])
+          if (responses.some(r => r.error)) throw new Error('Search failed')
+          found.shows.push(...(responses[0].data || [])); found.travel.push(...(responses[1].data || [])); found.contacts.push(...(responses[2].data || []))
+        }
+        found.shows = found.shows.sort((a,b) => b.date.localeCompare(a.date)).slice(0,50)
+        found.travel = found.travel.sort((a,b) => b.travel_date.localeCompare(a.travel_date)).slice(0,50)
+        found.contacts = found.contacts.sort((a,b) => a.name.localeCompare(b.name)).slice(0,50)
+        if (id === requestId.current) { setResults(found); setSettledQuery(term) }
+      } catch {
+        if (id === requestId.current) { setError('Search couldn’t finish. Check your connection and try again.'); setSettledQuery(term) }
+      } finally { if (id === requestId.current) setSearching(false) }
+    }, 300)
+    return () => { clearTimeout(timer); controller.abort(); requestId.current++ }
+  }, [term, artists, tours, loading, workspaceError, attempt])
+  const total = Object.values(results).reduce((count, rows) => count + rows.length, 0)
+  const categories = (Object.keys(labels) as Category[]).filter(key => category === 'all' || category === key)
+  const visibleTotal = categories.reduce((count, key) => count + results[key].length, 0)
+  function highlight(text?: string | null) {
+    if (!text || !term) return text
+    const parts = text.split(new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
+    return parts.map((part, i) => part.toLowerCase() === term.toLowerCase() ? <mark key={i}>{part}</mark> : part)
   }
-
-  return (
-    <div style={{ background: bg, minHeight: '100vh', fontFamily: 'Georgia, serif', color: text }}>
-      <div style={{ background: darkMode ? '#111' : '#1A1714', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => router.push('/dashboard')} style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#8A8580', background: 'transparent', border: '1px solid #2A2520', borderRadius: 4, padding: '6px 10px', cursor: 'pointer' }}>← ROSTER</button>
-          <span style={{ fontSize: 18, fontStyle: 'italic', color: '#F5F0E8' }}>Search</span>
-        </div>
-        <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'none', border: '1px solid #333', borderRadius: 6, padding: '6px 10px', color: '#F5F0E8', cursor: 'pointer', fontSize: 12 }}>
-          {darkMode ? '☀️' : '🌙'}
-        </button>
-      </div>
-
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px 16px' }}>
-
-        {/* Search input */}
-        <div style={{ position: 'relative', marginBottom: 28 }}>
-          <input
-            autoFocus
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="Search venues, cities, contacts, artists..."
-            style={{ width: '100%', padding: '14px 48px 14px 18px', border: `2px solid ${query ? accent : border}`, borderRadius: 12, background: card, color: text, fontSize: 16, fontFamily: 'Georgia, serif', outline: 'none', boxSizing: 'border-box' as const, transition: 'border-color 0.15s' }}
-          />
-          <div style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', color: muted, fontSize: 18 }}>
-            {searching ? '⟳' : '🔍'}
-          </div>
-        </div>
-
-        {/* Results */}
-        {query && total === 0 && !searching && (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: muted }}>
-            <div style={{ fontSize: 28, marginBottom: 12 }}>🔍</div>
-            No results for "{query}"
-          </div>
-        )}
-
-        {results.artists.length > 0 && (
-          <ResultSection title="Artists" count={results.artists.length} border={border} card={card} muted={muted} accent={accent}>
-            {results.artists.map((a: any, i: number) => (
-              <ResultItem key={i} last={i === results.artists.length - 1} border={border} onClick={() => router.push(`/dashboard/artists/${a.id}`)}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: a.color || accent, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{a.name.charAt(0)}</div>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{highlight(a.name)}</div>
-                    {a.project && <div style={{ fontSize: 12, color: muted, fontStyle: 'italic' }}>{highlight(a.project)}</div>}
-                  </div>
-                </div>
-              </ResultItem>
-            ))}
-          </ResultSection>
-        )}
-
-        {results.shows.length > 0 && (
-          <ResultSection title="Shows" count={results.shows.length} border={border} card={card} muted={muted} accent={accent}>
-            {results.shows.map((s: any, i: number) => (
-              <ResultItem key={i} last={i === results.shows.length - 1} border={border} onClick={() => router.push(`/dashboard/artists/${s.tours?.artist_id}`)}>
-                <div style={{ fontWeight: 600, marginBottom: 2 }}>{highlight(s.venue)}</div>
-                <div style={{ fontSize: 13, color: muted }}>{highlight(s.city)}{s.country ? `, ${s.country}` : ''} · {s.date}</div>
-                {s.tours?.artists?.name && <div style={{ fontSize: 11, color: accent, fontFamily: 'monospace', letterSpacing: 1, marginTop: 2 }}>{s.tours.artists.name}</div>}
-              </ResultItem>
-            ))}
-          </ResultSection>
-        )}
-
-        {results.travel.length > 0 && (
-          <ResultSection title="Travel" count={results.travel.length} border={border} card={card} muted={muted} accent={accent}>
-            {results.travel.map((t: any, i: number) => (
-              <ResultItem key={i} last={i === results.travel.length - 1} border={border} onClick={() => router.push(`/dashboard/artists/${t.tours?.artist_id}`)}>
-                <div style={{ fontWeight: 600, marginBottom: 2 }}>{highlight(t.from_location)} → {highlight(t.to_location)}</div>
-                <div style={{ fontSize: 13, color: muted }}>{t.travel_date}{t.carrier ? ` · ${highlight(t.carrier)}` : ''}{t.reference ? ` · ${highlight(t.reference)}` : ''}</div>
-                {t.tours?.artists?.name && <div style={{ fontSize: 11, color: accent, fontFamily: 'monospace', letterSpacing: 1, marginTop: 2 }}>{t.tours.artists.name}</div>}
-              </ResultItem>
-            ))}
-          </ResultSection>
-        )}
-
-        {results.contacts.length > 0 && (
-          <ResultSection title="Contacts" count={results.contacts.length} border={border} card={card} muted={muted} accent={accent}>
-            {results.contacts.map((c: any, i: number) => (
-              <ResultItem key={i} last={i === results.contacts.length - 1} border={border} onClick={() => router.push(`/dashboard/artists/${c.tours?.artist_id}`)}>
-                <div style={{ fontWeight: 600, marginBottom: 2 }}>{highlight(c.name)}</div>
-                {c.role && <div style={{ fontSize: 12, color: muted, fontFamily: 'monospace', letterSpacing: 1, textTransform: 'uppercase' as const }}>{highlight(c.role)}</div>}
-                <div style={{ display: 'flex', gap: 14, marginTop: 4, flexWrap: 'wrap' as const }}>
-                  {c.phone && <a href={`tel:${c.phone}`} style={{ fontSize: 13, color: accent, textDecoration: 'none' }} onClick={e => e.stopPropagation()}>📞 {highlight(c.phone)}</a>}
-                  {c.email && <a href={`mailto:${c.email}`} style={{ fontSize: 13, color: accent, textDecoration: 'none' }} onClick={e => e.stopPropagation()}>✉️ {highlight(c.email)}</a>}
-                </div>
-                {c.tours?.artists?.name && <div style={{ fontSize: 11, color: accent, fontFamily: 'monospace', letterSpacing: 1, marginTop: 4 }}>{c.tours.artists.name}</div>}
-              </ResultItem>
-            ))}
-          </ResultSection>
-        )}
-
-        {!query && (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: muted }}>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>🔍</div>
-            <div style={{ fontSize: 16, marginBottom: 8, color: text }}>Search your roster</div>
-            <div style={{ fontSize: 13 }}>Venues, cities, contacts, flights, artists — everything in one place</div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
+  function context(tourId: string) {
+    const tour = tours.find(t => t.id === tourId), artist = artists.find(a => a.id === tour?.artist_id)
+    return { href: tour ? tourHref(tour.artist_id, tour.id, adminOrg) : '/dashboard', label: [artist?.name, tour?.name].filter(Boolean).join(' · ') }
+  }
+  return <WorkspaceShell>
+    <div className="ws-page-heading"><div><span className="ws-eyebrow">LESS LOOKING. MORE FINDING.</span><h1>It’s in here somewhere.</h1><p>Artists, venues, cities, flight references and people. One search.</p></div></div>
+    <div className="ws-search-box"><Icon name="search" size={23}/><input ref={inputRef} type="search" autoFocus aria-label="Search your workspace" placeholder="A venue, an artist, a flight number…" value={query} maxLength={200} onChange={e => { setQuery(e.target.value); setResults(empty); requestId.current++ }} onKeyDown={e => { if (e.key === 'Escape') setQuery('') }}/>{query && <button aria-label="Clear search" onClick={() => { setQuery(''); inputRef.current?.focus() }}><Icon name="close"/></button>}<kbd>ESC</kbd></div>
+    <div className="ws-search-toolbar"><div className="ws-segments" aria-label="Search category"><button aria-pressed={category === 'all'} onClick={() => setCategory('all')}>Everything</button>{(Object.keys(labels) as Category[]).map(key => <button key={key} aria-pressed={category === key} onClick={() => setCategory(key)}>{labels[key]}{!pending && term && <span>{results[key].length === 50 ? '50+' : results[key].length}</span>}</button>)}</div><span className="ws-muted ws-small-text" role="status">{term ? pending ? 'Searching…' : error ? 'Search unavailable' : `${total} matches${Object.values(results).some(rows => rows.length === 50) ? ' · Showing up to 50 per category' : ''}` : 'Search across your roster'}</span></div>
+    {!term ? <div className="ws-panel ws-search-intro"><EmptyState title="One place to find the details" icon="search"><p>Search by venue, city, artist, contact or booking reference. Results link straight to the right tour.</p></EmptyState><div className="ws-search-suggestions"><span className="ws-eyebrow">TRY AN ARTIST</span>{artists.slice(0, 6).map(artist => <button key={artist.id} className="ws-button ws-small" onClick={() => { setQuery(artist.name); inputRef.current?.focus() }}><Icon name="music" size={13}/>{artist.name}</button>)}{!artists.length && <span className="ws-muted ws-small-text">Add your first artist to start building your workspace.</span>}</div></div> : pending ? <Skeleton rows={4}/> : error ? <LoadError message={error} retry={() => setAttempt(n => n + 1)}/> : !visibleTotal ? <div className="ws-panel"><EmptyState title={`No ${category === 'all' ? 'results' : labels[category].toLowerCase()} for “${term}”`} icon="search"><p>Try a shorter name, a city, or another category.</p>{category !== 'all' && <button className="ws-button" onClick={() => setCategory('all')}>Search all categories</button>}</EmptyState></div> : <div className="ws-search-results">{categories.map(key => results[key].length ? <section className="ws-panel" key={key}><div className="ws-search-section-heading"><h2>{labels[key]}</h2><span className="ws-counter">{results[key].length === 50 ? '50+' : results[key].length}</span></div>
+      {key === 'artists' && results.artists.map(artist => <Link className="ws-search-result" href={tourHref(artist.id, undefined, adminOrg)} key={artist.id}><span className="ws-result-symbol"><Icon name="music"/></span><div><strong>{highlight(artist.name)}</strong><p>{highlight(artist.project) || 'Artist workspace'}</p></div><Icon name="arrow" size={17}/></Link>)}
+      {key === 'shows' && results.shows.map(show => { const item = context(show.tour_id); return <Link className="ws-search-result" href={item.href} key={show.id}><span className="ws-result-symbol"><Icon name="calendar"/></span><div><strong>{highlight(show.venue) || 'Venue TBC'}{show.city && <> · {highlight(show.city)}</>}</strong><p>{show.date && formatDay(show.date, { day: 'numeric', month: 'short', year: 'numeric' })} · {item.label}</p></div><Icon name="arrow" size={17}/></Link> })}
+      {key === 'travel' && results.travel.map(leg => { const item = context(leg.tour_id); return <Link className="ws-search-result" href={item.href} key={leg.id}><span className="ws-result-symbol"><Icon name="plane"/></span><div><strong>{highlight(leg.from_location) || 'Origin TBC'} → {highlight(leg.to_location) || 'Destination TBC'}</strong><p>{leg.travel_date && formatDay(leg.travel_date)} · {highlight([leg.carrier, leg.reference].filter(Boolean).join(' · '))}</p><small>{item.label}</small></div><Icon name="arrow" size={17}/></Link> })}
+      {key === 'contacts' && results.contacts.map(contact => { const item = context(contact.tour_id); return <div className="ws-search-contact" key={contact.id}><Link className="ws-search-result" href={item.href}><span className="ws-result-symbol">{contact.name.charAt(0).toUpperCase()}</span><div><strong>{highlight(contact.name)}</strong><p>{highlight(contact.role)}{contact.role ? ' · ' : ''}{item.label}</p></div><Icon name="arrow" size={17}/></Link><div className="ws-contact-links">{contact.phone && <a href={`tel:${contact.phone}`}>{highlight(contact.phone)}</a>}{contact.email && <a href={`mailto:${contact.email}`}>{highlight(contact.email)}</a>}</div></div> })}
+    </section> : null)}</div>}
+  </WorkspaceShell>
 }
-
-function ResultSection({ title, count, children, border, card, muted, accent }: any) {
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 3, color: muted, marginBottom: 10, textTransform: 'uppercase' }}>{title} — {count}</div>
-      <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function ResultItem({ children, last, border, onClick }: any) {
-  return (
-    <div onClick={onClick} style={{ padding: '14px 18px', borderBottom: last ? 'none' : `1px solid ${border}`, cursor: 'pointer' }}
-      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(196,98,45,0.04)')}
-      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-      {children}
-    </div>
-  )
-}
+export default function SearchPage() { return <WorkspaceProvider><Search/></WorkspaceProvider> }

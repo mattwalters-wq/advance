@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthUser, userCanAccessTour, unauthorized, forbidden } from '@/lib/api-auth'
+import { applyImportReview, createReview, readReview, loadImportData, ImportReviewError } from '@/lib/import-review-server'
 import { extractStructured } from '@/lib/extract'
 import { isSupportedImageType, UNSUPPORTED_IMAGE_ERROR } from '@/lib/attach'
 
@@ -42,93 +43,11 @@ const MERGE_SCHEMA = {
   },
 }
 
-// Similarity score between two strings (0-1)
-function stringSimilarity(a: string, b: string): number {
-  if (!a || !b) return 0
-  const al = a.toLowerCase().trim()
-  const bl = b.toLowerCase().trim()
-  if (al === bl) return 1
-  if (al.includes(bl) || bl.includes(al)) return 0.8
-  // Check word overlap
-  const aWords = new Set(al.split(/\s+/))
-  const bWords = new Set(bl.split(/\s+/))
-  const intersection = [...aWords].filter(w => bWords.has(w)).length
-  const union = new Set([...aWords, ...bWords]).size
-  return intersection / union
-}
-
-function findMatchingShow(newShow: any, existingShows: any[]): any | null {
-  // Match on date first (exact), then venue similarity
-  const sameDateShows = existingShows.filter(s => s.date === newShow.date)
-  if (sameDateShows.length === 0) return null
-  if (sameDateShows.length === 1) return sameDateShows[0]
-
-  // Multiple shows on same date — match by venue
-  let best = null
-  let bestScore = 0.3 // minimum threshold
-  for (const s of sameDateShows) {
-    const score = stringSimilarity(newShow.venue || '', s.venue || '')
-    if (score > bestScore) { bestScore = score; best = s }
-  }
-  return best
-}
-
-function findMatchingTravel(newTravel: any, existingTravel: any[]): any | null {
-  // First try: same date + same carrier/flight number (catches same flight, different booking ref)
-  if (newTravel.carrier) {
-    const byCarrier = existingTravel.find(t =>
-      t.travel_date === newTravel.travel_date &&
-      t.carrier && t.carrier.toUpperCase().trim() === newTravel.carrier.toUpperCase().trim()
-    )
-    if (byCarrier) return byCarrier
-  }
-  // Second try: same date + same route
-  return existingTravel.find(t =>
-    t.travel_date === newTravel.travel_date &&
-    stringSimilarity(t.from_location || '', newTravel.from_location || '') > 0.5 &&
-    stringSimilarity(t.to_location || '', newTravel.to_location || '') > 0.5
-  ) || null
-}
-
-function findMatchingAccom(newAccom: any, existingAccom: any[]): any | null {
-  return existingAccom.find(a =>
-    a.check_in === newAccom.check_in &&
-    stringSimilarity(a.name || '', newAccom.name || '') > 0.4
-  ) || null
-}
-
-function findMatchingContact(newContact: any, existingContacts: any[]): any | null {
-  return existingContacts.find(c =>
-    stringSimilarity(c.name || '', newContact.name || '') > 0.7 ||
-    (c.email && c.email === newContact.email) ||
-    (c.phone && c.phone === newContact.phone)
-  ) || null
-}
-
-// Merge new fields into existing, only filling in blanks or updating with better data
-function mergeFields(existing: any, incoming: any, fields: string[]): { updates: any, changed: string[] } {
-  const updates: any = {}
-  const changed: string[] = []
-  for (const field of fields) {
-    const existingVal = existing[field]
-    const newVal = incoming[field]
-    if (!newVal) continue
-    if (!existingVal) {
-      // Fill blank
-      updates[field] = newVal
-      changed.push(field)
-    } else if (newVal !== existingVal && typeof newVal === 'string' && newVal.length > (existingVal?.length || 0)) {
-      // New value is more detailed — update
-      updates[field] = newVal
-      changed.push(field)
-    }
-  }
-  return { updates, changed }
-}
-
 export async function POST(request: NextRequest) {
   try {
-    const { tourId, text, pdf_base64, image_base64, image_type, filename } = await request.json()
+    const body = await request.json()
+    const { tourId, text, pdf_base64, image_base64, image_type, filename } = body
+    if (typeof tourId !== 'string' || !tourId) return NextResponse.json({ success: false, error: 'Choose a tour first.' }, { status: 400 })
 
     const user = await getAuthUser()
     if (!user) return unauthorized()
@@ -141,28 +60,41 @@ export async function POST(request: NextRequest) {
 
     if (!(await userCanAccessTour(supabase, user.id, tourId))) return forbidden()
 
+    const secret = process.env.SUPABASE_SERVICE_ROLE_KEY!
+    if (body.mode === 'apply' || body.mode === 'refresh') {
+      const review = readReview(body.token, user.id, tourId, secret, body.mode === 'refresh' ? 0 : Date.now())
+      if (body.mode === 'refresh') {
+        const current = await loadImportData(supabase, tourId)
+        return NextResponse.json({ success: true, review: createReview(review.extracted, current, user.id, tourId, secret) })
+      }
+      const { data: tour, error } = await supabase.from('tours').select('org_id, artist_id').eq('id', tourId).single()
+      if (error || !tour) throw new ImportReviewError('Could not load the tour. Try again.', 500)
+      let orgId = tour.org_id
+      if (!orgId && tour.artist_id) {
+        const { data: artist, error: artistError } = await supabase.from('artists').select('org_id').eq('id', tour.artist_id).single()
+        if (artistError) throw new ImportReviewError('Could not load the tour organisation. Try again.', 500)
+        orgId = artist?.org_id
+      }
+      if (!orgId) throw new ImportReviewError('This tour needs an organisation before it can accept imports.', 409)
+      const outcomes = await applyImportReview(supabase, review, body.selections, orgId)
+      return NextResponse.json({ success: true, outcomes })
+    }
+    if (body.mode && body.mode !== 'preview') throw new ImportReviewError('Unknown import action.')
+
     if (image_base64 && image_type && !isSupportedImageType(image_type)) {
       return NextResponse.json({ success: false, error: UNSUPPORTED_IMAGE_ERROR }, { status: 400 })
     }
 
     // 1. Load existing tour data
-    const [showsRes, travelRes, accomRes, contactsRes] = await Promise.all([
-      supabase.from('shows').select('*').eq('tour_id', tourId).is('deleted_at', null),
-      supabase.from('travel').select('*').eq('tour_id', tourId).is('deleted_at', null),
-      supabase.from('accommodation').select('*').eq('tour_id', tourId).is('deleted_at', null),
-      supabase.from('contacts').select('*').eq('tour_id', tourId).is('deleted_at', null),
-    ])
-    const existingShows = showsRes.data || []
-    const existingTravel = travelRes.data || []
-    const existingAccom = accomRes.data || []
-    const existingContacts = contactsRes.data || []
+    const existing = await loadImportData(supabase, tourId)
+    const existingShows = existing.shows
 
     // 2. Build context string of what already exists
     const existingContext = existingShows.length > 0 ? `
 EXISTING SHOWS IN THIS TOUR:
 ${existingShows.map(s => `- ${s.date}: ${s.venue}, ${s.city || ''}${s.set_time ? ' | Stage '+s.set_time : ''}${s.doors_time ? ' | Doors '+s.doors_time : ''}${s.soundcheck_time ? ' | SC '+s.soundcheck_time : ''}`).join('\n')}
 
-Focus on extracting data that fills in missing fields or adds new shows/travel not already listed.` : ''
+Extract all touring information in the document, including existing records, so the user can review any differences.` : ''
 
     // 3. Extract from document
     const SYSTEM_PROMPT = `You are a tour management assistant. Extract touring information from this document.
@@ -202,8 +134,8 @@ Rules:
 
     const extracted: any = await extractStructured({
       content: messageContent,
-      toolName: 'save_tour_data',
-      toolDescription: 'Save the touring information extracted from the document, to be merged into the existing tour.',
+      toolName: 'review_tour_data',
+      toolDescription: 'Extract touring information for a review before any changes are saved.',
       schema: MERGE_SCHEMA,
       maxTokens: 8000,
     })
@@ -212,128 +144,8 @@ Rules:
       return NextResponse.json({ success: false, error: 'Could not extract data from this document. Try a different format or paste the text instead.' }, { status: 422 })
     }
 
-    // 4. Get tour org_id
-    const { data: tour } = await supabase.from('tours').select('org_id').eq('id', tourId).single()
-    const org_id = tour?.org_id
-
-    // 5. Smart merge
-    const result = {
-      shows: { added: 0, updated: 0, unchanged: 0, failed: 0, details: [] as any[] },
-      travel: { added: 0, updated: 0, unchanged: 0, failed: 0 },
-      accommodation: { added: 0, updated: 0, unchanged: 0, failed: 0 },
-      contacts: { added: 0, updated: 0, unchanged: 0, failed: 0 },
-    }
-
-    // Shows
-    for (const newShow of extracted.shows || []) {
-      // shows.date is NOT NULL — a dateless runsheet can't be inserted as a show.
-      // Skip it (contacts/travel/etc. below still merge) and report it.
-      if (!newShow.date) {
-        result.shows.details.push({ action: 'skipped_no_date', venue: newShow.venue || '', fields: [] })
-        continue
-      }
-      const match = findMatchingShow(newShow, existingShows)
-      if (match) {
-        const { updates, changed } = mergeFields(match, newShow, ['venue', 'city', 'country', 'stage', 'set_time', 'doors_time', 'soundcheck_time', 'notes', 'catering', 'backline'])
-        if (Object.keys(updates).length > 0) {
-          // Strip fields that may not exist in schema yet
-          const safeUpdates = { ...updates }
-          let { error: updateErr } = await supabase.from('shows').update(safeUpdates).eq('id', match.id).eq('tour_id', tourId)
-          if (updateErr && updateErr.message?.includes('column')) {
-            const { catering: _c, backline: _b, ...baseUpdates } = safeUpdates
-            ;({ error: updateErr } = await supabase.from('shows').update(baseUpdates).eq('id', match.id).eq('tour_id', tourId))
-          }
-          if (updateErr) {
-            result.shows.failed++
-            result.shows.details.push({ action: 'failed', date: newShow.date, venue: newShow.venue, fields: changed, error: updateErr.message })
-          } else {
-            result.shows.updated++
-            result.shows.details.push({ action: 'updated', date: newShow.date, venue: newShow.venue, fields: changed })
-          }
-        } else {
-          result.shows.unchanged++
-          result.shows.details.push({ action: 'unchanged', date: newShow.date, venue: newShow.venue, fields: [] })
-        }
-      } else {
-        // Strip any fields that may not exist in schema yet
-        const { catering, backline, ...safeShow } = newShow
-        const insertData: any = { ...safeShow, tour_id: tourId, org_id }
-        // Try with extra fields first, fall back without
-        let { error: insertErr } = await supabase.from('shows').insert(insertData)
-        if (insertErr && insertErr.message?.includes('column')) {
-          // Schema doesn't have new columns yet — insert without them
-          const { catering: _c, backline: _b, ...baseShow } = insertData
-          ;({ error: insertErr } = await supabase.from('shows').insert(baseShow))
-        }
-        if (insertErr) {
-          result.shows.failed++
-          result.shows.details.push({ action: 'failed', date: newShow.date, venue: newShow.venue, fields: [], error: insertErr.message })
-        } else {
-          result.shows.added++
-          result.shows.details.push({ action: 'added', date: newShow.date, venue: newShow.venue, fields: [] })
-        }
-      }
-    }
-
-    // Travel
-    for (const newTravel of extracted.travel || []) {
-      const match = findMatchingTravel(newTravel, existingTravel)
-      if (match) {
-        const { updates } = mergeFields(match, newTravel, ['travel_type', 'departure_time', 'arrival_time', 'carrier', 'reference', 'notes'])
-        if (Object.keys(updates).length > 0) {
-          const { error } = await supabase.from('travel').update(updates).eq('id', match.id).eq('tour_id', tourId)
-          if (error) result.travel.failed++
-          else result.travel.updated++
-        } else {
-          result.travel.unchanged++
-        }
-      } else {
-        const { error } = await supabase.from('travel').insert({ ...newTravel, tour_id: tourId, org_id })
-        if (error) result.travel.failed++
-        else result.travel.added++
-      }
-    }
-
-    // Accommodation
-    for (const newAccom of extracted.accommodation || []) {
-      const match = findMatchingAccom(newAccom, existingAccom)
-      if (match) {
-        const { updates } = mergeFields(match, newAccom, ['check_out', 'address', 'confirmation', 'notes'])
-        if (Object.keys(updates).length > 0) {
-          const { error } = await supabase.from('accommodation').update(updates).eq('id', match.id).eq('tour_id', tourId)
-          if (error) result.accommodation.failed++
-          else result.accommodation.updated++
-        } else {
-          result.accommodation.unchanged++
-        }
-      } else {
-        const { error } = await supabase.from('accommodation').insert({ ...newAccom, tour_id: tourId, org_id })
-        if (error) result.accommodation.failed++
-        else result.accommodation.added++
-      }
-    }
-
-    // Contacts — match by name/email/phone, merge missing fields
-    for (const newContact of extracted.contacts || []) {
-      const match = findMatchingContact(newContact, existingContacts)
-      if (match) {
-        const { updates } = mergeFields(match, newContact, ['role', 'phone', 'email'])
-        if (Object.keys(updates).length > 0) {
-          const { error } = await supabase.from('contacts').update(updates).eq('id', match.id).eq('tour_id', tourId)
-          if (error) result.contacts.failed++
-          else result.contacts.updated++
-        } else {
-          result.contacts.unchanged++
-        }
-      } else {
-        const { error } = await supabase.from('contacts').insert({ ...newContact, tour_id: tourId, org_id })
-        if (error) result.contacts.failed++
-        else result.contacts.added++
-      }
-    }
-
-    return NextResponse.json({ success: true, result, extracted })
+    return NextResponse.json({ success: true, review: createReview(extracted, existing, user.id, tourId, secret) })
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+    return NextResponse.json({ success: false, error: err.message }, { status: err instanceof ImportReviewError ? err.status : 500 })
   }
 }

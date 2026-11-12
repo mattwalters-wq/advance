@@ -1,240 +1,53 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
-import { createClient } from '@/lib/supabase'
-import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import { useMemo, useState } from 'react'
+import WorkspaceShell, { EmptyState, LoadError, Skeleton } from '@/components/workspace/WorkspaceShell'
+import { WorkspaceProvider, useEvents, useWorkspace } from '@/components/workspace/WorkspaceProvider'
+import Icon from '@/components/workspace/Icon'
+import EventList from '@/components/workspace/EventList'
+import { buildAgenda, dateKey, formatDay, shiftDay, tourHref } from '@/lib/workspace'
 
-const supabase = createClient()
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'mattwaltersconsulting@gmail.com'
-
-function DashboardInner() {
-  const [artists, setArtists] = useState<any[]>([])
-  const [user, setUser] = useState<any>(null)
-  const [profile, setProfile] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [godMode, setGodMode] = useState<any>(null) // { orgId, name }
-  const router = useRouter()
-  const searchParams = useSearchParams()
-
-  useEffect(() => { loadData() }, [])
-
-  async function loadData() {
-    let redirecting = false
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { redirecting = true; router.push('/auth/signin'); return }
-
-      // God mode: admin can view any user's roster
-      const superadmin = searchParams.get('superadmin')
-      const orgId = searchParams.get('org_id')
-      if (superadmin === '1' && orgId && user.email === ADMIN_EMAIL) {
-        // Resolve the target org's profile (fall back to treating the param as a user id for old links)
-        let { data: targetProfile } = await supabase.from('profiles').select('*').eq('org_id', orgId).limit(1).maybeSingle()
-        if (!targetProfile) {
-          const { data: byId } = await supabase.from('profiles').select('*').eq('id', orgId).maybeSingle()
-          targetProfile = byId
-        }
-        const targetOrgId = targetProfile?.org_id || orgId
-        const { data: artistsData } = await supabase.from('artists').select('*').eq('org_id', targetOrgId).order('name')
-        setUser(user)
-        setProfile(targetProfile)
-        setArtists(artistsData || [])
-        setGodMode({ orgId: targetOrgId, name: targetProfile?.full_name || targetOrgId })
-        return
-      }
-
-      setUser(user)
-      // Parallelise profile + artists
-      const [profileRes, artistsRes] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).single(),
-        supabase.from('artists').select('*').order('name'),
-      ])
-      let profile = profileRes.data
-      // If no profile or no org, run full setup
-      if (!profile?.org_id) {
-        const res = await fetch('/api/setup-account', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.id, email: user.email, fullName: profile?.full_name || '' }),
-        })
-        const setupData = await res.json()
-        if (setupData.success) {
-          const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-          profile = refreshed
-        }
-      }
-      setProfile(profile)
-      setArtists(artistsRes.data || [])
-    } finally {
-      if (!redirecting) setLoading(false)
-    }
-  }
-
-  async function handleSignout() {
-    await supabase.auth.signOut()
-    router.push('/auth/signin')
-  }
-
-  if (loading) return (
-    <div style={{ background: '#F4EFE6', minHeight: '100vh', fontFamily: '"Georgia", serif' }}>
-      <style>{`@keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} } .sk{background:linear-gradient(90deg,#E8E0D4 25%,#F0E8DC 50%,#E8E0D4 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:6px;}`}</style>
-      <div style={{ background: '#0F0E0C', height: 56 }} />
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px' }}>
-        <div className="sk" style={{ width: 120, height: 12, marginBottom: 12 }} />
-        <div className="sk" style={{ width: 200, height: 36, marginBottom: 40 }} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-          {[1,2,3,4].map(i => (
-            <div key={i} style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', border: '1px solid #E8E0D4' }}>
-              <div style={{ height: 5, background: '#E8E0D4' }} />
-              <div style={{ padding: '20px 22px 22px' }}>
-                <div className="sk" style={{ width: 44, height: 44, borderRadius: 10, marginBottom: 16 }} />
-                <div className="sk" style={{ width: '70%', height: 18, marginBottom: 8 }} />
-                <div className="sk" style={{ width: '50%', height: 12 }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+function Overview() {
+  const { artists, tours, profile, adminOrg } = useWorkspace()
+  const [today] = useState(() => dateKey(new Date()))
+  const [rosterQuery, setRosterQuery] = useState(''), [activeOnly, setActiveOnly] = useState(false)
+  const [eventFilter, setEventFilter] = useState<'all' | 'show' | 'travel'>('all'), [limit, setLimit] = useState(6)
+  const schedule = useEvents(today, shiftDay(today, 29))
+  const events = useMemo(() => buildAgenda(artists, tours, schedule.shows, schedule.travel), [artists, tours, schedule.shows, schedule.travel])
+  const visibleEvents = events.filter(e => eventFilter === 'all' || e.kind === eventFilter)
+  const attention = events.filter(e => e.missing.length && e.date <= shiftDay(today, 6))
+  const activeTours = tours.filter(t => t.status !== 'completed' && (!t.end_date || t.end_date >= today))
+  const filteredArtists = artists.filter(a => `${a.name} ${a.project || ''}`.toLowerCase().includes(rosterQuery.trim().toLowerCase()) && (!activeOnly || activeTours.some(t => t.artist_id === a.id)))
+  const suffix = adminOrg ? `?superadmin=1&org_id=${encodeURIComponent(adminOrg)}` : ''
+  const firstName = profile?.full_name?.trim().split(/\s+/)[0]
+  const metric = (value: number) => schedule.loading || schedule.error ? '—' : value
+  return <WorkspaceShell>
+    <div className="ws-page-heading"><div><span className="ws-eyebrow">{formatDay(today, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span><h1>{firstName ? `Your day, ${firstName}.` : 'Your day, in focus.'}</h1><p>Everything moving. Nothing missed.</p></div>{!adminOrg && <div className="ws-heading-actions"><Link className="ws-button" href="/dashboard/import"><Icon name="upload"/>Import documents</Link><Link className="ws-button ws-primary" href="/dashboard/artists/new"><Icon name="plus"/>Add artist</Link></div>}</div>
+    <div className="ws-stats">
+      <a href="#roster" className="ws-stat"><span>Your roster<Icon name="music"/></span><strong>{artists.length.toString().padStart(2, '0')}</strong><small>{activeTours.length} current or upcoming tours</small></a>
+      <Link href={`/dashboard/calendar${suffix}`} className="ws-stat"><span>Upcoming events<Icon name="calendar"/></span><strong>{metric(events.filter(e => e.kind === 'show').length)}</strong><small>Over the next 30 days</small></Link>
+      <button className="ws-stat" onClick={() => { setEventFilter('travel'); document.getElementById('schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}><span>Travel legs<Icon name="plane"/></span><strong>{metric(events.filter(e => e.kind === 'travel').length)}</strong><small>Over the next 30 days</small></button>
+      <a href="#attention" className={`ws-stat ${attention.length ? 'ws-stat-attention' : ''}`}><span>Needs attention<Icon name="alert"/></span><strong>{metric(attention.length)}</strong><small>Events with missing details this week</small></a>
     </div>
-  )
-
-  return (
-    <div style={{ background: '#F4EFE6', minHeight: '100vh', fontFamily: '"Georgia", serif' }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
-        @media (max-width: 600px) {
-          .dashboard-header { flex-direction: column !important; align-items: flex-start !important; }
-          .dashboard-header h1 { font-size: 26px !important; }
-          .dashboard-nav { gap: 0 !important; }
-          .dashboard-nav button { padding: 6px 8px !important; font-size: 12px !important; }
-        }
-        * { box-sizing: border-box; }
-        .artist-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.12) !important; }
-        .artist-card:hover .card-arrow { opacity: 1 !important; transform: translateX(0) !important; }
-        .nav-btn:hover { background: rgba(255,255,255,0.08) !important; }
-        .action-btn:hover { opacity: 0.85; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
-        .fade-in { animation: fadeIn 0.4s ease forwards; }
-      `}</style>
-
-      {/* Header */}
-      <header style={{ background: '#0F0E0C', borderBottom: '1px solid #1E1C18' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {/* Logo */}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-            <span style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 22, fontStyle: 'italic', color: '#F4EFE6', letterSpacing: '-0.02em' }}>Advance</span>
-            <span style={{ fontFamily: 'monospace', fontSize: 8, letterSpacing: '0.25em', color: '#C4622D' }}>✦</span>
-          </div>
-
-          {/* Nav */}
-          <nav style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            {[
-              { label: 'Calendar', path: '/dashboard/calendar', icon: '▦' },
-              { label: 'Search', path: '/dashboard/search', icon: '⌕' },
-            ].map(item => (
-              <button key={item.path} onClick={() => router.push(item.path)} className="nav-btn"
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'transparent', border: 'none', color: '#7A7570', cursor: 'pointer', borderRadius: 6, fontSize: 13, fontFamily: '"Georgia", serif', transition: 'background 0.15s' }}>
-                <span style={{ fontSize: 11, opacity: 0.7 }}>{item.icon}</span> {item.label}
-              </button>
-            ))}
-            <div style={{ width: 1, height: 20, background: '#2A2520', margin: '0 4px' }} />
-            <div style={{ position: 'relative' }}>
-              <button onClick={() => setMenuOpen(!menuOpen)} className="nav-btn"
-                style={{ width: 32, height: 32, borderRadius: '50%', background: '#C4622D', border: 'none', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {(profile?.full_name || user?.email || 'M').charAt(0).toUpperCase()}
-              </button>
-              {menuOpen && (
-                <div style={{ position: 'absolute', right: 0, top: 40, background: '#1A1714', borderRadius: 10, padding: '6px', minWidth: 160, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 50 }}
-                  onMouseLeave={() => setMenuOpen(false)}>
-                  <div style={{ padding: '8px 12px', fontSize: 12, color: '#7A7570', fontFamily: 'monospace', borderBottom: '1px solid #2A2520', marginBottom: 4 }}>
-                    {profile?.full_name || user?.email}
-                  </div>
-                  <button onClick={handleSignout}
-                    style={{ width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: '#F4EFE6', cursor: 'pointer', borderRadius: 6, fontSize: 13, textAlign: 'left', fontFamily: '"Georgia", serif' }}>
-                    Sign out
-                  </button>
-                </div>
-              )}
-            </div>
-          </nav>
-        </div>
-      </header>
-
-      {/* God mode banner */}
-      {godMode && (
-        <div style={{ background: '#B8860B', padding: '8px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontFamily: 'monospace', fontSize: 11, letterSpacing: 2, color: '#fff' }}>
-            ⚡ GOD MODE — viewing as <strong>{godMode.name}</strong>
-          </div>
-          <button onClick={() => router.push('/admin')}
-            style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 5, color: '#fff', cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, padding: '4px 10px', letterSpacing: 1 }}>
-            ← BACK TO ADMIN
-          </button>
-        </div>
-      )}
-
-      {/* Main */}
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px' }}>
-
-        {/* Page header */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 36, flexWrap: 'wrap', gap: 16 }}>
-          <div>
-            <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.25em', color: '#B8A898', marginBottom: 6, textTransform: 'uppercase' }}>
-              {new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </div>
-            <h1 style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 36, fontWeight: 400, color: '#1A1714', margin: 0, lineHeight: 1.1 }}>
-              Your Roster
-            </h1>
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => router.push('/dashboard/artists/new')} className="action-btn"
-              style={{ padding: '10px 20px', background: '#C4622D', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', cursor: 'pointer', transition: 'opacity 0.15s' }}>
-              + ARTIST
-            </button>
-          </div>
-        </div>
-
-        {/* Artist grid */}
-        {artists.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '80px 20px' }}>
-            <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 28, color: '#C8BFB0', fontStyle: 'italic', marginBottom: 12 }}>No artists yet</div>
-            <div style={{ color: '#B8A898', fontSize: 14, marginBottom: 24 }}>Add an artist or import a tour document to get started.</div>
-            <button onClick={() => router.push('/dashboard/artists/new')}
-              style={{ padding: '12px 28px', background: '#C4622D', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', cursor: 'pointer' }}>
-              + ADD ARTIST
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-            {artists.map((artist, i) => (
-              <div key={artist.id} className="artist-card fade-in" onClick={() => router.push(`/dashboard/artists/${artist.id}${godMode ? `?superadmin=1&org_id=${godMode.orgId}` : ''}`)}
-                style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', cursor: 'pointer', border: '1px solid #E8E0D4', transition: 'transform 0.2s, box-shadow 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', animationDelay: `${i * 0.06}s`, animationFillMode: 'both' }}>
-                {/* Colour band */}
-                <div style={{ height: 5, background: artist.color || '#C4622D' }} />
-                <div style={{ padding: '20px 22px 22px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 10, background: artist.color || '#C4622D', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 700, fontFamily: '"Playfair Display", Georgia, serif', fontStyle: 'italic' }}>
-                      {artist.name.charAt(0)}
-                    </div>
-                    <span className="card-arrow" style={{ color: '#C8BFB0', fontSize: 18, opacity: 0, transform: 'translateX(-4px)', transition: 'all 0.2s' }}>→</span>
-                  </div>
-                  <div style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 18, fontWeight: 700, color: '#1A1714', marginBottom: 4, lineHeight: 1.2 }}>{artist.name}</div>
-                  <div style={{ fontSize: 12, color: '#B8A898', fontStyle: 'italic', lineHeight: 1.4 }}>{artist.project || 'No active project'}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </main>
+    <div className="ws-overview-columns">
+      <section className="ws-panel" id="schedule"><div className="ws-panel-heading"><div><span className="ws-eyebrow">THE NEXT 30 DAYS</span><h2>Coming up</h2></div><Link className="ws-text-link" href={`/dashboard/calendar${suffix}`}>Calendar <Icon name="arrow" size={16}/></Link></div>
+        <div className="ws-segment-row"><div className="ws-segments" aria-label="Schedule filter">{(['all', 'show', 'travel'] as const).map(filter => <button key={filter} aria-pressed={eventFilter === filter} onClick={() => { setEventFilter(filter); setLimit(6) }}>{filter === 'all' ? 'Everything' : filter === 'show' ? 'Events' : 'Travel'}</button>)}</div><span className="ws-muted ws-small-text">{schedule.loading ? 'Loading…' : `${visibleEvents.length} on the horizon`}</span></div>
+        {schedule.loading ? <Skeleton/> : schedule.error ? <LoadError message={schedule.error} retry={schedule.reload}/> : visibleEvents.length ? <><EventList events={visibleEvents.slice(0, limit)} adminOrg={adminOrg}/>{visibleEvents.length > limit && <button className="ws-show-more" onClick={() => setLimit(n => n + 10)}>Show more <Icon name="plus" size={15}/></button>}</> : <EmptyState title={artists.length ? 'A clear stretch ahead' : 'Your next show starts here'}><p>{artists.length ? 'No matching events in the next 30 days. Open an artist to plan their next tour.' : 'Add your first artist, then bring their itinerary into Advance.'}</p>{!adminOrg && <Link className="ws-text-link" href={artists.length ? '/dashboard/import' : '/dashboard/artists/new'}>{artists.length ? 'Import an itinerary' : 'Add your first artist'} <Icon name="arrow" size={16}/></Link>}</EmptyState>}
+      </section>
+      <aside className="ws-side-stack">
+        <section className="ws-panel ws-attention" id="attention"><div className="ws-panel-heading"><div><span className="ws-eyebrow">BEFORE YOU GO</span><h2>A little attention</h2></div><span className="ws-counter">{metric(attention.length)}</span></div><p className="ws-panel-description">Missing details for the next 7 days.</p>
+          {schedule.loading ? <Skeleton rows={2}/> : schedule.error ? <p className="ws-panel-description">Retry the schedule to check missing details.</p> : attention.length ? <div className="ws-attention-list">{attention.slice(0, 5).map(event => <Link key={event.id} href={tourHref(event.artist.id, event.tour.id, adminOrg)}><span className="ws-attention-dot"/><div><strong>{event.missing.join(' · ')}</strong><span>{event.artist.name} · {formatDay(event.date)}</span><small>{event.title}</small></div><Icon name="chevron" size={14}/></Link>)}{attention.length > 5 && <Link className="ws-text-link" href={`/dashboard/calendar${suffix}`}>View all {attention.length} in calendar →</Link>}</div> : <div className="ws-all-clear"><span><Icon name="check"/></span><strong>{events.length ? 'The essentials are covered' : 'Nothing to flag yet'}</strong><p>{events.length ? 'No missing venue, route or time details in this week’s schedule.' : 'Upcoming events will appear here when details need filling in.'}</p></div>}
+        </section>
+        {!adminOrg && <Link href="/dashboard/import" className="ws-import-card"><span className="ws-import-art" aria-hidden="true"><span>PDF</span><span>XLS</span><Icon name="upload" size={26}/></span><span className="ws-eyebrow">FROM INBOX TO ITINERARY</span><h2>Bring the details.<br/>We’ll bring the order.</h2><p>Turn your tour documents into shows, travel and stays.</p><strong>Import documents <Icon name="arrow" size={17}/></strong></Link>}
+      </aside>
     </div>
-  )
+    <section id="roster" className="ws-roster-section"><div className="ws-section-heading"><div><span className="ws-eyebrow">THE PEOPLE BEHIND THE SHOW</span><h2>Your roster <span>{artists.length}</span></h2></div><div className="ws-roster-tools"><label className="ws-input-wrap"><Icon name="search" size={17}/><input aria-label="Filter artists" value={rosterQuery} onChange={e => setRosterQuery(e.target.value)} placeholder="Find an artist…"/>{rosterQuery && <button aria-label="Clear artist filter" onClick={() => setRosterQuery('')}><Icon name="close" size={15}/></button>}</label><label className="ws-checkbox"><input type="checkbox" checked={activeOnly} onChange={e => setActiveOnly(e.target.checked)}/>With current tours</label></div></div>
+      {filteredArtists.length ? <div className="ws-artist-grid">{filteredArtists.map((artist, i) => {
+        const artistTours = activeTours.filter(t => t.artist_id === artist.id), next = events.find(e => e.artist.id === artist.id)
+        return <Link key={artist.id} href={tourHref(artist.id, undefined, adminOrg)} className="ws-artist-card"><div className={`ws-artist-art ws-tone-${i % 4}`}><span className="ws-artist-monogram">{artist.name.split(/\s+/).map(w => w[0]).slice(0, 2).join('')}</span><span className="ws-artist-count">{artistTours.length} current {artistTours.length === 1 ? 'tour' : 'tours'}</span><span className="ws-artist-open"><Icon name="arrow" size={18}/></span></div><div className="ws-artist-details"><h3><span className="ws-color-dot" style={{ background: artist.color || '#397661' }}/>{artist.name}</h3><p>{artist.project || 'Ready for what’s next'}</p><div>{schedule.loading ? 'Checking schedule…' : schedule.error ? 'Schedule unavailable' : next ? <><Icon name={next.kind === 'show' ? 'music' : 'plane'} size={14}/><span>{formatDay(next.date)} · {next.title}</span></> : <><Icon name="calendar" size={14}/><span>No events in the next 30 days</span></>}</div></div></Link>
+      })}</div> : <div className="ws-panel"><EmptyState title={artists.length ? 'No artists match' : 'Build your roster'} icon="music"><p>{artists.length ? 'Try another name or clear the current-tours filter.' : 'Keep every artist, tour and detail together in one place.'}</p>{artists.length ? <button className="ws-button" onClick={() => { setRosterQuery(''); setActiveOnly(false) }}>Clear filters</button> : !adminOrg && <Link className="ws-button ws-primary" href="/dashboard/artists/new">Add artist</Link>}</EmptyState></div>}
+    </section>
+  </WorkspaceShell>
 }
-
-export default function DashboardPage() {
-  return (
-    <Suspense fallback={<div style={{ background: '#F4EFE6', minHeight: '100vh' }} />}>
-      <DashboardInner />
-    </Suspense>
-  )
-}
+export default function DashboardPage() { return <WorkspaceProvider><Overview/></WorkspaceProvider> }

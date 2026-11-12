@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase'
 import { fileToAttachment, collectFiles } from '@/lib/attach'
 import TourShowSummary, { missingShowDetails } from '@/components/TourShowSummary'
 import TourDetails from '@/components/TourDetails'
+import ImportReview from '@/components/ImportReview'
+import type { ImportSelection } from '@/lib/import-review'
 
 const supabase = createClient()
 
@@ -59,6 +61,12 @@ export default function ArtistPage() {
   const [expandedShowId, setExpandedShowId] = useState<string | null>(null)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set(['travel', 'accommodation', 'contacts', 'press', 'documents']))
   const [importJobs, setImportJobs] = useState<any[]>([])
+  const importLocks = useRef(new Set<string>())
+  const importQueueLock = useRef(false)
+  const [importQueueBusy, setImportQueueBusy] = useState(false)
+  const activeImportTour = useRef<string | undefined>()
+  activeImportTour.current = selectedTour?.id
+  const tourImportJobs = importJobs.filter(j => j.tourId === selectedTour?.id)
   const [importDragging, setImportDragging] = useState(false)
   const [importTab, setImportTab] = useState<'drop' | 'paste' | 'bandsintown'>('drop')
   const [bitArtistName, setBitArtistName] = useState('')
@@ -160,7 +168,9 @@ export default function ArtistPage() {
       } else {
         picked = toursData[toursData.length - 1]
       }
-      setSelectedTour(picked)
+      // Workspace links explicitly select a tour; only accept one belonging to this artist.
+      const requestedTourId = new URLSearchParams(window.location.search).get('tour')
+      setSelectedTour(toursData.find((tour: any) => tour.id === requestedTourId) || picked)
     }
     // Get user name (non-blocking)
     const user = authRes.data?.user
@@ -342,22 +352,16 @@ export default function ArtistPage() {
     return w
   }
 
-  async function processImportFile(file: File) {
-    if (!selectedTour) return
-    // Find the queued job for this file or create one
-    let jobId: string
-    setImportJobs(prev => {
-      const existing = prev.find(j => j.name === file.name && j.status === 'queued')
-      if (existing) { jobId = existing.id; return prev.map(j => j.id === existing.id ? { ...j, status: 'parsing' } : j) }
-      jobId = Math.random().toString(36).slice(2)
-      return [...prev, { id: jobId, name: file.name, file, status: 'parsing', result: null, error: null }]
-    })
-
-    const update = (updates: any) => setImportJobs(prev => prev.map(j => j.id === jobId ? { ...j, ...updates } : j))
+  async function processImportFile(job: any) {
+    if (importLocks.current.has(job.id)) return
+    importLocks.current.add(job.id)
+    const file: File = job.file
+    const update = (updates: any) => setImportJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...updates } : j))
+    update({ status: 'parsing', error: null })
 
     try {
       const ext = file.name.split('.').pop()?.toLowerCase()
-      let body: any = { tourId: selectedTour.id, filename: file.name }
+      let body: any = { mode: 'preview', tourId: job.tourId, filename: file.name }
 
       if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'].includes(ext || '') || file.type.startsWith('image/')) {
         const base64 = await new Promise<string>((res, rej) => {
@@ -408,12 +412,29 @@ export default function ArtistPage() {
       }
       if (!data.success) throw new Error(data.error || 'Could not process this document')
 
-      update({ status: 'done', result: data.result })
-      // Reload tour data to reflect merged changes
-      await loadTourData(selectedTour.id)
+      update({ status: 'review', review: data.review, outcomes: [] })
     } catch (err: any) {
       update({ status: 'error', error: err.message })
-    }
+    } finally { importLocks.current.delete(job.id) }
+  }
+
+  async function reviewImport(job: any, mode: 'apply' | 'refresh', selections?: ImportSelection[]) {
+    if (importLocks.current.has(job.id) || activeImportTour.current !== job.tourId) return
+    importLocks.current.add(job.id)
+    const update = (updates: any) => setImportJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...updates } : j))
+    update({ status: 'applying', error: null })
+    try {
+      const response = await fetch('/api/merge-tour', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode, tourId: job.tourId, token: job.review.token, selections }) })
+      const data = await response.json()
+      if (!response.ok || !data.success) throw new Error(data.error || 'Could not apply changes. Try again.')
+      if (mode === 'refresh') update({ status: 'review', review: data.review, outcomes: [] })
+      else {
+        const outcomes = [...(job.outcomes || []).filter((o: any) => !data.outcomes.some((n: any) => n.id === o.id)), ...data.outcomes]
+        update({ status: outcomes.some((o: any) => o.status === 'failed') ? 'review' : 'done', outcomes })
+        if (activeImportTour.current === job.tourId) await loadTourData(job.tourId)
+      }
+    } catch (err: any) { update({ status: 'review', error: err.message || 'Could not confirm changes were saved. Retry to check their status.' }) }
+    finally { importLocks.current.delete(job.id) }
   }
 
   async function scanTravelDoc(file: File) {
@@ -1994,9 +2015,9 @@ export default function ArtistPage() {
                     }}>
                     {label}
                     {v === 'notes' && notes.length > 0 && <span style={{ position: 'absolute', top: 5, right: 5, width: 5, height: 5, borderRadius: '50%', background: '#f59e0b' }} />}
-                    {v === 'import' && importJobs.filter(j => j.status === 'queued').length > 0 && (
+                    {v === 'import' && tourImportJobs.filter(j => j.status === 'queued').length > 0 && (
                       <span style={{ marginLeft: 5, background: accent, color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 9 }}>
-                        {importJobs.filter(j => j.status === 'queued').length}
+                        {tourImportJobs.filter(j => j.status === 'queued').length}
                       </span>
                     )}
                   </button>
@@ -2907,7 +2928,7 @@ export default function ArtistPage() {
                         if (newFiles.length === 0) newFiles = Array.from(dt.files) as File[]
                         setImportJobs(prev => [...prev, ...newFiles.map(f => ({
                           id: Math.random().toString(36).slice(2), name: f.name, file: f,
-                          status: 'queued' as const, result: null, error: null
+                          tourId: selectedTour?.id, status: 'queued' as const, result: null, error: null
                         }))])
                       }}
                       onDragOver={e => { e.preventDefault(); setImportDragging(true) }}
@@ -2920,7 +2941,7 @@ export default function ArtistPage() {
                           const newFiles = Array.from(e.target.files || []) as File[]
                           setImportJobs(prev => [...prev, ...newFiles.map(f => ({
                             id: Math.random().toString(36).slice(2), name: f.name, file: f,
-                            status: 'queued' as const, result: null, error: null
+                            tourId: selectedTour?.id, status: 'queued' as const, result: null, error: null
                           }))])
                         }
                         inp.click()
@@ -2928,7 +2949,7 @@ export default function ArtistPage() {
                       style={{ border: `2px dashed ${importDragging ? accent : border}`, borderRadius: 14, padding: '28px 24px', textAlign: 'center', cursor: 'pointer', background: importDragging ? (darkMode ? '#2a1f18' : '#FDF5EF') : card, transition: 'all 0.15s' }}>
                       <div style={{ fontSize: 26, marginBottom: 8 }}>⊕</div>
                       <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: text }}>
-                        {importDragging ? 'Drop to add to queue' : 'Drop anything here'}
+                        {importDragging ? 'Drop to add to queue' : 'Add documents to review'}
                       </div>
                       <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>Images, screenshots, PDFs — anything. Click to browse · Add more any time</div>
                       <div style={{ fontFamily: 'monospace', fontSize: 9, color: muted, letterSpacing: 2 }}>IMAGES · PDF · WORD · EXCEL · CSV · TEXT</div>
@@ -2967,7 +2988,7 @@ export default function ArtistPage() {
                               id: Math.random().toString(36).slice(2),
                               name: label,
                               file,
-                              status: 'queued' as const,
+                              tourId: selectedTour?.id, status: 'queued' as const,
                               result: null,
                               error: null,
                             }])
@@ -3137,77 +3158,40 @@ export default function ArtistPage() {
                   </div>
                 )}
 
-                {/* Queue — shown on drop tab when jobs exist */}
-                {importJobs.length > 0 && (
+                {tourImportJobs.length > 0 && (
                   <div style={{ background: card, borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden' }}>
                     <div style={{ padding: '12px 20px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: muted }}>
-                        {importJobs.filter(j => j.status === 'queued').length > 0
-                          ? `${importJobs.filter(j => j.status === 'queued').length} QUEUED · READY TO PROCESS`
-                          : `${importJobs.filter(j => j.status === 'done').length} PROCESSED`}
-                      </div>
-                      <button onClick={() => setImportJobs([])}
-                        style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 11, fontFamily: 'monospace' }}>
-                        CLEAR
-                      </button>
+                      <span style={{ fontSize: 13, color: muted }}>{tourImportJobs.length} {tourImportJobs.length === 1 ? 'document' : 'documents'} · Read, review, then apply</span>
+                      <button disabled={importQueueBusy || tourImportJobs.some(j => ['parsing', 'applying'].includes(j.status))} onClick={() => setImportJobs(prev => prev.filter(j => j.tourId !== selectedTour?.id))} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', minHeight: 44 }}>Clear</button>
                     </div>
-
-                    {importJobs.map((job, i) => (
-                      <div key={job.id} style={{ padding: '12px 20px', borderBottom: i < importJobs.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                        <span style={{ fontSize: 15, marginTop: 1, flexShrink: 0 }}>
-                          {job.status === 'queued' && <span style={{ color: muted }}>○</span>}
-                          {job.status === 'parsing' && <span style={{ color: accent }}>✦</span>}
-                          {job.status === 'done' && <span style={{ color: '#2d7a4f' }}>✓</span>}
-                          {job.status === 'error' && <span style={{ color: '#C00' }}>✕</span>}
-                        </span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{job.name}</div>
-                          {job.status === 'queued' && <div style={{ fontSize: 11, color: muted, fontFamily: 'monospace', letterSpacing: 1, marginTop: 2 }}>Waiting...</div>}
-                          {job.status === 'parsing' && <div style={{ fontSize: 11, color: accent, fontFamily: 'monospace', letterSpacing: 1, marginTop: 2 }}>Processing...</div>}
-                          {job.status === 'done' && job.result && (
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginTop: 6 }}>
-                              {[['shows','🎵'],['travel','✈️'],['accommodation','🏨'],['contacts','👤']].map(([key, icon]) => {
-                                const r = job.result[key]
-                                if (!r) return null
-                                const parts = []
-                                if (r.added > 0) parts.push(`+${r.added}`)
-                                if (r.updated > 0) parts.push(`↑${r.updated}`)
-                                if (parts.length === 0) return null
-                                return <div key={key} style={{ fontSize: 11, background: darkMode ? '#2a2a2a' : '#F5F0E8', borderRadius: 5, padding: '2px 8px', color: text }}>{icon} {parts.join(' ')}</div>
-                              })}
-                            </div>
-                          )}
-                          {job.status === 'error' && <div style={{ fontSize: 11, color: '#C00', fontFamily: 'monospace', marginTop: 2 }}>{job.error}</div>}
+                    {tourImportJobs.map(job => (
+                      <div key={job.id} style={{ padding: '16px 20px', borderBottom: `1px solid ${border}` }}>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+                          <strong style={{ fontSize: 14, overflowWrap: 'anywhere', minWidth: 0 }}>{job.name}</strong>
+                          {['queued', 'error'].includes(job.status) && <button aria-label={`Remove ${job.name}`} onClick={() => setImportJobs(prev => prev.filter(j => j.id !== job.id))} style={{ background: 'none', border: 'none', color: muted, minHeight: 44, minWidth: 44 }}>×</button>}
                         </div>
-                        {job.status === 'queued' && (
-                          <button onClick={() => setImportJobs(prev => prev.filter(j => j.id !== job.id))}
-                            style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 16, padding: 0, flexShrink: 0 }}>×</button>
-                        )}
+                        <div role="status" style={{ fontSize: 13, color: muted, marginTop: 6 }}>
+                          {job.status === 'queued' && 'Ready to read. No changes saved.'}
+                          {job.status === 'parsing' && 'Reading document… No changes saved.'}
+                          {job.status === 'done' && `${job.outcomes.filter((o: any) => o.status !== 'failed').length} selected records saved. Unselected changes were skipped.`}
+                          {job.status === 'discarded' && (job.outcomes?.some((o: any) => o.status !== 'failed') ? 'Remaining changes discarded. Records already saved are kept.' : 'Document discarded. No changes saved.')}
+                        </div>
+                        {['review', 'applying'].includes(job.status) && job.review && <ImportReview key={job.review.token} entries={job.review.entries} busy={job.status === 'applying'} outcomes={job.outcomes} error={job.error} onApply={selections => reviewImport(job, 'apply', selections)} onRefresh={() => reviewImport(job, 'refresh')} onDiscard={() => setImportJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'discarded' } : j))} />}
+                        {job.status === 'error' && <div><p role="alert" style={{ fontSize: 13 }}>{job.error}</p><button onClick={() => processImportFile(job)} style={{ minHeight: 44 }}>Read again</button></div>}
                       </div>
                     ))}
-
-                    {importJobs.some(j => j.status === 'queued') && (
-                      <div style={{ padding: '14px 20px', borderTop: `1px solid ${border}`, background: darkMode ? '#222' : '#FAFAF8' }}>
-                        <button onClick={async () => {
-                          const queued = importJobs.filter(j => j.status === 'queued')
-                          for (const job of queued) {
-                            await processImportFile(job.file)
-                          }
-                        }}
-                          style={{ width: '100%', padding: '12px', background: '#1A1714', color: '#F5F0E8', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 3 }}>
-                          ✦ PROCESS {importJobs.filter(j => j.status === 'queued').length} DOCUMENT{importJobs.filter(j => j.status === 'queued').length !== 1 ? 'S' : ''}
-                        </button>
-                        <div style={{ textAlign: 'center', marginTop: 8, fontSize: 11, color: muted }}>
-                          Merges with existing tour data — no duplicates
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {importJobs.some(j => j.status === 'done') && warnings.filter(w => !dismissedWarnings.has(w)).length === 0 && (
-                  <div style={{ background: darkMode ? '#0a2a1a' : '#F0FFF4', border: `1px solid #2d7a4f`, borderRadius: 10, padding: '14px 18px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 14, color: '#2d7a4f', fontWeight: 600 }}>✓ No gaps detected</div>
+                    {tourImportJobs.some(j => j.status === 'queued') && <div style={{ padding: '14px 20px' }}>
+                      <button disabled={importQueueBusy} onClick={async () => {
+                        if (importQueueLock.current) return
+                        importQueueLock.current = true
+                        setImportQueueBusy(true)
+                        try { for (const job of tourImportJobs.filter(j => j.status === 'queued')) await processImportFile(job) }
+                        finally { importQueueLock.current = false; setImportQueueBusy(false) }
+                      }} style={{ width: '100%', minHeight: 44, padding: 12, background: accent, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>
+                        {importQueueBusy ? 'Reading documents…' : `Read ${tourImportJobs.filter(j => j.status === 'queued').length} ${tourImportJobs.filter(j => j.status === 'queued').length === 1 ? 'document' : 'documents'}`}
+                      </button>
+                      <p style={{ textAlign: 'center', fontSize: 12, color: muted }}>You’ll review new records and changes before saving.</p>
+                    </div>}
                   </div>
                 )}
               </div>
