@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import SheetDetails from '@/components/SheetDetails'
+import { SharedPage, SharedHero, SharedState, SharedDock, MapLink, CopyReference, ContactCards } from '@/components/shared/SharedPage'
+import { groupTravel, matchesTraveller } from '@/lib/shared-itinerary'
 
 const supabase = createClient()
 
@@ -126,11 +128,18 @@ export default function DaySheetPage() {
   const [mode, setMode] = useState<'day' | 'trip'>('day')
   const [personFilter, setPersonFilter] = useState('everyone')
 
-  useEffect(() => { loadData() }, [params.show_id])
+  const [loadError, setLoadError] = useState(false)
+  const request = useRef(0)
+  useEffect(() => { loadData(); return () => { request.current++ } }, [params.show_id])
 
   async function loadData() {
+    const id = ++request.current
+    setLoading(true); setLoadError(false); setNotFound(false)
+    try {
     // One server-side call returns only what this sheet needs (see public_daysheet in the DB)
-    const { data } = await supabase.rpc('public_daysheet', { p_show_id: params.show_id })
+    const { data, error } = await supabase.rpc('public_daysheet', { p_show_id: params.show_id })
+    if (id !== request.current) return
+    if (error) throw error
     const showData = data?.show
     if (!showData) { setNotFound(true); setLoading(false); return }
 
@@ -157,7 +166,7 @@ export default function DaySheetPage() {
 
     const tourData = data.tour
     setTour(tourData)
-    if (tourData?.artists) setArtist(tourData.artists)
+    setArtist(tourData?.artists || null)
 
     const showDate = showData.date
     const showDateObj = new Date(showDate + 'T00:00:00')
@@ -183,17 +192,19 @@ export default function DaySheetPage() {
     setSetlist(data.setlist || null)
     setShowPeople(data.show_people || [])
     setLoading(false)
+    } catch { if (id === request.current) { setLoadError(true); setLoading(false) } }
   }
 
-  const accent = '#C4622D'
-  const accentLight = '#FDF5EF'
-  const border = '#E8E2D8'
-  const muted = '#706960'
-  const text = '#1A1714'
+  const accent = '#285e48'
+  const accentLight = '#f0f4e9'
+  const border = '#e0e5db'
+  const muted = '#667167'
+  const text = '#1d3229'
   const sectionBg = '#F9F6F2'
 
-  if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F9F6F2', fontFamily: 'sans-serif', color: muted }}>Loading...</div>
-  if (notFound) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F9F6F2', fontFamily: 'sans-serif', color: muted }}>Show not found.</div>
+  if (loading) return <SharedState state="loading"/>
+  if (loadError) return <SharedState state="error" retry={loadData}/>
+  if (notFound) return <SharedState state="missing" noun="day sheet"/>
 
   // Build schedule timeline
   const isNonShow = ['rehearsal', 'recording', 'press'].includes(show?.type || '')
@@ -220,38 +231,10 @@ export default function DaySheetPage() {
 
   // Filter travel by mode + person
   const filteredTravel = travel.filter((t: any) => {
-    const matchesPerson = personFilter === 'everyone' ||
-      (t.travellers || '').toLowerCase().includes(personFilter.toLowerCase())
+    const matchesPerson = matchesTraveller(t.travellers, personFilter)
     if (mode === 'day') return t.travel_date === showDate && matchesPerson
     return matchesPerson
   })
-
-  // Dedup by flight number
-  function groupTravel(items: any[]) {
-    const grouped: any[] = []
-    items.forEach((t: any) => {
-      const key = t.carrier
-        ? `${t.carrier}__${t.from_location}__${t.to_location}`
-        : `${t.travel_type}__${t.from_location}__${t.to_location}__${t.departure_time}`
-      const existing = grouped.find((g: any) => g._key === key)
-      if (existing) {
-        const merged = [...new Set([
-          ...(existing.travellers || '').split(',').map((n: string) => n.trim()).filter(Boolean),
-          ...(t.travellers || '').split(',').map((n: string) => n.trim()).filter(Boolean),
-        ])]
-        existing.travellers = merged.join(', ')
-        if (t.reference && !existing.reference?.includes(t.reference)) {
-          existing.reference = existing.reference ? `${existing.reference}, ${t.reference}` : t.reference
-        }
-      } else {
-        grouped.push({ ...t, _key: key })
-      }
-    })
-    return grouped.sort((a: any, b: any) => {
-      const dc = (a.travel_date || '').localeCompare(b.travel_date || '')
-      return dc !== 0 ? dc : (a.departure_time || '').localeCompare(b.departure_time || '')
-    })
-  }
 
   // Group trip travel by date
   const travelByDate: Record<string, any[]> = {}
@@ -262,76 +245,15 @@ export default function DaySheetPage() {
   })
 
   return (
-    <div style={{ background: sectionBg, minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif', color: text }}>
-      <style>{`
-        * { box-sizing: border-box; }
-        @media print {
-          .no-print { display: none !important; }
-          body { background: white !important; }
-          @page { margin: 1.5cm; size: A4; }
-        }
-        @media (max-width: 600px) {
-          .contact-table td { display: block; padding: 8px 20px !important; text-align: left !important; }
-          .contact-table td:last-child { padding-top: 0 !important; padding-bottom: 16px !important; }
-          .contact-table td:last-child > div { justify-content: flex-start !important; }
-          .sheet-page { padding-top: 16px !important; }
-          .sheet-header { padding: 20px !important; }
-          .times-grid { grid-template-columns: repeat(2, 1fr) !important; }
-        }
-      `}</style>
-
-      {/* Toolbar */}
-      <div className="no-print" style={{ background: '#1A1714', padding: '8px 16px', minHeight: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 17, fontStyle: 'italic', color: '#F5F0E8', fontFamily: 'Georgia, serif', flexShrink: 0 }}>Advance</span>
-
-          {/* Day / Trip toggle */}
-          <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-            {(['day', 'trip'] as const).map(m => (
-              <button key={m} aria-pressed={mode === m} onClick={() => setMode(m)}
-                style={{ padding: '10px 12px', minHeight: 44, background: mode === m ? accent : 'transparent', color: mode === m ? '#fff' : '#BDB5AC', border: `1px solid ${mode === m ? accent : '#2A2520'}`, borderRadius: 5, cursor: 'pointer', fontFamily: 'monospace', fontSize: 12, letterSpacing: 0 }}>
-                {m === 'day' ? 'Day sheet' : 'Nearby travel'}
-              </button>
-            ))}
-          </div>
-
-          {/* Person filter - only show if multiple people */}
-          {allPeople.length > 1 && (
-            <select aria-label="Filter travel by person" value={personFilter} onChange={e => setPersonFilter(e.target.value)}
-              style={{ padding: '10px 10px', minHeight: 44, background: '#2A2520', color: personFilter !== 'everyone' ? accent : '#BDB5AC', border: `1px solid ${personFilter !== 'everyone' ? accent : '#2A2520'}`, borderRadius: 5, fontSize: 11, fontFamily: 'monospace', cursor: 'pointer', outline: 'none', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              <option value="everyone">Everyone</option>
-              {allPeople.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          )}
-        </div>
-
-        <button onClick={() => window.print()}
-          style={{ padding: '10px 18px', minHeight: 44, background: accent, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, flexShrink: 0 }}>
-          PRINT
-        </button>
+    <SharedPage label="Day sheet">
+      <SharedHero eyebrow={mode === 'day' ? 'Your day sheet' : 'Travel around this show'} title={artist?.name || tour?.name || 'Your day'} subtitle={tour?.name}>
+        <div className="shared-hero-date">{fmtDate(show?.date) || 'Date to be confirmed'}</div>
+      </SharedHero>
+      <div className="shared-toolbar no-print">
+        <div className="shared-tabs" aria-label="Sheet view">{(['day', 'trip'] as const).map(m => <button key={m} aria-pressed={mode === m} onClick={() => setMode(m)}>{m === 'day' ? 'Day sheet' : 'Nearby travel'}</button>)}</div>
+        {allPeople.length > 1 && <label className="shared-person-filter">Travel for<select value={personFilter} onChange={e => setPersonFilter(e.target.value)}><option value="everyone">Everyone</option>{allPeople.map(p => <option key={p} value={p}>{p}</option>)}</select></label>}
       </div>
-
-      {/* Page */}
-      <div className="sheet-page" style={{ maxWidth: 700, margin: '0 auto', padding: '32px 16px 60px' }}>
-
-        {/* ── HEADER ── */}
-        <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
-          <div style={{ height: 5, background: artist?.color || accent }} />
-          <div className="sheet-header" style={{ padding: '24px 28px' }}>
-            <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: muted, marginBottom: 6, textTransform: 'uppercase' }}>
-              {mode === 'day' ? 'Day sheet' : 'Travel around this show'}
-            </div>
-            <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 2, lineHeight: 1.1 }}>{artist?.name}</div>
-            {tour?.name && <div style={{ fontSize: 14, color: muted, marginBottom: 12 }}>{tour.name}</div>}
-            <div style={{ fontSize: 18, fontWeight: 600, color: text }}>{fmtDate(show?.date)}</div>
-            {mode === 'trip' && personFilter !== 'everyone' && (
-              <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 14px', background: accentLight, border: `1px solid ${accent}`, borderRadius: 20, fontSize: 13, color: accent, fontWeight: 600 }}>
-                👤 {personFilter}
-              </div>
-            )}
-          </div>
-        </div>
-
+      <div className="daysheet-body" id="schedule">
         {/* ── PRESS DAY HEADER ── */}
         {mode === 'day' && show?.type === 'press' && press.filter((p: any) => p.date === show.date).length > 0 && (
           <div style={{ background: '#FDF5EF', borderRadius: 12, border: `1px solid #F5D9C4`, padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -362,7 +284,7 @@ export default function DaySheetPage() {
                     : null
                   return (
                     <>
-                      <div style={{ fontSize: 20, fontWeight: 700, marginBottom: show?.city ? 4 : (venueDetail ? 8 : 16), lineHeight: 1.3 }}>{venueName}</div>
+                      <h2 style={{ fontSize: 24, fontWeight: 600, marginBottom: show?.city ? 4 : (venueDetail ? 8 : 16), lineHeight: 1.3 }}>{venueName || 'Venue to be confirmed'}</h2>
                       {venueDetail && (
                         <div style={{ fontSize: 13, color: muted, lineHeight: 1.7, marginBottom: 14, padding: '10px 12px', background: '#F9F6F2', borderRadius: 6 }}>{venueDetail}</div>
                       )}
@@ -374,32 +296,14 @@ export default function DaySheetPage() {
                     {show.city}{show.country && show.country !== 'AU' ? `, ${show.country}` : ''}
                   </div>
                 )}
-                {show?.address && (
-                  <div style={{ marginBottom: 16 }}>
-                    <a href={`https://maps.google.com/?q=${encodeURIComponent(show.address)}`} target="_blank" rel="noreferrer"
-                      style={{ fontSize: 13, color: accent, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      📍 {show.address} ↗
-                    </a>
-                  </div>
-                )}
+                {schedule.length > 0 ? <><div className="shared-times">{schedule.map((s, i) => <div key={i} className={`shared-time${s.highlight ? ' highlight' : ''}`}><span>{s.event}</span><strong>{s.time}</strong>{s.highlight && show?.set_length && <small>{show.set_length}</small>}</div>)}</div><p className="shared-time-note">Times as supplied by your tour manager.</p></> : <p className="shared-time-note">Schedule to be confirmed.</p>}
+                {show?.address && <><p className="shared-location">{show.address}</p><div className="shared-actions"><MapLink address={show.address} label="Venue directions"/></div></>}
                 {show?.stage && (
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', background: sectionBg, borderRadius: 20, border: `1px solid ${border}`, fontSize: 12, color: muted, marginBottom: 16 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', background: sectionBg, borderRadius: 20, border: `1px solid ${border}`, fontSize: 12, color: muted, margin: '12px 0 16px' }}>
                     Stage: <strong style={{ color: text }}>{show.stage}</strong>
                   </div>
                 )}
-                {schedule.length > 0 && (
-                  <div className="times-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(schedule.length, 3)}, 1fr)`, gap: 10, marginBottom: show?.catering || show?.backline || show?.notes ? 16 : 0 }}>
-                    {schedule.map((s, i) => (
-                      <div key={i} style={{ background: s.highlight ? accent : sectionBg, borderRadius: 8, padding: '14px 16px', textAlign: 'center' }}>
-                        <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: s.highlight ? 'rgba(255,255,255,0.75)' : muted, textTransform: 'uppercase', marginBottom: 5 }}>{s.event}</div>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: s.highlight ? '#fff' : text, lineHeight: 1 }}>{s.time}</div>
-                        {s.highlight && show?.set_length && (
-                          <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.75)', marginTop: 5 }}>{show.set_length}</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+
                 {(show?.catering || show?.backline || show?.parking || show?.notes) && (
                   <SheetDetails title="Venue details & notes" hint="Parking, catering, backline and the detailed schedule">
                 {show?.catering && (
@@ -456,7 +360,7 @@ export default function DaySheetPage() {
                         <div style={{ borderRadius: 6, overflow: 'hidden', border: `1px solid ${border}` }}>
                           {parsed.map((entry, i) => (
                             <div key={i} style={{ display: 'flex', borderBottom: i < parsed.length - 1 ? `1px solid ${border}` : 'none', background: entry.bold ? accentLight : (i % 2 === 0 ? '#fff' : '#FAFAF8') }}>
-                              <div style={{ padding: '8px 14px', fontFamily: 'monospace', fontSize: 12, color: accent, fontWeight: 700, minWidth: 80, flexShrink: 0, whiteSpace: 'nowrap', borderRight: `1px solid ${border}` }}>{entry.time}</div>
+                              <div className="detailed-schedule-time" style={{ padding: '8px 14px', fontFamily: 'monospace', fontSize: 12, color: accent, fontWeight: 700, minWidth: 80, flexShrink: 0, whiteSpace: 'nowrap', borderRight: `1px solid ${border}` }}>{entry.time}</div>
                               <div style={{ padding: '8px 14px', fontSize: 13, color: text, lineHeight: 1.5, fontWeight: entry.bold ? 600 : 400 }}>{entry.text}</div>
                             </div>
                           ))}
@@ -518,23 +422,24 @@ export default function DaySheetPage() {
           </>
         )}
 
+        <div id="travel"/>
         {/* ── TRAVEL ── */}
         {mode === 'day' ? (
           filteredTravel.length > 0 ? (
             <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
               <SectionHeader label="Travel Today" />
-              <div style={{ padding: '4px 24px' }}>
+              <div className="sheet-inset" style={{ padding: '4px 24px' }}>
                 {groupTravel(filteredTravel).map((t: any, i: number, arr: any[]) => (
                   <TravelRow key={i} t={t} isLast={i === arr.length - 1} border={border} muted={muted} fmt={fmt} />
                 ))}
               </div>
             </div>
-          ) : null
+          ) : travel.length > 0 ? <div className="shared-section shared-empty">No travel scheduled for this day{personFilter !== 'everyone' ? ` for ${personFilter}` : ''}. Check nearby travel for other dates.</div> : null
         ) : (
           Object.keys(travelByDate).length > 0 ? (
             <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
               <SectionHeader label={personFilter !== 'everyone' ? `Travel - ${personFilter}` : 'Travel around this show'} />
-              <div style={{ padding: '4px 24px' }}>
+              <div className="sheet-inset" style={{ padding: '4px 24px' }}>
                 {Object.entries(travelByDate).map(([date, items], di) => (
                   <div key={date}>
                     <div style={{ padding: '12px 0 4px', display: 'flex', alignItems: 'center', gap: 10, borderTop: di > 0 ? `1px solid ${border}` : 'none', marginTop: di > 0 ? 4 : 0 }}>
@@ -583,7 +488,7 @@ export default function DaySheetPage() {
                   <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: accent, textTransform: 'uppercase' }}>Press Commitments</span>
                 </div>
               </div>
-              <div style={{ padding: '4px 24px' }}>
+              <div className="sheet-inset" style={{ padding: '4px 24px' }}>
                 {pressToShow.map((p: any, i: number) => (
                   <div key={i} style={{ padding: '14px 0', borderBottom: i < pressToShow.length - 1 ? `1px solid ${border}` : 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
@@ -618,11 +523,12 @@ export default function DaySheetPage() {
           )
         })()}
 
+        <div id="stays"/>
         {/* ── ACCOMMODATION ── */}
         {accommodation.length > 0 && (
           <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
             <SectionHeader label="Accommodation" />
-            <div style={{ padding: '4px 24px' }}>
+            <div className="sheet-inset" style={{ padding: '4px 24px' }}>
               {accommodation.map((a, i) => (
                 <div key={i} style={{ padding: '14px 0', borderBottom: i < accommodation.length - 1 ? `1px solid ${border}` : 'none' }}>
                   <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{a.name}</div>
@@ -634,10 +540,11 @@ export default function DaySheetPage() {
                     </a>
                   )}
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: a.travellers ? 8 : 0 }}>
-                    {a.check_in && <Pill label="Check in" value={a.check_in} />}
-                    {a.check_out && <Pill label="Check out" value={a.check_out} />}
-                    {a.confirmation && <Pill label="Ref" value={a.confirmation} />}
+                    {a.check_in && <Pill label="Check in" value={fmtDateMed(a.check_in)} />}
+                    {a.check_out && <Pill label="Check out" value={fmtDateMed(a.check_out)} />}
+
                   </div>
+                  {a.confirmation && <CopyReference value={a.confirmation}/>}
                   {a.travellers && <div style={{ fontSize: 13, color: muted }}>👤 {a.travellers}</div>}
                   {a.rooming && (
                     <div style={{ marginTop: 10, padding: '10px 12px', background: '#F9F6F2', borderLeft: `3px solid ${accent}`, borderRadius: 4 }}>
@@ -653,39 +560,19 @@ export default function DaySheetPage() {
           </div>
         )}
 
+        <div id="contacts"/>
         {/* ── CONTACTS (day mode only) ── */}
         {mode === 'day' && contacts.length > 0 && (
           <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
             <SectionHeader label="Key Contacts" />
-            <table className="contact-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <tbody>
-              {contacts.map((c, i) => (
-                <tr key={i} style={{ borderBottom: i < contacts.length - 1 ? `1px solid ${border}` : 'none' }}>
-                  <td style={{ padding: '13px 12px 13px 24px', verticalAlign: 'middle' }}>
-                    <div style={{ fontSize: 15, fontWeight: 600 }}>{c.name}</div>
-                    {c.role && <div style={{ fontSize: 11, color: muted, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>{c.role}</div>}
-                  </td>
-                  <td style={{ padding: '13px 24px 13px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
-                    <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                      {c.phone && (
-                        <a href={`tel:${c.phone}`} style={{ fontSize: 14, color: accent, textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>{c.phone}</a>
-                      )}
-                      {c.email && (
-                        <a href={`mailto:${c.email}`} style={{ fontSize: 13, color: muted, textDecoration: 'none', wordBreak: 'break-all' }}>{c.email}</a>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              </tbody>
-            </table>
+            <ContactCards contacts={contacts}/>
           </div>
         )}
 
         {/* ── RIDER (day mode only) ── */}
         {mode === 'day' && rider && (rider.tech_notes || rider.hospitality || rider.set_length || rider.band_size || rider.input_list || rider.tech_rider_url) && (
           <SheetDetails title="Rider & technical details" hint="Band setup, hospitality and technical documents">
-            <div style={{ padding: '16px 24px', display: 'grid', gap: 12 }}>
+            <div className="sheet-inset" style={{ padding: '16px 24px', display: 'grid', gap: 12 }}>
               {rider.band_size && <RiderRow label="Band" value={rider.band_size} />}
               {rider.set_length && <RiderRow label="Set" value={rider.set_length} />}
               {rider.tech_notes && <RiderRow label="Technical" value={rider.tech_notes} />}
@@ -718,7 +605,7 @@ export default function DaySheetPage() {
             <SheetDetails title="Supports & crew" hint="Set times and contact details">
               <div>
                 {sorted.map((p: any, i: number) => (
-                  <div key={i} style={{ padding: '12px 24px', borderBottom: i < sorted.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <div key={i} className="sheet-inset" style={{ padding: '12px 24px', borderBottom: i < sorted.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                     <div style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: 'center' }}>{roleIcons[p.role] || '•'}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
@@ -763,7 +650,7 @@ export default function DaySheetPage() {
               <div style={{ fontSize: 13, color: muted, marginBottom: 12 }}>
                 {setlist.songs.length} songs{totalSeconds > 0 ? ` · ${totalMin}:${String(totalSec).padStart(2, '0')}` : ''}
               </div>
-              <div style={{ padding: '4px 24px' }}>
+              <div className="sheet-inset" style={{ padding: '4px 24px' }}>
                 {setlist.songs.map((song: any, i: number) => (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '28px 1fr auto', gap: 12, padding: '10px 0', borderBottom: i < setlist.songs.length - 1 ? `1px solid ${border}` : 'none', alignItems: 'center' }}>
                     <span style={{ fontFamily: 'monospace', fontSize: 11, color: muted, textAlign: 'center' }}>{i + 1}</span>
@@ -786,12 +673,14 @@ export default function DaySheetPage() {
           )
         })()}
 
-        {/* Footer */}
-        <div style={{ textAlign: 'center', paddingTop: 20, fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: '#C8BFB0' }}>
-          ADVANCE · {artist?.name?.toUpperCase()} · {show?.date}
-        </div>
       </div>
-    </div>
+      <SharedDock items={[
+        ...(mode === 'day' ? [{href:'#schedule',label:'Schedule',icon:'calendar' as const}] : []),
+        ...(travel.length ? [{href:'#travel',label:'Travel',icon:'plane' as const}] : []),
+        ...(accommodation.length ? [{href:'#stays',label:'Stay',icon:'overview' as const}] : []),
+        ...(mode === 'day' && contacts.length ? [{href:'#contacts',label:'Contacts',icon:'list' as const}] : [])
+      ]}/>
+    </SharedPage>
   )
 }
 
@@ -803,11 +692,12 @@ function TravelRow({ t, isLast, border, muted, fmt }: any) {
         <span style={{ fontSize: 16, fontWeight: 700 }}>{t.from_location} → {t.to_location}</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
-        {t.carrier && <Pill label="Flight" value={t.carrier} />}
-        {t.departure_time && <Pill label="Departs" value={fmt(t.departure_time)} />}
+        {t.carrier && <Pill label="Service" value={t.carrier} />}
+        <Pill label="Departs" value={t.departure_time ? fmt(t.departure_time) : 'Time TBC'} />
         {t.arrival_time && <Pill label="Arrives" value={fmt(t.arrival_time)} />}
-        {t.reference && <Pill label="Ref" value={t.reference} />}
+
       </div>
+      {t.reference && <CopyReference value={t.reference}/>}
       {t.travellers && <div style={{ marginTop: 8, fontSize: 13, color: muted }}>👤 {t.travellers}</div>}
       {t.notes && <div style={{ marginTop: 6, fontSize: 12, color: muted, fontStyle: 'italic' }}>{t.notes}</div>}
     </div>
@@ -816,17 +706,14 @@ function TravelRow({ t, isLast, border, muted, fmt }: any) {
 
 function SectionHeader({ label }: { label: string }) {
   return (
-    <div style={{ padding: '11px 24px', borderBottom: '1px solid #E8E2D8', display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ width: 3, height: 14, background: '#C4622D', borderRadius: 2, flexShrink: 0 }} />
-      <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: '#8A8580', textTransform: 'uppercase' }}>{label}</span>
-    </div>
+    <div className="shared-section-heading"><h2>{label}</h2></div>
   )
 }
 
 function Pill({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ background: '#F9F6F2', border: '1px solid #E8E2D8', borderRadius: 6, padding: '6px 12px', display: 'inline-block' }}>
-      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: '#8A8580', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.1em', color: '#667167', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
       <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1714' }}>{value}</div>
     </div>
   )
@@ -835,7 +722,7 @@ function Pill({ label, value }: { label: string; value: string }) {
 function RiderRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: '#8A8580', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: '#667167', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 13, color: '#1A1714', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{value}</div>
     </div>
   )

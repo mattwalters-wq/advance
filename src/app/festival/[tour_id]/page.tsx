@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { SharedPage, SharedHero, SharedState, MapLink } from '@/components/shared/SharedPage'
 
 const supabase = createClient()
 
@@ -46,14 +47,21 @@ export default function FestivalSheetPage() {
   const [loading, setLoading] = useState(true)
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set())
 
-  useEffect(() => { loadData() }, [params.tour_id, venueFilter])
+  const [loadError, setLoadError] = useState(false)
+  const request = useRef(0)
+  useEffect(() => { loadData(); return () => { request.current++ } }, [params.tour_id, venueFilter])
 
   async function loadData() {
+    const id = ++request.current
+    setLoading(true); setLoadError(false); setNotFound(false)
+    try {
     // Server-side call; with ?venue= it returns just that festival's days
-    const { data } = await supabase.rpc('public_festival', { p_tour_id: params.tour_id, p_venue: venueFilter })
+    const { data, error } = await supabase.rpc('public_festival', { p_tour_id: params.tour_id, p_venue: venueFilter })
+    if (id !== request.current) return
+    if (error) throw error
     if (!data?.tour) { setNotFound(true); setLoading(false); return }
     setTour(data.tour)
-    if (data.tour.artists) setArtist(data.tour.artists)
+    setArtist(data.tour.artists || null)
     const showsData: any[] = data.shows || []
     const pressData: any[] = data.press || []
     setShows(showsData)
@@ -74,17 +82,19 @@ export default function FestivalSheetPage() {
     }
 
     setLoading(false)
+    } catch { if (id === request.current) { setLoadError(true); setLoading(false) } }
   }
 
-  const accent = '#C4622D'
-  const accentLight = '#FDF5EF'
-  const border = '#E8E2D8'
-  const muted = '#8A8580'
-  const text = '#1A1714'
-  const sectionBg = '#F9F6F2'
+  const accent = '#285e48'
+  const accentLight = '#f0f4e9'
+  const border = '#e0e5db'
+  const muted = '#667167'
+  const text = '#1d3229'
+  const sectionBg = '#f6f7f1'
 
-  if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F9F6F2', fontFamily: 'sans-serif', color: muted }}>Loading...</div>
-  if (notFound) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F9F6F2', fontFamily: 'sans-serif', color: muted }}>Festival not found.</div>
+  if (loading) return <SharedState state="loading"/>
+  if (loadError) return <SharedState state="error" retry={loadData}/>
+  if (notFound) return <SharedState state="missing" noun="festival sheet"/>
 
   // Collect all unique dates from shows + press, sorted
   const allDates = Array.from(new Set([
@@ -120,62 +130,15 @@ export default function FestivalSheetPage() {
   const city = shows[0]?.city || ''
 
   return (
-    <div style={{ background: sectionBg, minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif', color: text }}>
-      <style>{`
-        * { box-sizing: border-box; }
-        @media print {
-          .no-print { display: none !important; }
-          body { background: white !important; }
-          @page { margin: 1.5cm; size: A4; }
-          .day-content { display: block !important; }
-        }
-      `}</style>
-
-      {/* Toolbar */}
-      <div className="no-print" style={{ background: '#1A1714', padding: '8px 16px', minHeight: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 17, fontStyle: 'italic', color: '#F5F0E8', fontFamily: 'Georgia, serif' }}>Advance</span>
-          <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: accent }}>FESTIVAL SHEET</span>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={expandAll}
-            style={{ padding: '6px 12px', background: 'transparent', color: '#8A8580', border: '1px solid #2A2520', borderRadius: 5, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
-            EXPAND ALL
-          </button>
-          <button onClick={collapseAll}
-            style={{ padding: '6px 12px', background: 'transparent', color: '#8A8580', border: '1px solid #2A2520', borderRadius: 5, cursor: 'pointer', fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 }}>
-            COLLAPSE
-          </button>
-          <button onClick={() => { expandAll(); setTimeout(() => window.print(), 50) }}
-            style={{ padding: '7px 18px', background: accent, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: 'monospace', fontSize: 10, letterSpacing: 2 }}>
-            PRINT
-          </button>
-        </div>
-      </div>
-
-      {/* Page */}
-      <div style={{ maxWidth: 700, margin: '0 auto', padding: '32px 16px 60px' }}>
-
-        {/* ── HEADER ── */}
-        <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
-          <div style={{ height: 5, background: artist?.color || accent }} />
-          <div style={{ padding: '24px 28px' }}>
-            <div style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: muted, marginBottom: 6, textTransform: 'uppercase' }}>Festival Run</div>
-            <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 2, lineHeight: 1.1 }}>{artist?.name}</div>
-            <div style={{ fontSize: 18, color: text, fontWeight: 600, marginTop: 6 }}>{tour?.name}</div>
-            {venue && (
-              <div style={{ fontSize: 14, color: muted, marginTop: 4 }}>
-                {venue}{city ? `, ${city}` : ''}
-              </div>
-            )}
-            {allDates.length > 0 && (
-              <div style={{ fontSize: 13, color: muted, marginTop: 10, fontFamily: 'monospace', letterSpacing: 1 }}>
-                {fmtDateShort(allDates[0])} → {fmtDateShort(allDates[allDates.length - 1])} · {allDates.length} day{allDates.length !== 1 ? 's' : ''}
-              </div>
-            )}
-          </div>
-        </div>
-
+    <SharedPage label="Festival sheet">
+      <SharedHero eyebrow="Your festival run" title={artist?.name || tour?.name || 'Festival'} subtitle={tour?.name}>
+        {venue && <div className="shared-hero-date">{venue}{city ? `, ${city}` : ''}</div>}
+        {allDates.length > 0 && <div className="shared-hero-meta"><span>{fmtDateShort(allDates[0])} → {fmtDateShort(allDates[allDates.length - 1])}</span><span>{allDates.length} days</span></div>}
+      </SharedHero>
+      {shows[0]?.address && <div className="shared-actions"><MapLink address={shows[0].address} label="Festival directions"/></div>}
+      <div className="shared-toolbar no-print"><button className="shared-action" onClick={expandAll}>Expand all days</button><button className="shared-action" onClick={collapseAll}>Collapse all</button></div>
+      <div className="festival-body">
+        {allDates.length === 0 && <div className="shared-section shared-empty">Festival dates will appear here once scheduled.</div>}
         {/* Day accordions */}
         {allDates.map(date => {
           const dayShows = shows.filter((s: any) => s.date === date)
@@ -199,7 +162,7 @@ export default function FestivalSheetPage() {
           return (
             <div key={date} style={{ background: '#fff', borderRadius: 12, border: `1px solid ${isToday ? accent : border}`, overflow: 'hidden', marginBottom: 12 }}>
               {/* Day header - clickable */}
-              <div onClick={() => toggleDay(date)}
+              <button className="festival-day-toggle" aria-expanded={expanded} aria-controls={`festival-${date}`} onClick={() => toggleDay(date)}
                 style={{ padding: '16px 20px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isToday ? accentLight : '#fff', borderBottom: expanded ? `1px solid ${border}` : 'none' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
                   <div style={{ fontSize: 16, fontWeight: 700 }}>{fmtDateLong(date)}</div>
@@ -220,25 +183,12 @@ export default function FestivalSheetPage() {
                   </div>
                 </div>
                 <span style={{ fontSize: 16, color: muted, transition: 'transform 0.2s', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
-              </div>
+              </button>
 
               {/* Day content */}
-              {expanded && (
-                <div className="day-content" style={{ padding: '20px 24px' }}>
+              <div id={`festival-${date}`} hidden={!expanded} className="day-content" style={{ padding: '20px 24px' }}>
                   {/* Schedule grid */}
-                  {schedule.length > 0 && (
-                    <div style={{ marginBottom: 20 }}>
-                      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: '0.15em', color: muted, marginBottom: 10, textTransform: 'uppercase' }}>Schedule</div>
-                      <div style={{ borderRadius: 6, overflow: 'hidden', border: `1px solid ${border}` }}>
-                        {schedule.map((s, i) => (
-                          <div key={i} style={{ display: 'flex', borderBottom: i < schedule.length - 1 ? `1px solid ${border}` : 'none', background: s.highlight ? accentLight : (i % 2 === 0 ? '#fff' : '#FAFAF8') }}>
-                            <div style={{ padding: '8px 14px', fontFamily: 'monospace', fontSize: 12, color: s.highlight ? accent : text, fontWeight: 700, minWidth: 80, flexShrink: 0, borderRight: `1px solid ${border}` }}>{s.time}</div>
-                            <div style={{ padding: '8px 14px', fontSize: 13, color: text, lineHeight: 1.5, fontWeight: s.highlight ? 600 : 400 }}>{s.event}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {schedule.length > 0 ? <div className="shared-times">{schedule.map((s, i) => <div key={i} className={`shared-time${s.highlight ? ' highlight' : ''}`}><span>{s.event}</span><strong>{s.time}</strong></div>)}</div> : <p className="shared-time-note">Schedule to be confirmed.</p>}
 
                   {/* Show details */}
                   {dayShows.map((show: any, i: number) => {
@@ -350,16 +300,11 @@ export default function FestivalSheetPage() {
                     </div>
                   )}
                 </div>
-              )}
             </div>
           )
         })}
 
-        {/* Footer */}
-        <div style={{ textAlign: 'center', paddingTop: 20, fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.2em', color: '#C8BFB0' }}>
-          ADVANCE · {artist?.name?.toUpperCase()} · {tour?.name?.toUpperCase()}
-        </div>
       </div>
-    </div>
+    </SharedPage>
   )
 }
